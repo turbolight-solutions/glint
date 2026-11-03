@@ -99,6 +99,21 @@ jobs:
           head -c 300 corpus.json
           docker logs glint
           docker rm -f glint
+      - name: Save the image as a tarball
+        run: |
+          # Tag it as it will be pushed, so `docker load -i glint-image.tar` gives the same name the
+          # systemd unit runs. The registry path must be lowercase.
+          docker tag glint:test "${IMAGE,,}:edge"
+          docker save "${IMAGE,,}:edge" -o glint-image.tar
+          sha256sum glint-image.tar | tee glint-image.tar.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: glint-image
+          path: |
+            glint-image.tar
+            glint-image.tar.sha256
+          retention-days: 14
+          compression-level: 6
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
