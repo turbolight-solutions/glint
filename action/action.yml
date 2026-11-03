@@ -1,0 +1,114 @@
+name: Glint ASN.1 check
+description: Check the ASN.1 in Internet-Drafts and RFCs with Glint and report the findings as code-scanning annotations.
+author: Glint contributors
+
+inputs:
+  files:
+    description: Documents to check, one path or glob per line (RFCXML, Markdown, plain text or .asn).
+    required: true
+  version:
+    description: Release of Glint to use, such as v0.1.0, or `latest`.
+    default: latest
+  config:
+    description: Path to glint.toml. By default the nearest one above each document is used.
+    default: ""
+  deny-warnings:
+    description: Fail the job when there are warnings, not only errors.
+    default: "false"
+  upload:
+    description: Upload the SARIF file to code scanning. Needs `security-events - write`; pull requests from forks cannot do this.
+    default: "true"
+  category:
+    description: Code-scanning category, to keep results of several runs apart.
+    default: glint
+  extra-args:
+    description: More arguments for `glint check`, for example `--pin PKIX1Explicit88=rfc5280`.
+    default: ""
+
+outputs:
+  sarif:
+    description: Path of the SARIF file.
+    value: ${{ steps.check.outputs.sarif }}
+  exit-code:
+    description: Exit status of `glint check`.
+    value: ${{ steps.check.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Glint
+      id: install
+      shell: bash
+      env:
+        GLINT_VERSION: ${{ inputs.version }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS_NAME/$RUNNER_ARCH_NAME" in
+          Linux/X64)    target=x86_64-unknown-linux-gnu;  ext=tar.gz ;;
+          macOS/ARM64)  target=aarch64-apple-darwin;      ext=tar.gz ;;
+          macOS/X64)    target=x86_64-apple-darwin;       ext=tar.gz ;;
+          Windows/X64)  target=x86_64-pc-windows-msvc;    ext=zip ;;
+          *) echo "::error::Glint has no release for $RUNNER_OS_NAME/$RUNNER_ARCH_NAME"; exit 1 ;;
+        esac
+        base="https://github.com/glint-asn1/glint/releases"
+        if [ "$GLINT_VERSION" = latest ]; then url="$base/latest/download"; else url="$base/download/$GLINT_VERSION"; fi
+        dir="$RUNNER_TEMP/glint"
+        mkdir -p "$dir"
+        curl --fail --silent --show-error --location --output "$dir/glint.$ext" "$url/glint-$target.$ext"
+        curl --fail --silent --show-error --location --output "$dir/glint.$ext.sha256" "$url/glint-$target.$ext.sha256"
+        expected="$(cut -d' ' -f1 "$dir/glint.$ext.sha256")"
+        if command -v sha256sum >/dev/null; then actual="$(sha256sum "$dir/glint.$ext" | cut -d' ' -f1)"; else actual="$(shasum -a 256 "$dir/glint.$ext" | cut -d' ' -f1)"; fi
+        if [ "$expected" != "$actual" ]; then echo "::error::The Glint download does not match its published digest"; exit 1; fi
+        if [ "$ext" = zip ]; then unzip -q -o "$dir/glint.$ext" -d "$dir"; else tar -xzf "$dir/glint.$ext" -C "$dir"; fi
+        echo "$dir" >> "$GITHUB_PATH"
+
+    - name: Check
+      id: check
+      shell: bash
+      env:
+        FILES: ${{ inputs.files }}
+        CONFIG: ${{ inputs.config }}
+        DENY_WARNINGS: ${{ inputs.deny-warnings }}
+        EXTRA_ARGS: ${{ inputs.extra-args }}
+      run: |
+        set -uo pipefail
+        args=()
+        [ -n "$CONFIG" ] && args+=(--config "$CONFIG")
+        [ "$DENY_WARNINGS" = true ] && args+=(--deny-warnings)
+        # shellcheck disable=SC2206
+        [ -n "$EXTRA_ARGS" ] && args+=($EXTRA_ARGS)
+        shopt -s nullglob
+        docs=()
+        while IFS= read -r pattern; do
+          pattern="$(echo "$pattern" | xargs)"
+          [ -z "$pattern" ] && continue
+          matches=($pattern)
+          if [ ${#matches[@]} -eq 0 ]; then echo "::warning::No file matches $pattern"; fi
+          docs+=("${matches[@]}")
+        done <<< "$FILES"
+        if [ ${#docs[@]} -eq 0 ]; then echo "::error::No documents to check"; exit 2; fi
+        sarif="$RUNNER_TEMP/glint.sarif"
+        glint check --format sarif ${args[@]+"${args[@]}"} "${docs[@]}" > "$sarif"
+        status=$?
+        # Show the findings in the job log too.
+        glint check --color never ${args[@]+"${args[@]}"} "${docs[@]}" || true
+        echo "sarif=$sarif" >> "$GITHUB_OUTPUT"
+        echo "exit-code=$status" >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF
+      if: ${{ inputs.upload == 'true' && steps.check.outputs.sarif != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.check.outputs.sarif }}
+        category: ${{ inputs.category }}
+
+    - name: Fail on findings
+      if: ${{ steps.check.outputs.exit-code != '0' }}
+      shell: bash
+      env:
+        STATUS: ${{ steps.check.outputs.exit-code }}
+      run: |
+        echo "::error::glint check exited with status $STATUS"
+        exit "$STATUS"

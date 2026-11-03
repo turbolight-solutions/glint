@@ -1,0 +1,85 @@
+---
+source: crates/glint-syntax/tests/cst_snapshots.rs
+expression: "dump(&module(\"T ::= SEQUENCE { a INTEGER, ..., [[ 2: b BOOLEAN OPTIONAL, c NULL DEFAULT NULL ]], ..., d INTEGER }\"))"
+---
+SourceFile@0..128
+  ModuleDefinition@0..127
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..123
+      TypeAssignment@24..123
+        UpperName@24..25 "T"
+        Whitespace@25..26 " "
+        Assign@26..29 "::="
+        Whitespace@29..30 " "
+        SequenceType@30..123
+          Keyword@30..38 "SEQUENCE"
+          Whitespace@38..39 " "
+          LBrace@39..40 "{"
+          Whitespace@40..41 " "
+          ComponentType@41..50
+            NamedType@41..50
+              LowerName@41..42 "a"
+              Whitespace@42..43 " "
+              IntegerType@43..50
+                Keyword@43..50 "INTEGER"
+          Comma@50..51 ","
+          Whitespace@51..52 " "
+          ExtensionMarker@52..55
+            Ellipsis@52..55 "..."
+          Comma@55..56 ","
+          Whitespace@56..57 " "
+          ExtensionAdditionGroup@57..105
+            LDoubleBracket@57..59 "[["
+            Whitespace@59..60 " "
+            VersionNumber@60..62
+              Number@60..61 "2"
+              Colon@61..62 ":"
+            Whitespace@62..63 " "
+            ComponentType@63..81
+              NamedType@63..72
+                LowerName@63..64 "b"
+                Whitespace@64..65 " "
+                BuiltinType@65..72
+                  Keyword@65..72 "BOOLEAN"
+              Whitespace@72..73 " "
+              Keyword@73..81 "OPTIONAL"
+            Comma@81..82 ","
+            Whitespace@82..83 " "
+            ComponentType@83..102
+              NamedType@83..89
+                LowerName@83..84 "c"
+                Whitespace@84..85 " "
+                BuiltinType@85..89
+                  Keyword@85..89 "NULL"
+              Whitespace@89..90 " "
+              Keyword@90..97 "DEFAULT"
+              Whitespace@97..98 " "
+              Value@98..102
+                Keyword@98..102 "NULL"
+            Whitespace@102..103 " "
+            RDoubleBracket@103..105 "]]"
+          Comma@105..106 ","
+          Whitespace@106..107 " "
+          ExtensionMarker@107..110
+            Ellipsis@107..110 "..."
+          Comma@110..111 ","
+          Whitespace@111..112 " "
+          ComponentType@112..121
+            NamedType@112..121
+              LowerName@112..113 "d"
+              Whitespace@113..114 " "
+              IntegerType@114..121
+                Keyword@114..121 "INTEGER"
+          Whitespace@121..122 " "
+          RBrace@122..123 "}"
+    Whitespace@123..124 "\n"
+    Keyword@124..127 "END"
+  Whitespace@127..128 "\n"

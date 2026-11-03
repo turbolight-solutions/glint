@@ -1,0 +1,140 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: corpus bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y rsync
+      - run: corpus/fetch.sh
+      - name: Build the bundle
+        run: |
+          cargo run --release --locked -p glint-corpus-build -- \
+            --rfc-dir corpus/cache/rfc --overrides corpus/overrides \
+            --itu-manifest corpus/itu-modules.toml --out corpus/out --date "$(date +%F)"
+          cp corpus/out/corpus-*.bundle corpus.bundle
+          sha256sum corpus.bundle | tee corpus.bundle.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corpus
+          path: |
+            corpus.bundle
+            corpus.bundle.sha256
+            corpus/out/report.md
+
+  binaries:
+    name: binary (${{ matrix.target }})
+    needs: corpus
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, archive: tar.gz }
+          - { target: aarch64-apple-darwin, os: macos-14, archive: tar.gz }
+          - { target: x86_64-apple-darwin, os: macos-15-intel, archive: tar.gz }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, archive: zip }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: corpus
+          path: corpus-download
+      - name: Embed the corpus
+        shell: bash
+        run: cp corpus-download/corpus.bundle corpus/embedded.bundle
+      - run: cargo build --release --locked --target ${{ matrix.target }} -p glint-asn1
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="target/${{ matrix.target }}/release"
+          mkdir dist
+          bin=glint
+          [ "${{ matrix.archive }}" = zip ] && bin=glint.exe
+          cp "$out/$bin" LICENSE NOTICE dist/
+          name="glint-${{ matrix.target }}.${{ matrix.archive }}"
+          if [ "${{ matrix.archive }}" = zip ]; then
+            (cd dist && 7z a "../$name" "$bin" LICENSE NOTICE >/dev/null)
+          else
+            tar -czf "$name" -C dist "$bin" LICENSE NOTICE
+          fi
+          if command -v sha256sum >/dev/null; then sha256sum "$name" > "$name.sha256"; else shasum -a 256 "$name" > "$name.sha256"; fi
+          "dist/$bin" --version
+          "dist/$bin" explain E110 | head -n 3
+          "dist/$bin" corpus list | head -n 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glint-${{ matrix.target }}
+          path: |
+            glint-${{ matrix.target }}.${{ matrix.archive }}
+            glint-${{ matrix.target }}.${{ matrix.archive }}.sha256
+
+  publish:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [corpus, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" --generate-notes \
+            artifacts/glint-* artifacts/corpus.bundle artifacts/corpus.bundle.sha256 artifacts/corpus/out/report.md
+
+  docker:
+    name: container image
+    needs: corpus
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: corpus
+          path: corpus-download
+      - run: cp corpus-download/corpus.bundle corpus/embedded.bundle
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

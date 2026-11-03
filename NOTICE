@@ -1,0 +1,16 @@
+Glint
+Copyright 2026 the Glint authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The corpus bundle that Glint embeds and that `glint corpus update` downloads contains third-party text:
+
+  * ASN.1 modules extracted from RFCs. They are code components under the IETF Trust's Revised BSD
+    License (Trust Legal Provisions; BCP 78 and BCP 79). Each module record names the RFC and section it
+    comes from.
+
+  * ASN.1 modules from ITU-T Recommendations (for example X.501, X.509 and X.520), which are the property
+    of ITU-T and are included with credit to ITU-T. Each record keeps its Recommendation number and the
+    URL it was taken from.
+
+The same notices are printed by `GET /api/v1/corpus` and are part of every bundle.

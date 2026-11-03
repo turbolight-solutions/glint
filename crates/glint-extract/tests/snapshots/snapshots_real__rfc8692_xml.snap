@@ -1,0 +1,8 @@
+---
+source: crates/glint-extract/tests/snapshots_real.rs
+expression: "summary(source, &run(source, Format::Xml))"
+---
+Fragment | Section 3 | "Identifiers" | bytes 14121..14586 | text 394 bytes | first line "" | original starts "<sourcecode type=\"as"
+Fragment | Section 3 | "Identifiers" | bytes 14711..15186 | text 404 bytes | first line "" | original starts "<sourcecode type=\"as"
+Fragment | Section 4.1 | "Signatures" | bytes 16790..17029 | text 166 bytes | first line "" | original starts "<sourcecode type=\"as"
+Module | Appendix A | "ASN.1 Module" | bytes 50636..56475 | text 5743 bytes | first line "" | original starts "<sourcecode type=\"as"

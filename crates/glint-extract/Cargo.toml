@@ -1,0 +1,22 @@
+[package]
+name = "glint-extract"
+version = "0.1.0"
+description = "Extracts ASN.1 blocks from RFCXML, Markdown and plain-text drafts, with source maps"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+glint-syntax = { workspace = true }
+pulldown-cmark = { workspace = true }
+quick-xml = { workspace = true }
+regex = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+insta = { workspace = true }
+
+[lints]
+workspace = true

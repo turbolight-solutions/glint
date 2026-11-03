@@ -1,0 +1,47 @@
+---
+source: crates/glint-sema/tests/typemodel.rs
+expression: "json(&model(&rfc5280(), \"PKIX1Explicit88\", \"Time\"))"
+---
+{
+  "kind": "CHOICE",
+  "tags": [
+    {
+      "class": "UNIVERSAL",
+      "number": 23
+    },
+    {
+      "class": "UNIVERSAL",
+      "number": 24
+    }
+  ],
+  "components": [
+    {
+      "name": "utcTime",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "UTCTime",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 23
+          }
+        ]
+      }
+    },
+    {
+      "name": "generalTime",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "GeneralizedTime",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 24
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[package]
+name = "glint-sema"
+version = "0.1.0"
+description = "Symbol tables, import resolution and semantic checks for Glint"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+glint-syntax = { workspace = true }
+glint-corpus = { workspace = true }
+glint-diag = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+insta = { workspace = true }
+serde_json = { workspace = true }

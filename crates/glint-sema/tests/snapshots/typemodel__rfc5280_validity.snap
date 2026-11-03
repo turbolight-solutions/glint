@@ -1,0 +1,139 @@
+---
+source: crates/glint-sema/tests/typemodel.rs
+expression: "json(&model(&rfc5280(), \"PKIX1Explicit88\", \"Validity\"))"
+---
+{
+  "kind": "SEQUENCE",
+  "tags": [
+    {
+      "class": "UNIVERSAL",
+      "number": 16
+    }
+  ],
+  "components": [
+    {
+      "name": "notBefore",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "Time",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 23
+          },
+          {
+            "class": "UNIVERSAL",
+            "number": 24
+          }
+        ],
+        "expanded": {
+          "kind": "CHOICE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 23
+            },
+            {
+              "class": "UNIVERSAL",
+              "number": 24
+            }
+          ],
+          "components": [
+            {
+              "name": "utcTime",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "UTCTime",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 23
+                  }
+                ]
+              }
+            },
+            {
+              "name": "generalTime",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "GeneralizedTime",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 24
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "notAfter",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "Time",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 23
+          },
+          {
+            "class": "UNIVERSAL",
+            "number": 24
+          }
+        ],
+        "expanded": {
+          "kind": "CHOICE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 23
+            },
+            {
+              "class": "UNIVERSAL",
+              "number": 24
+            }
+          ],
+          "components": [
+            {
+              "name": "utcTime",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "UTCTime",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 23
+                  }
+                ]
+              }
+            },
+            {
+              "name": "generalTime",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "GeneralizedTime",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 24
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

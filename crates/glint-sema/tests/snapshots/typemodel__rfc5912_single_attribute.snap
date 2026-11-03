@@ -1,0 +1,64 @@
+---
+source: crates/glint-sema/tests/typemodel.rs
+expression: "json(&model(&rfc5912(), \"PKIX-CommonTypes-2009\", \"SingleAttribute\"))"
+---
+{
+  "kind": "SEQUENCE",
+  "tags": [
+    {
+      "class": "UNIVERSAL",
+      "number": 16
+    }
+  ],
+  "components": [
+    {
+      "name": "type",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "OBJECT IDENTIFIER",
+        "reference": "ATTRIBUTE.&id",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 6
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "table",
+            "text": "( { AttrSet } )"
+          }
+        ],
+        "open_type": {
+          "class": "ATTRIBUTE",
+          "field": "&id",
+          "object_set": "AttrSet"
+        }
+      }
+    },
+    {
+      "name": "value",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "OpenType",
+        "reference": "ATTRIBUTE.&Type",
+        "constraints": [
+          {
+            "kind": "table",
+            "text": "( { AttrSet } { @ type } )"
+          }
+        ],
+        "open_type": {
+          "class": "ATTRIBUTE",
+          "field": "&Type",
+          "object_set": "AttrSet",
+          "referenced": [
+            "@type"
+          ]
+        }
+      }
+    }
+  ]
+}

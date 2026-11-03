@@ -1,0 +1,29 @@
+[package]
+name = "glint-asn1"
+version = "0.1.0"
+description = "Glint: an ASN.1 checker for Internet-Draft and RFC authors"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "glint"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+etcetera = { workspace = true }
+glint-check = { workspace = true }
+glint-corpus = { workspace = true }
+glint-diag = { workspace = true }
+glint-extract = { workspace = true }
+glint-syntax = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -1,0 +1,60 @@
+---
+source: crates/glint-sema/tests/typemodel.rs
+expression: "json(&model(&rfc5280(), \"PKIX1Explicit88\", \"Extension\"))"
+---
+{
+  "kind": "SEQUENCE",
+  "tags": [
+    {
+      "class": "UNIVERSAL",
+      "number": 16
+    }
+  ],
+  "components": [
+    {
+      "name": "extnID",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "OBJECT IDENTIFIER",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 6
+          }
+        ]
+      }
+    },
+    {
+      "name": "critical",
+      "optional": false,
+      "default": {
+        "Boolean": false
+      },
+      "region": "root",
+      "ty": {
+        "kind": "BOOLEAN",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "extnValue",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "OCTET STRING",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 4
+          }
+        ]
+      }
+    }
+  ]
+}

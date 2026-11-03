@@ -1,0 +1,6 @@
+---
+source: crates/glint-extract/tests/snapshots_real.rs
+expression: "summary(source, &run(source, Format::Text))"
+---
+Module | Appendix A.1 | "Explicitly Tagged Module, 1988 Syntax" | bytes 805..26388 | text 23364 bytes | first line "PKIX1Explicit88 { iso(1) identified-organization(3) dod(6) internet(1)" | original starts "PKIX1Explicit88 { is"
+Module | Appendix A.2 | "Implicitly Tagged Module, 1988 Syntax" | bytes 26435..38510 | text 10892 bytes | first line "PKIX1Implicit88 { iso(1) identified-organization(3) dod(6) internet(1)" | original starts "PKIX1Implicit88 { is"

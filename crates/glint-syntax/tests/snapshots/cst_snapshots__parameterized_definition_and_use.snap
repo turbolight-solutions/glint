@@ -1,0 +1,78 @@
+---
+source: crates/glint-syntax/tests/cst_snapshots.rs
+expression: "dump(&module(\"List{Elem, INTEGER:max} ::= SEQUENCE (SIZE (1..max)) OF Elem\\nU ::= List{ BOOLEAN, 8 }\"))"
+---
+SourceFile@0..114
+  ModuleDefinition@0..113
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..109
+      TypeAssignment@24..84
+        UpperName@24..28 "List"
+        ParameterList@28..47
+          LBrace@28..29 "{"
+          Parameter@29..33
+            UpperName@29..33 "Elem"
+          Comma@33..34 ","
+          Whitespace@34..35 " "
+          Parameter@35..46
+            IntegerType@35..42
+              Keyword@35..42 "INTEGER"
+            Colon@42..43 ":"
+            LowerName@43..46 "max"
+          RBrace@46..47 "}"
+        Whitespace@47..48 " "
+        Assign@48..51 "::="
+        Whitespace@51..52 " "
+        SequenceOfType@52..84
+          Keyword@52..60 "SEQUENCE"
+          Whitespace@60..61 " "
+          Constraint@61..76
+            LParen@61..62 "("
+            SizeElement@62..75
+              Keyword@62..66 "SIZE"
+              Whitespace@66..67 " "
+              Constraint@67..75
+                LParen@67..68 "("
+                RangeElement@68..74
+                  Value@68..69
+                    Number@68..69 "1"
+                  DotDot@69..71 ".."
+                  Value@71..74
+                    LowerName@71..74 "max"
+                RParen@74..75 ")"
+            RParen@75..76 ")"
+          Whitespace@76..77 " "
+          Keyword@77..79 "OF"
+          Whitespace@79..80 " "
+          DefinedType@80..84
+            UpperName@80..84 "Elem"
+      Whitespace@84..85 "\n"
+      TypeAssignment@85..109
+        UpperName@85..86 "U"
+        Whitespace@86..87 " "
+        Assign@87..90 "::="
+        Whitespace@90..91 " "
+        DefinedType@91..109
+          UpperName@91..95 "List"
+          ActualParameterList@95..109
+            LBrace@95..96 "{"
+            Whitespace@96..97 " "
+            ActualParameter@97..104
+              UpperName@97..104 "BOOLEAN"
+            Comma@104..105 ","
+            Whitespace@105..106 " "
+            ActualParameter@106..107
+              Number@106..107 "8"
+            Whitespace@107..108 " "
+            RBrace@108..109 "}"
+    Whitespace@109..110 "\n"
+    Keyword@110..113 "END"
+  Whitespace@113..114 "\n"

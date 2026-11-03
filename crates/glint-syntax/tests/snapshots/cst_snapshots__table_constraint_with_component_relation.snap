@@ -1,0 +1,76 @@
+---
+source: crates/glint-syntax/tests/cst_snapshots.rs
+expression: "dump(&module(\"T ::= SEQUENCE { id OBJECT-CLASS.&id ({Set}), val OBJECT-CLASS.&Type ({Set}{@id}) }\"))"
+---
+SourceFile@0..112
+  ModuleDefinition@0..111
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..107
+      TypeAssignment@24..107
+        UpperName@24..25 "T"
+        Whitespace@25..26 " "
+        Assign@26..29 "::="
+        Whitespace@29..30 " "
+        SequenceType@30..107
+          Keyword@30..38 "SEQUENCE"
+          Whitespace@38..39 " "
+          LBrace@39..40 "{"
+          Whitespace@40..41 " "
+          ComponentType@41..68
+            NamedType@41..68
+              LowerName@41..43 "id"
+              Whitespace@43..44 " "
+              ConstrainedType@44..68
+                ObjectClassFieldType@44..60
+                  UpperName@44..56 "OBJECT-CLASS"
+                  Dot@56..57 "."
+                  FieldName@57..60
+                    FieldLower@57..60 "&id"
+                Whitespace@60..61 " "
+                Constraint@61..68
+                  LParen@61..62 "("
+                  TableConstraint@62..67
+                    BraceGroup@62..67
+                      LBrace@62..63 "{"
+                      UpperName@63..66 "Set"
+                      RBrace@66..67 "}"
+                  RParen@67..68 ")"
+          Comma@68..69 ","
+          Whitespace@69..70 " "
+          ComponentType@70..105
+            NamedType@70..105
+              LowerName@70..73 "val"
+              Whitespace@73..74 " "
+              ConstrainedType@74..105
+                ObjectClassFieldType@74..92
+                  UpperName@74..86 "OBJECT-CLASS"
+                  Dot@86..87 "."
+                  FieldName@87..92
+                    FieldUpper@87..92 "&Type"
+                Whitespace@92..93 " "
+                Constraint@93..105
+                  LParen@93..94 "("
+                  TableConstraint@94..104
+                    BraceGroup@94..99
+                      LBrace@94..95 "{"
+                      UpperName@95..98 "Set"
+                      RBrace@98..99 "}"
+                    BraceGroup@99..104
+                      LBrace@99..100 "{"
+                      At@100..101 "@"
+                      LowerName@101..103 "id"
+                      RBrace@103..104 "}"
+                  RParen@104..105 ")"
+          Whitespace@105..106 " "
+          RBrace@106..107 "}"
+    Whitespace@107..108 "\n"
+    Keyword@108..111 "END"
+  Whitespace@111..112 "\n"

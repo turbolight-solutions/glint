@@ -1,0 +1,82 @@
+---
+source: crates/glint-syntax/tests/cst_snapshots.rs
+expression: "dump(&module(\"IMPORTS a, B FROM X { 1 2 } WITH SUCCESSORS c FROM Y d FROM Z e{} FROM W;\"))"
+---
+SourceFile@0..102
+  ModuleDefinition@0..101
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..97
+      Imports@24..97
+        Keyword@24..31 "IMPORTS"
+        Whitespace@31..32 " "
+        SymbolsFromModule@32..67
+          SymbolList@32..36
+            Symbol@32..33
+              LowerName@32..33 "a"
+            Comma@33..34 ","
+            Whitespace@34..35 " "
+            Symbol@35..36
+              UpperName@35..36 "B"
+          Whitespace@36..37 " "
+          Keyword@37..41 "FROM"
+          Whitespace@41..42 " "
+          GlobalModuleReference@42..67
+            UpperName@42..43 "X"
+            Whitespace@43..44 " "
+            AssignedIdentifier@44..51
+              BraceGroup@44..51
+                LBrace@44..45 "{"
+                Whitespace@45..46 " "
+                Number@46..47 "1"
+                Whitespace@47..48 " "
+                Number@48..49 "2"
+                Whitespace@49..50 " "
+                RBrace@50..51 "}"
+            Whitespace@51..52 " "
+            Keyword@52..56 "WITH"
+            Whitespace@56..57 " "
+            Keyword@57..67 "SUCCESSORS"
+        Whitespace@67..68 " "
+        SymbolsFromModule@68..76
+          SymbolList@68..69
+            Symbol@68..69
+              LowerName@68..69 "c"
+          Whitespace@69..70 " "
+          Keyword@70..74 "FROM"
+          Whitespace@74..75 " "
+          GlobalModuleReference@75..76
+            UpperName@75..76 "Y"
+        Whitespace@76..77 " "
+        SymbolsFromModule@77..85
+          SymbolList@77..78
+            Symbol@77..78
+              LowerName@77..78 "d"
+          Whitespace@78..79 " "
+          Keyword@79..83 "FROM"
+          Whitespace@83..84 " "
+          GlobalModuleReference@84..85
+            UpperName@84..85 "Z"
+        Whitespace@85..86 " "
+        SymbolsFromModule@86..96
+          SymbolList@86..89
+            Symbol@86..89
+              LowerName@86..87 "e"
+              LBrace@87..88 "{"
+              RBrace@88..89 "}"
+          Whitespace@89..90 " "
+          Keyword@90..94 "FROM"
+          Whitespace@94..95 " "
+          GlobalModuleReference@95..96
+            UpperName@95..96 "W"
+        Semicolon@96..97 ";"
+    Whitespace@97..98 "\n"
+    Keyword@98..101 "END"
+  Whitespace@101..102 "\n"

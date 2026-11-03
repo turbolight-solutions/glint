@@ -1,0 +1,35 @@
+[package]
+name = "glint-corpus-build"
+version = "0.1.0"
+description = "Offline builder for the Glint RFC module corpus"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+glint-syntax = { workspace = true }
+glint-extract = { workspace = true }
+glint-corpus = { workspace = true }
+glint-diag = { workspace = true }
+glint-sema = { workspace = true }
+clap = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
+quick-xml = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "corpus-build"
+path = "src/main.rs"
+
+[dev-dependencies]
+glint-check = { workspace = true }

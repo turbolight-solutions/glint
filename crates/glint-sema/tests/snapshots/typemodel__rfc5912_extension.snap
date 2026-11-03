@@ -1,0 +1,86 @@
+---
+source: crates/glint-sema/tests/typemodel.rs
+expression: json(&extension)
+---
+{
+  "kind": "SEQUENCE",
+  "tags": [
+    {
+      "class": "UNIVERSAL",
+      "number": 16
+    }
+  ],
+  "components": [
+    {
+      "name": "extnID",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "OBJECT IDENTIFIER",
+        "reference": "EXTENSION.&id",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 6
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "table",
+            "text": "( { ExtensionSet } )"
+          }
+        ],
+        "open_type": {
+          "class": "EXTENSION",
+          "field": "&id",
+          "object_set": "ExtensionSet"
+        }
+      }
+    },
+    {
+      "name": "critical",
+      "optional": false,
+      "default": {
+        "Boolean": false
+      },
+      "region": "root",
+      "ty": {
+        "kind": "BOOLEAN",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "extnValue",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "OCTET STRING",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 4
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "contents",
+            "text": "( CONTAINING EXTENSION . &ExtnType ( { ExtensionSet } { @ extnID } ) )"
+          }
+        ],
+        "open_type": {
+          "class": "EXTENSION",
+          "field": "&ExtnType",
+          "object_set": "ExtensionSet",
+          "referenced": [
+            "@extnID"
+          ]
+        }
+      }
+    }
+  ]
+}

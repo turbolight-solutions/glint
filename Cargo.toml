@@ -1,0 +1,69 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/glint-syntax",
+    "crates/glint-diag",
+    "crates/glint-extract",
+    "crates/glint-corpus",
+    "crates/glint-sema",
+    "crates/glint-check",
+    "crates/glint-corpus-build",
+    "crates/glint-cli",
+    "crates/glint-server",
+]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/glint-asn1/glint"
+rust-version = "1.88"
+
+[workspace.dependencies]
+glint-syntax = { path = "crates/glint-syntax" }
+glint-diag = { path = "crates/glint-diag" }
+glint-extract = { path = "crates/glint-extract" }
+glint-corpus = { path = "crates/glint-corpus" }
+glint-sema = { path = "crates/glint-sema" }
+glint-check = { path = "crates/glint-check" }
+axum = { version = "0.8.9", features = ["macros"] }
+ariadne = "0.6.0"
+futures-core = "0.3.34"
+http-body-util = "0.1.5"
+clap = { version = "4.6.7", features = ["derive"] }
+insta = "1.49.0"
+proptest = "1.12.0"
+logos = "0.16.1"
+pulldown-cmark = { version = "0.13.6", default-features = false }
+quick-xml = "0.42.0"
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "rustls"] }
+rayon = "1.12.0"
+rowan = "0.16.1"
+sha2 = "0.11.1"
+etcetera = "0.11.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+serde-sarif = "0.8.0"
+strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["compression-gzip", "fs", "limit", "set-header", "timeout", "trace"] }
+tower_governor = "0.8.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+toml = "1.1.8"
+zstd = "0.14.3"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"

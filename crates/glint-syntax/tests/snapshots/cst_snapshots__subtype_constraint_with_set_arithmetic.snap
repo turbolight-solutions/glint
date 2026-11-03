@@ -1,0 +1,74 @@
+---
+source: crates/glint-syntax/tests/cst_snapshots.rs
+expression: "dump(&module(\"T ::= INTEGER (1..10 | 20 ^ (MIN..<50) EXCEPT 5, ... ! 7)\"))"
+---
+SourceFile@0..86
+  ModuleDefinition@0..85
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..81
+      TypeAssignment@24..81
+        UpperName@24..25 "T"
+        Whitespace@25..26 " "
+        Assign@26..29 "::="
+        Whitespace@29..30 " "
+        ConstrainedType@30..81
+          IntegerType@30..37
+            Keyword@30..37 "INTEGER"
+          Whitespace@37..38 " "
+          Constraint@38..81
+            LParen@38..39 "("
+            UnionSet@39..71
+              RangeElement@39..44
+                Value@39..40
+                  Number@39..40 "1"
+                DotDot@40..42 ".."
+                Value@42..44
+                  Number@42..44 "10"
+              Whitespace@44..45 " "
+              Pipe@45..46 "|"
+              Whitespace@46..47 " "
+              IntersectionSet@47..71
+                ValueElement@47..49
+                  Value@47..49
+                    Number@47..49 "20"
+                Whitespace@49..50 " "
+                Caret@50..51 "^"
+                Whitespace@51..52 " "
+                ExclusionSet@52..71
+                  ParenElementSet@52..62
+                    LParen@52..53 "("
+                    RangeElement@53..61
+                      Value@53..56
+                        Keyword@53..56 "MIN"
+                      DotDot@56..58 ".."
+                      Lt@58..59 "<"
+                      Value@59..61
+                        Number@59..61 "50"
+                    RParen@61..62 ")"
+                  Whitespace@62..63 " "
+                  Keyword@63..69 "EXCEPT"
+                  Whitespace@69..70 " "
+                  ValueElement@70..71
+                    Value@70..71
+                      Number@70..71 "5"
+            Comma@71..72 ","
+            Whitespace@72..73 " "
+            Ellipsis@73..76 "..."
+            Whitespace@76..77 " "
+            ExceptionSpec@77..80
+              Bang@77..78 "!"
+              Whitespace@78..79 " "
+              Value@79..80
+                Number@79..80 "7"
+            RParen@80..81 ")"
+    Whitespace@81..82 "\n"
+    Keyword@82..85 "END"
+  Whitespace@85..86 "\n"

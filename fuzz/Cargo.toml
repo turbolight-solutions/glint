@@ -1,0 +1,37 @@
+[package]
+name = "glint-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# cargo-fuzz needs its own workspace and nightly flags, so this crate is the one place that declares versions locally.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+glint-syntax = { path = "../crates/glint-syntax" }
+glint-extract = { path = "../crates/glint-extract" }
+
+[[bin]]
+name = "lexer"
+path = "fuzz_targets/lexer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extract"
+path = "fuzz_targets/extract.rs"
+test = false
+doc = false
+bench = false

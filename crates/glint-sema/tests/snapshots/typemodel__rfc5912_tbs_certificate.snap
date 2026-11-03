@@ -1,0 +1,575 @@
+---
+source: crates/glint-sema/tests/typemodel.rs
+expression: json(&tbs)
+---
+{
+  "kind": "SEQUENCE",
+  "tags": [
+    {
+      "class": "UNIVERSAL",
+      "number": 16
+    }
+  ],
+  "extensible": true,
+  "components": [
+    {
+      "name": "version",
+      "optional": false,
+      "default": {
+        "Raw": "v1"
+      },
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "Version",
+        "tags": [
+          {
+            "class": "CONTEXT",
+            "number": 0
+          }
+        ],
+        "mode": "explicit",
+        "expanded": {
+          "kind": "INTEGER",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 2
+            }
+          ],
+          "named_values": [
+            {
+              "name": "v1",
+              "value": 0
+            },
+            {
+              "name": "v2",
+              "value": 1
+            },
+            {
+              "name": "v3",
+              "value": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "serialNumber",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "CertificateSerialNumber",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 2
+          }
+        ],
+        "expanded": {
+          "kind": "INTEGER",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "signature",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "AlgorithmIdentifier",
+        "actuals": [
+          "SIGNATURE-ALGORITHM",
+          "{ SignatureAlgorithms }"
+        ],
+        "instantiation": {
+          "kind": "SEQUENCE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 16
+            }
+          ],
+          "components": [
+            {
+              "name": "algorithm",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "ObjectClassFieldType",
+                "reference": "ALGORITHM-TYPE.&id",
+                "constraints": [
+                  {
+                    "kind": "table",
+                    "text": "( { AlgorithmSet } )"
+                  }
+                ],
+                "open_type": {
+                  "class": "ALGORITHM-TYPE",
+                  "field": "&id",
+                  "object_set": "AlgorithmSet"
+                }
+              }
+            },
+            {
+              "name": "parameters",
+              "optional": true,
+              "region": "root",
+              "ty": {
+                "kind": "OpenType",
+                "reference": "ALGORITHM-TYPE.&Params",
+                "constraints": [
+                  {
+                    "kind": "table",
+                    "text": "( { AlgorithmSet } { @ algorithm } )"
+                  }
+                ],
+                "open_type": {
+                  "class": "ALGORITHM-TYPE",
+                  "field": "&Params",
+                  "object_set": "AlgorithmSet",
+                  "referenced": [
+                    "@algorithm"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "issuer",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "Name",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 16
+          }
+        ],
+        "expanded": {
+          "kind": "CHOICE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 16
+            }
+          ],
+          "components": [
+            {
+              "name": "rdnSequence",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "Reference",
+                "reference": "RDNSequence",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 16
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "validity",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "Validity",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 16
+          }
+        ],
+        "expanded": {
+          "kind": "SEQUENCE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 16
+            }
+          ],
+          "components": [
+            {
+              "name": "notBefore",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "Reference",
+                "reference": "Time",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 23
+                  },
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 24
+                  }
+                ]
+              }
+            },
+            {
+              "name": "notAfter",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "Reference",
+                "reference": "Time",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 23
+                  },
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 24
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "subject",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "Name",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 16
+          }
+        ],
+        "expanded": {
+          "kind": "CHOICE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 16
+            }
+          ],
+          "components": [
+            {
+              "name": "rdnSequence",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "Reference",
+                "reference": "RDNSequence",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 16
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "subjectPublicKeyInfo",
+      "optional": false,
+      "region": "root",
+      "ty": {
+        "kind": "Reference",
+        "reference": "SubjectPublicKeyInfo",
+        "tags": [
+          {
+            "class": "UNIVERSAL",
+            "number": 16
+          }
+        ],
+        "expanded": {
+          "kind": "SEQUENCE",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 16
+            }
+          ],
+          "components": [
+            {
+              "name": "algorithm",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "Reference",
+                "reference": "AlgorithmIdentifier",
+                "actuals": [
+                  "PUBLIC-KEY",
+                  "{ PublicKeyAlgorithms }"
+                ],
+                "instantiation": {
+                  "kind": "SEQUENCE",
+                  "tags": [
+                    {
+                      "class": "UNIVERSAL",
+                      "number": 16
+                    }
+                  ],
+                  "components": [
+                    {
+                      "name": "algorithm",
+                      "optional": false,
+                      "region": "root",
+                      "ty": {
+                        "kind": "ObjectClassFieldType",
+                        "reference": "ALGORITHM-TYPE.&id",
+                        "constraints": [
+                          {
+                            "kind": "table",
+                            "text": "( { AlgorithmSet } )"
+                          }
+                        ],
+                        "open_type": {
+                          "class": "ALGORITHM-TYPE",
+                          "field": "&id",
+                          "object_set": "AlgorithmSet"
+                        }
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "optional": true,
+                      "region": "root",
+                      "ty": {
+                        "kind": "OpenType",
+                        "reference": "ALGORITHM-TYPE.&Params",
+                        "constraints": [
+                          {
+                            "kind": "table",
+                            "text": "( { AlgorithmSet } { @ algorithm } )"
+                          }
+                        ],
+                        "open_type": {
+                          "class": "ALGORITHM-TYPE",
+                          "field": "&Params",
+                          "object_set": "AlgorithmSet",
+                          "referenced": [
+                            "@algorithm"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "subjectPublicKey",
+              "optional": false,
+              "region": "root",
+              "ty": {
+                "kind": "BIT STRING",
+                "tags": [
+                  {
+                    "class": "UNIVERSAL",
+                    "number": 3
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "issuerUniqueID",
+      "optional": true,
+      "region": "addition",
+      "group": 0,
+      "version": 2,
+      "ty": {
+        "kind": "Reference",
+        "reference": "UniqueIdentifier",
+        "tags": [
+          {
+            "class": "CONTEXT",
+            "number": 1
+          }
+        ],
+        "mode": "implicit",
+        "expanded": {
+          "kind": "BIT STRING",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "subjectUniqueID",
+      "optional": true,
+      "region": "addition",
+      "group": 0,
+      "version": 2,
+      "ty": {
+        "kind": "Reference",
+        "reference": "UniqueIdentifier",
+        "tags": [
+          {
+            "class": "CONTEXT",
+            "number": 2
+          }
+        ],
+        "mode": "implicit",
+        "expanded": {
+          "kind": "BIT STRING",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "extensions",
+      "optional": true,
+      "region": "addition",
+      "group": 1,
+      "version": 3,
+      "ty": {
+        "kind": "Reference",
+        "reference": "Extensions",
+        "tags": [
+          {
+            "class": "CONTEXT",
+            "number": 3
+          }
+        ],
+        "mode": "explicit",
+        "actuals": [
+          "{ CertExtensions }"
+        ],
+        "instantiation": {
+          "kind": "SEQUENCE OF",
+          "tags": [
+            {
+              "class": "UNIVERSAL",
+              "number": 16
+            }
+          ],
+          "element": {
+            "kind": "Reference",
+            "reference": "Extension",
+            "actuals": [
+              "{ ExtensionSet }"
+            ],
+            "instantiation": {
+              "kind": "SEQUENCE",
+              "tags": [
+                {
+                  "class": "UNIVERSAL",
+                  "number": 16
+                }
+              ],
+              "components": [
+                {
+                  "name": "extnID",
+                  "optional": false,
+                  "region": "root",
+                  "ty": {
+                    "kind": "OBJECT IDENTIFIER",
+                    "reference": "EXTENSION.&id",
+                    "tags": [
+                      {
+                        "class": "UNIVERSAL",
+                        "number": 6
+                      }
+                    ],
+                    "constraints": [
+                      {
+                        "kind": "table",
+                        "text": "( { ExtensionSet } )"
+                      }
+                    ],
+                    "open_type": {
+                      "class": "EXTENSION",
+                      "field": "&id",
+                      "object_set": "ExtensionSet"
+                    }
+                  }
+                },
+                {
+                  "name": "critical",
+                  "optional": false,
+                  "default": {
+                    "Boolean": false
+                  },
+                  "region": "root",
+                  "ty": {
+                    "kind": "BOOLEAN",
+                    "tags": [
+                      {
+                        "class": "UNIVERSAL",
+                        "number": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "extnValue",
+                  "optional": false,
+                  "region": "root",
+                  "ty": {
+                    "kind": "OCTET STRING",
+                    "tags": [
+                      {
+                        "class": "UNIVERSAL",
+                        "number": 4
+                      }
+                    ],
+                    "constraints": [
+                      {
+                        "kind": "contents",
+                        "text": "( CONTAINING EXTENSION . &ExtnType ( { ExtensionSet } { @ extnID } ) )"
+                      }
+                    ],
+                    "open_type": {
+                      "class": "EXTENSION",
+                      "field": "&ExtnType",
+                      "object_set": "ExtensionSet",
+                      "referenced": [
+                        "@extnID"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

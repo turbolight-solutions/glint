@@ -1,0 +1,95 @@
+---
+source: crates/glint-syntax/tests/cst_snapshots.rs
+expression: "dump(&module(\"V INTEGER ::= { 1 | 2 }\\nobj MY-CLASS ::= { &id 1, &Type BOOLEAN }\\nSet MY-CLASS ::= { obj1 | obj2, ... }\\nn INTEGER ::= 5\"))"
+---
+SourceFile@0..148
+  ModuleDefinition@0..147
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..143
+      ValueSetAssignment@24..47
+        UpperName@24..25 "V"
+        Whitespace@25..26 " "
+        IntegerType@26..33
+          Keyword@26..33 "INTEGER"
+        Whitespace@33..34 " "
+        Assign@34..37 "::="
+        Whitespace@37..38 " "
+        AmbiguousRhs@38..47
+          BraceGroup@38..47
+            LBrace@38..39 "{"
+            Whitespace@39..40 " "
+            Number@40..41 "1"
+            Whitespace@41..42 " "
+            Pipe@42..43 "|"
+            Whitespace@43..44 " "
+            Number@44..45 "2"
+            Whitespace@45..46 " "
+            RBrace@46..47 "}"
+      Whitespace@47..48 "\n"
+      ValueAssignment@48..89
+        LowerName@48..51 "obj"
+        Whitespace@51..52 " "
+        DefinedType@52..60
+          UpperName@52..60 "MY-CLASS"
+        Whitespace@60..61 " "
+        Assign@61..64 "::="
+        Whitespace@64..65 " "
+        AmbiguousRhs@65..89
+          BraceGroup@65..89
+            LBrace@65..66 "{"
+            Whitespace@66..67 " "
+            FieldLower@67..70 "&id"
+            Whitespace@70..71 " "
+            Number@71..72 "1"
+            Comma@72..73 ","
+            Whitespace@73..74 " "
+            FieldUpper@74..79 "&Type"
+            Whitespace@79..80 " "
+            UpperName@80..87 "BOOLEAN"
+            Whitespace@87..88 " "
+            RBrace@88..89 "}"
+      Whitespace@89..90 "\n"
+      ValueSetAssignment@90..127
+        UpperName@90..93 "Set"
+        Whitespace@93..94 " "
+        DefinedType@94..102
+          UpperName@94..102 "MY-CLASS"
+        Whitespace@102..103 " "
+        Assign@103..106 "::="
+        Whitespace@106..107 " "
+        AmbiguousRhs@107..127
+          BraceGroup@107..127
+            LBrace@107..108 "{"
+            Whitespace@108..109 " "
+            LowerName@109..113 "obj1"
+            Whitespace@113..114 " "
+            Pipe@114..115 "|"
+            Whitespace@115..116 " "
+            LowerName@116..120 "obj2"
+            Comma@120..121 ","
+            Whitespace@121..122 " "
+            Ellipsis@122..125 "..."
+            Whitespace@125..126 " "
+            RBrace@126..127 "}"
+      Whitespace@127..128 "\n"
+      ValueAssignment@128..143
+        LowerName@128..129 "n"
+        Whitespace@129..130 " "
+        IntegerType@130..137
+          Keyword@130..137 "INTEGER"
+        Whitespace@137..138 " "
+        Assign@138..141 "::="
+        Whitespace@141..142 " "
+        Value@142..143
+          Number@142..143 "5"
+    Whitespace@143..144 "\n"
+    Keyword@144..147 "END"
+  Whitespace@147..148 "\n"

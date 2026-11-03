@@ -1,0 +1,7 @@
+[[override]]
+tier = "correction"
+rfc = 8017
+module = "PKCS-1"
+justification = "The comment inside the CONSTRAINED BY of Version wraps onto a second line, which ASN.1 reads as code. The fix joins the comment onto one line."
+author = "Glint maintainers"
+date = "2026-11-03"

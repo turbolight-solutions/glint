@@ -1,0 +1,148 @@
+---
+source: crates/glint-syntax/tests/x681_syntax.rs
+expression: "dump(&module(\"C ::= CLASS {\n           &Type OPTIONAL,\n           &Other DEFAULT INTEGER,\n           &fixed INTEGER UNIQUE,\n           &withDefault BOOLEAN DEFAULT TRUE,\n           &variable &Type OPTIONAL,\n           &Set INTEGER DEFAULT { 1 | 2 },\n           &obj D OPTIONAL,\n           &Objs D DEFAULT { a },\n           &chain &obj.&Type\n         } WITH SYNTAX { ID &fixed [TYPE &Type] }\"))"
+---
+SourceFile@0..405
+  ModuleDefinition@0..404
+    ModuleIdentifier@0..1
+      UpperName@0..1 "M"
+    Whitespace@1..2 " "
+    Keyword@2..13 "DEFINITIONS"
+    Whitespace@13..14 " "
+    Assign@14..17 "::="
+    Whitespace@17..18 " "
+    Keyword@18..23 "BEGIN"
+    Whitespace@23..24 "\n"
+    ModuleBody@24..400
+      TypeAssignment@24..400
+        UpperName@24..25 "C"
+        Whitespace@25..26 " "
+        Assign@26..29 "::="
+        Whitespace@29..30 " "
+        ObjectClassDef@30..400
+          Keyword@30..35 "CLASS"
+          Whitespace@35..36 " "
+          ClassFieldList@36..361
+            LBrace@36..37 "{"
+            Whitespace@37..49 "\n           "
+            FieldSpec@49..63
+              FieldUpper@49..54 "&Type"
+              Whitespace@54..55 " "
+              Keyword@55..63 "OPTIONAL"
+            Comma@63..64 ","
+            Whitespace@64..76 "\n           "
+            FieldSpec@76..98
+              FieldUpper@76..82 "&Other"
+              Whitespace@82..83 " "
+              Keyword@83..90 "DEFAULT"
+              Whitespace@90..91 " "
+              IntegerType@91..98
+                Keyword@91..98 "INTEGER"
+            Comma@98..99 ","
+            Whitespace@99..111 "\n           "
+            FieldSpec@111..132
+              FieldLower@111..117 "&fixed"
+              Whitespace@117..118 " "
+              IntegerType@118..125
+                Keyword@118..125 "INTEGER"
+              Whitespace@125..126 " "
+              Keyword@126..132 "UNIQUE"
+            Comma@132..133 ","
+            Whitespace@133..145 "\n           "
+            FieldSpec@145..178
+              FieldLower@145..157 "&withDefault"
+              Whitespace@157..158 " "
+              BuiltinType@158..165
+                Keyword@158..165 "BOOLEAN"
+              Whitespace@165..166 " "
+              Keyword@166..173 "DEFAULT"
+              Whitespace@173..174 " "
+              Value@174..178
+                Keyword@174..178 "TRUE"
+            Comma@178..179 ","
+            Whitespace@179..191 "\n           "
+            FieldSpec@191..215
+              FieldLower@191..200 "&variable"
+              Whitespace@200..201 " "
+              FieldName@201..206
+                FieldUpper@201..206 "&Type"
+              Whitespace@206..207 " "
+              Keyword@207..215 "OPTIONAL"
+            Comma@215..216 ","
+            Whitespace@216..228 "\n           "
+            FieldSpec@228..258
+              FieldUpper@228..232 "&Set"
+              Whitespace@232..233 " "
+              IntegerType@233..240
+                Keyword@233..240 "INTEGER"
+              Whitespace@240..241 " "
+              Keyword@241..248 "DEFAULT"
+              Whitespace@248..249 " "
+              BraceGroup@249..258
+                LBrace@249..250 "{"
+                Whitespace@250..251 " "
+                Number@251..252 "1"
+                Whitespace@252..253 " "
+                Pipe@253..254 "|"
+                Whitespace@254..255 " "
+                Number@255..256 "2"
+                Whitespace@256..257 " "
+                RBrace@257..258 "}"
+            Comma@258..259 ","
+            Whitespace@259..271 "\n           "
+            FieldSpec@271..286
+              FieldLower@271..275 "&obj"
+              Whitespace@275..276 " "
+              DefinedType@276..277
+                UpperName@276..277 "D"
+              Whitespace@277..278 " "
+              Keyword@278..286 "OPTIONAL"
+            Comma@286..287 ","
+            Whitespace@287..299 "\n           "
+            FieldSpec@299..320
+              FieldUpper@299..304 "&Objs"
+              Whitespace@304..305 " "
+              DefinedType@305..306
+                UpperName@305..306 "D"
+              Whitespace@306..307 " "
+              Keyword@307..314 "DEFAULT"
+              Whitespace@314..315 " "
+              BraceGroup@315..320
+                LBrace@315..316 "{"
+                Whitespace@316..317 " "
+                LowerName@317..318 "a"
+                Whitespace@318..319 " "
+                RBrace@319..320 "}"
+            Comma@320..321 ","
+            Whitespace@321..333 "\n           "
+            FieldSpec@333..350
+              FieldLower@333..339 "&chain"
+              Whitespace@339..340 " "
+              FieldName@340..350
+                FieldLower@340..344 "&obj"
+                Dot@344..345 "."
+                FieldUpper@345..350 "&Type"
+            Whitespace@350..360 "\n         "
+            RBrace@360..361 "}"
+          Whitespace@361..362 " "
+          Keyword@362..366 "WITH"
+          Whitespace@366..367 " "
+          Keyword@367..373 "SYNTAX"
+          Whitespace@373..374 " "
+          BraceGroup@374..400
+            LBrace@374..375 "{"
+            Whitespace@375..376 " "
+            UpperName@376..378 "ID"
+            Whitespace@378..379 " "
+            FieldLower@379..385 "&fixed"
+            Whitespace@385..386 " "
+            LBracket@386..387 "["
+            UpperName@387..391 "TYPE"
+            Whitespace@391..392 " "
+            FieldUpper@392..397 "&Type"
+            RBracket@397..398 "]"
+            Whitespace@398..399 " "
+            RBrace@399..400 "}"
+    Whitespace@400..401 "\n"
+    Keyword@401..404 "END"
+  Whitespace@404..405 "\n"

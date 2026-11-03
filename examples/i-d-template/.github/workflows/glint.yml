@@ -1,0 +1,24 @@
+# Add this file to a draft repository made from martinthomson/i-d-template.
+# Findings show up as annotations on the pull request (Security > Code scanning has the full list).
+name: ASN.1 check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  glint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: glint-asn1/glint/action@v0
+        with:
+          # The Markdown or RFCXML source of the draft; the template names it draft-*.md.
+          files: |
+            draft-*.md
+            draft-*.xml

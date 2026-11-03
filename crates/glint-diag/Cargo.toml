@@ -1,0 +1,18 @@
+[package]
+name = "glint-diag"
+version = "0.1.0"
+description = "Diagnostic types and renderers for Glint"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+ariadne = { workspace = true }
+serde = { workspace = true }
+serde-sarif = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

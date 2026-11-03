@@ -1,0 +1,16 @@
+---
+source: crates/glint-check/tests/rfc5280_blind.rs
+expression: lines
+---
+E300 line 882 (Section 4.1): `Certificate` differs from its definition in PKIX1Explicit88: component `signatureValue` here is `signature` in the module
+    -> line 6487 (Appendix A.1)
+W302 line 885 (Section 4.1): `TBSCertificate` is written differently from its definition in PKIX1Explicit88: `EXPLICIT` is written out here; the module leaves the tagging to the module default (in component `version`)
+    -> line 6504 (Appendix A.1)
+W301 line 1880 (Section 4.2.1.4): snippet defines `Qualifier`, which is not in any module
+E300 line 2094 (Section 4.2.1.6): `GeneralName` differs from its definition in PKIX1Implicit88: type is `OtherName` here but `AnotherName` in the module (in alternative `otherName`)
+    -> line 7120 (Appendix A.2)
+W301 line 2104 (Section 4.2.1.6): snippet defines `OtherName`, which is not in any module
+E300 line 3090 (Section 5.1): `CertificateList` differs from its definition in PKIX1Explicit88: component `signatureValue` here is `signature` in the module
+    -> line 6564 (Appendix A.1)
+W302 line 3105 (Section 5.1): `TBSCertList` is written differently from its definition in PKIX1Explicit88: `EXPLICIT` is written out here; the module leaves the tagging to the module default (in component `crlExtensions`)
+    -> line 6579 (Appendix A.1)
