@@ -1,0 +1,108 @@
+name: docker
+
+# Builds the web service image with a freshly built corpus bundle embedded.
+# Release tags are handled by release.yml; this one is for `main` and for building on demand.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays: pick up RFCs published since the last build
+
+env:
+  CARGO_TERM_COLOR: always
+  IMAGE: ghcr.io/${{ github.repository }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  corpus:
+    name: corpus bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y rsync
+      - run: corpus/fetch.sh
+      - name: Build the bundle
+        run: |
+          cargo run --release --locked -p glint-corpus-build -- \
+            --rfc-dir corpus/cache/rfc --overrides corpus/overrides \
+            --itu-manifest corpus/itu-modules.toml --out corpus/out --date "$(date +%F)"
+          cp corpus/out/corpus-*.bundle corpus.bundle
+          sha256sum corpus.bundle | tee corpus.bundle.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: corpus
+          path: |
+            corpus.bundle
+            corpus.bundle.sha256
+            corpus/out/report.md
+
+  image:
+    name: container image
+    needs: corpus
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: corpus
+          path: corpus-download
+      - name: Embed the corpus
+        run: cp corpus-download/corpus.bundle corpus/embedded.bundle
+      - uses: docker/setup-buildx-action@v4
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=edge
+            type=sha,prefix=sha-,format=short
+      - name: Build (local, for the smoke test)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: glint:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          # The image holds the CLI beside the server; use it to check the corpus is really embedded.
+          docker run --rm --entrypoint /usr/local/bin/glint glint:test --version
+          docker run --rm --entrypoint /usr/local/bin/glint glint:test corpus list | head -n 5
+          docker run -d --name glint -p 8080:8080 glint:test
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/health && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/health
+          curl -fsS http://127.0.0.1:8080/ | grep -qi '<title>'
+          curl -fsS http://127.0.0.1:8080/api/v1/corpus | head -c 300
+          docker logs glint
+          docker rm -f glint
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha

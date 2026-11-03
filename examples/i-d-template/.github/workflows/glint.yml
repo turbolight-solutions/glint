@@ -15,7 +15,7 @@ jobs:
   glint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: glint-asn1/glint/action@v0
         with:
           # The Markdown or RFCXML source of the draft; the template names it draft-*.md.
