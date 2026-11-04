@@ -30,7 +30,7 @@ fn bundle(dir: &std::path::Path) -> PathBuf {
     let record = ModuleRecord {
         name: "Base".to_owned(),
         oid: Some("1.3.6.1.4.1.99.1".parse().unwrap()),
-        source: ModuleSource { rfc: Some(1000), section: Some("Appendix A".to_owned()), kind: SourceKind::Extracted },
+        source: ModuleSource::rfc(1000, Some("Appendix A".to_owned()), SourceKind::Extracted),
         rfc_status: Some("proposed standard".to_owned()),
         obsoleted_by: Vec::new(),
         syntax_era: SyntaxEra::Neutral,
@@ -45,7 +45,7 @@ fn bundle(dir: &std::path::Path) -> PathBuf {
             oid: "1.3.6.1.4.1.99".parse().unwrap(),
             name: "id-base".to_owned(),
             module: "Base".to_owned(),
-            rfc: Some(1000),
+            document: "rfc1000".to_owned(),
         }],
         ..Bundle::default()
     };

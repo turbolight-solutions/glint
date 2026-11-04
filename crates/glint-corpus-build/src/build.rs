@@ -5,12 +5,13 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use glint_corpus::{
-    Bundle, Corpus, CorpusInfo, Exports, ModuleRecord, ModuleSource, OidAssignment, ParseStatus,
-    SourceKind, write_bundle,
+    BODY_RFC, Bundle, Corpus, CorpusInfo, Exports, ModuleRecord, ModuleSource, Oid, OidAssignment,
+    ParseStatus, SourceKind, write_bundle,
 };
 use glint_diag::Severity;
 use glint_sema::{
-    DraftSource, Evaluator, ExportsModel, ModuleModel, Options, SourceId, analyze, syntax_era,
+    AssignedId, DraftSource, Evaluator, ExportsModel, ModuleModel, Options, SourceId, analyze,
+    syntax_era,
 };
 use glint_syntax::{ParseOptions, ast, parse_source_with};
 use rayon::prelude::*;
@@ -19,14 +20,11 @@ use sha2::{Digest, Sha256};
 use crate::Settings;
 use crate::collect::{Candidate, extract_rfc};
 use crate::index::{RfcMeta, read_index};
-use crate::itu::{fetch_needed, read_manifest as read_itu_manifest};
 use crate::overrides::{Override, check_errata, check_extraction_tier, read_overrides};
 use crate::report::{FindingLine, ModuleOutcome, ReportData, render_report};
+use crate::sources::{Defined, Fetched, Manifest, Need, fetch, read_manifest, select};
 
-const NOTICES: &[&str] = &[
-    "Modules extracted from RFCs are code components under the IETF Trust's Revised BSD License (BCP 78, BCP 79).",
-    "Modules from ITU-T Recommendations are the property of ITU-T and are included with credit to ITU-T.",
-];
+const RFC_NOTICE: &str = "Modules extracted from RFCs are code components under the IETF Trust's Revised BSD License (BCP 78, BCP 79).";
 
 pub fn run(settings: &Settings) -> Result<String, String> {
     let numbers = rfc_numbers(&settings.rfc_dir, &settings.only);
@@ -59,98 +57,84 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         }
     }
 
-    let mut kinds: HashMap<(u32, String), SourceKind> = HashMap::new();
-    let mut applied: Vec<Override> = Vec::new();
+    let manifest = match &settings.sources {
+        Some(path) => read_manifest(path)?,
+        None => Manifest::default(),
+    };
+    let mut source_problems: Vec<String> = Vec::new();
+    let (always, problems) = fetch(&manifest.always(), &settings.cache);
+    source_problems.extend(problems);
+    for item in always {
+        candidates.push(standalone_candidate(item, &mut source_problems));
+    }
+
     if let Some(errata) = &settings.errata {
         check_errata(&overrides, errata)?;
     }
-    for item in overrides {
-        check_extraction_tier(
-            &item,
-            candidates
-                .iter()
-                .find(|c| c.rfc == item.rfc && c.name == item.module)
-                .map(|c| c.text.as_str()),
-        )?;
-        let key = (item.rfc, item.module.clone());
-        let section = candidates
-            .iter()
-            .find(|c| c.rfc == item.rfc && c.name == item.module)
-            .and_then(|c| c.section.clone());
-        candidates.retain(|c| !(c.rfc == item.rfc && c.name == item.module));
-        candidates.push(Candidate {
-            rfc: item.rfc,
-            name: item.module.clone(),
-            section,
-            text: item.text.trim().to_owned(),
-            smi: false,
-        });
-        kinds.insert(
-            key,
-            SourceKind::Overridden {
-                tier: item.tier,
-                errata_ids: item.errata_ids.clone(),
-            },
-        );
-        applied.push(item);
-    }
+    let mut pending = overrides;
+    let mut applied: Vec<Override> = Vec::new();
+    apply_overrides(&mut candidates, &mut pending, &mut applied)?;
 
-    let mut seen: HashSet<(u32, String)> = HashSet::new();
-    candidates.retain(|c| seen.insert((c.rfc, c.name.clone())));
-    candidates.sort_by(|a, b| (a.rfc, &a.name).cmp(&(b.rfc, &b.name)));
+    candidates
+        .sort_by(|a, b| (source_key(&a.source), &a.name).cmp(&(source_key(&b.source), &b.name)));
 
-    let mut records: Vec<ModuleRecord> = candidates
+    // A module is identified by its document, name and OID. An RFC may define two modules with one name and
+    // different OIDs (RFC 4998 does), and may show the same module twice, as a header stub and in full.
+    let made: Vec<Option<Made>> = candidates
         .par_iter()
-        .filter_map(|c| {
-            let kind = kinds
-                .get(&(c.rfc, c.name.clone()))
-                .cloned()
-                .unwrap_or(SourceKind::Extracted);
-            let input = RecordInput {
-                name: &c.name,
-                text: &c.text,
-                rfc: Some(c.rfc),
-                section: c.section.clone(),
-            };
-            make_record(&input, kind, meta.get(&c.rfc))
-        })
+        .map(|c| make_record(c, meta_of(&meta, c)))
         .collect();
-    records.sort_by(|a, b| (a.source.rfc, &a.name).cmp(&(b.source.rfc, &b.name)));
-    let unreadable = candidates.len().saturating_sub(records.len());
-    let mut itu_problems: Vec<String> = Vec::new();
-    if let Some(manifest_path) = &settings.itu_manifest {
-        let manifest = read_itu_manifest(manifest_path)?;
-        for _ in 0..4 {
-            let needed = unresolved_imports(&records);
-            let already: HashSet<String> = records.iter().map(|r| r.name.clone()).collect();
-            let (fetched, problems) =
-                fetch_needed(&manifest, &settings.itu_cache, &needed, &already);
-            itu_problems.extend(problems);
-            if fetched.is_empty() {
-                break;
-            }
-            for item in fetched {
-                let input = RecordInput {
-                    name: &item.name,
-                    text: item.text.trim(),
-                    rfc: None,
-                    section: None,
-                };
-                if let Some(record) = make_record(&input, item.kind, None) {
-                    records.push(record);
+    let mut unreadable = made.iter().filter(|m| m.is_none()).count();
+    let mut records = one_per_identity(made.into_iter().flatten().collect());
+    let mut fetched_oids: HashSet<Oid> = HashSet::new();
+    for _ in 0..4 {
+        let mut defined = defined_by(&records);
+        defined.oids.extend(fetched_oids.iter().cloned());
+        let needs = unresolved_imports(&records, &defined);
+        let wanted = select(&manifest.module, &needs, &defined);
+        let (fetched, problems) = fetch(&wanted, &settings.cache);
+        source_problems.extend(problems);
+        if fetched.is_empty() {
+            break;
+        }
+        let mut batch: Vec<Candidate> = Vec::new();
+        for item in fetched {
+            fetched_oids.insert(item.oid.clone());
+            batch.push(standalone_candidate(item, &mut source_problems));
+        }
+        apply_overrides(&mut batch, &mut pending, &mut applied)?;
+        for candidate in &batch {
+            match make_record(candidate, None) {
+                Some(made) => records.push(made.record),
+                None => {
+                    unreadable = unreadable.saturating_add(1);
+                    source_problems.push(format!(
+                        "could not read {} in {}",
+                        candidate.name, candidate.source.document
+                    ));
                 }
             }
         }
-        itu_problems.sort();
-        itu_problems.dedup();
     }
-    records.sort_by(|a, b| (a.source.rfc, &a.name).cmp(&(b.source.rfc, &b.name)));
+    source_problems.sort();
+    source_problems.dedup();
+    if settings.only.is_empty()
+        && let Some(item) = pending.first()
+    {
+        return Err(format!(
+            "override of {} in {} matches no module of the corpus",
+            item.module,
+            glint_corpus::document_title(&item.document)
+        ));
+    }
+    records.sort_by(|a, b| identity(a).cmp(&identity(b)));
 
+    let info = CorpusInfo {
+        version: settings.date.clone(),
+        notices: notices(&manifest, &records),
+    };
     let corpus = Corpus::from_bundle(Bundle {
-        info: CorpusInfo {
-            version: settings.date.clone(),
-            notices: NOTICES.iter().map(|s| (*s).to_owned()).collect(),
-        },
+        info: info.clone(),
         modules: records.clone(),
         oid_assignments: Vec::new(),
     });
@@ -179,7 +163,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         skipped_smi: &skipped_smi,
         unreadable,
         extraction_notes: &extraction_notes,
-        itu_problems: &itu_problems,
+        source_problems: &source_problems,
         overrides: &applied,
         oid_assignments: oid_assignments.len(),
     };
@@ -201,13 +185,9 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         }
         std::fs::write(path, dump).map_err(|e| format!("{}: {e}", path.display()))?;
     }
-    let rfcs_with_modules_count = data.rfcs_with_modules;
 
     let bundle = Bundle {
-        info: CorpusInfo {
-            version: settings.date.clone(),
-            notices: NOTICES.iter().map(|s| (*s).to_owned()).collect(),
-        },
+        info,
         modules: records,
         oid_assignments,
     };
@@ -222,13 +202,23 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     std::fs::write(settings.out.join("report.md"), &report)
         .map_err(|e| format!("report.md: {e}"))?;
 
+    let documents: HashSet<(&str, &str)> = bundle
+        .modules
+        .iter()
+        .map(|m| (m.source.body.as_str(), m.source.document.as_str()))
+        .collect();
+    let rfc_documents = documents
+        .iter()
+        .filter(|(body, _)| *body == BODY_RFC)
+        .count();
     let mut summary = String::new();
     let _ = write!(
         summary,
-        "{}: {} modules from {} RFCs, {} OID assignments",
+        "{}: {} modules from {} RFCs and {} other documents, {} OID assignments",
         bundle_path.display(),
         bundle.modules.len(),
-        rfcs_with_modules_count,
+        rfc_documents,
+        documents.len().saturating_sub(rfc_documents),
         bundle.oid_assignments.len()
     );
     Ok(summary)
@@ -254,23 +244,19 @@ fn rfc_numbers(dir: &Path, only: &[u32]) -> Vec<u32> {
     numbers
 }
 
-struct RecordInput<'a> {
-    name: &'a str,
-    text: &'a str,
-    rfc: Option<u32>,
-    section: Option<String>,
+/// A record and whether its text parsed without syntax errors.
+struct Made {
+    record: ModuleRecord,
+    syntax_clean: bool,
 }
 
-fn make_record(
-    input: &RecordInput<'_>,
-    kind: SourceKind,
-    meta: Option<&RfcMeta>,
-) -> Option<ModuleRecord> {
-    let parse = parse_source_with(input.text, ParseOptions::corpus());
+fn make_record(candidate: &Candidate, meta: Option<&RfcMeta>) -> Option<Made> {
+    let (name, text) = (candidate.name.as_str(), candidate.text.as_str());
+    let parse = parse_source_with(text, ParseOptions::corpus());
     let file = ast::SourceFile::cast(parse.syntax())?;
     let module = file
         .modules()
-        .find(|m| m.name().is_some_and(|n| n.text() == input.name))
+        .find(|m| m.name().is_some_and(|n| n.text() == name))
         .or_else(|| file.modules().next())?;
     let model = ModuleModel::build(&module)?;
     let oid = model.oid_group.as_ref().and_then(Evaluator::literal_oid);
@@ -279,33 +265,195 @@ fn make_record(
         ExportsModel::List(list) => Exports::List(list.iter().map(|(n, _)| n.clone()).collect()),
     };
     let mut hasher = Sha256::new();
-    hasher.update(input.text.as_bytes());
+    hasher.update(text.as_bytes());
     let sha256: String = hasher
         .finalize()
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect();
-    Some(ModuleRecord {
-        name: input.name.to_owned(),
+    let syntax_clean = parse
+        .errors()
+        .iter()
+        .all(|e| e.severity != glint_syntax::Severity::Error);
+    let record = ModuleRecord {
+        name: name.to_owned(),
         oid,
-        source: ModuleSource {
-            rfc: input.rfc,
-            section: input.section.clone(),
-            kind,
-        },
+        source: candidate.source.clone(),
         rfc_status: meta.and_then(|m| m.status.clone()),
         obsoleted_by: meta.map(|m| m.obsoleted_by.clone()).unwrap_or_default(),
         syntax_era: syntax_era(&module),
-        text: input.text.to_owned(),
+        text: text.to_owned(),
         exports,
         parse_status: ParseStatus::Clean,
         sha256,
+    };
+    Some(Made {
+        record,
+        syntax_clean,
     })
 }
 
-/// Names of modules that records import but nothing in `records` defines.
-fn unresolved_imports(records: &[ModuleRecord]) -> HashSet<String> {
-    let defined: HashSet<&str> = records.iter().map(|r| r.name.as_str()).collect();
+/// Orders documents: by body, then by recency within the body, then by id.
+fn source_key(source: &ModuleSource) -> (&str, Option<u32>, &str) {
+    (&source.body, source.recency(), &source.document)
+}
+
+/// What identifies a module: its document, name and definitive identifier.
+fn identity(record: &ModuleRecord) -> ((&str, Option<u32>, &str), &str, &Option<Oid>) {
+    (source_key(&record.source), &record.name, &record.oid)
+}
+
+fn meta_of<'a>(meta: &'a HashMap<u32, RfcMeta>, candidate: &Candidate) -> Option<&'a RfcMeta> {
+    candidate
+        .source
+        .rfc_number()
+        .and_then(|number| meta.get(&number))
+}
+
+/// A downloaded module as a candidate. Reports when its definitive identifier is not the one the manifest lists.
+fn standalone_candidate(item: Fetched, problems: &mut Vec<String>) -> Candidate {
+    let found = module_oid(&item.text, &item.name);
+    if found.as_ref() != Some(&item.oid) {
+        problems.push(format!(
+            "{}: the manifest says {} but the module's identifier is {}",
+            item.name,
+            item.oid,
+            found.map_or_else(|| "absent".to_owned(), |oid| oid.to_string())
+        ));
+    }
+    Candidate {
+        name: item.name,
+        text: item.text.trim().to_owned(),
+        smi: false,
+        source: item.source,
+    }
+}
+
+/// The licence notices of the bodies that `records` come from.
+fn notices(manifest: &Manifest, records: &[ModuleRecord]) -> Vec<String> {
+    let mut notices = vec![RFC_NOTICE.to_owned()];
+    for body in &manifest.body {
+        if records.iter().any(|r| r.source.body == body.id) {
+            notices.push(body.notice.clone());
+        }
+    }
+    notices
+}
+
+/// Replaces the candidates that each pending override names, moving the override to `applied`. An override that
+/// replaces nothing stays pending: its module may arrive with a later batch of downloads.
+fn apply_overrides(
+    candidates: &mut Vec<Candidate>,
+    pending: &mut Vec<Override>,
+    applied: &mut Vec<Override>,
+) -> Result<(), String> {
+    for item in std::mem::take(pending) {
+        let replaced = replaced_by(candidates, &item)?;
+        let extracted = replaced
+            .iter()
+            .filter_map(|&i| candidates.get(i))
+            .min_by_key(|c| !parses_cleanly(&c.text));
+        let Some(extracted) = extracted else {
+            pending.push(item);
+            continue;
+        };
+        check_extraction_tier(&item, Some(extracted.text.as_str()))?;
+        let source = ModuleSource {
+            kind: SourceKind::Overridden {
+                tier: item.tier,
+                errata_ids: item.errata_ids.clone(),
+            },
+            ..extracted.source.clone()
+        };
+        *candidates = std::mem::take(candidates)
+            .into_iter()
+            .enumerate()
+            .filter(|(index, _)| !replaced.contains(index))
+            .map(|(_, candidate)| candidate)
+            .collect();
+        candidates.push(Candidate {
+            name: item.module.clone(),
+            text: item.text.trim().to_owned(),
+            smi: false,
+            source,
+        });
+        applied.push(item);
+    }
+    Ok(())
+}
+
+/// Keeps one record per identity, preferring the one that parses without syntax errors, then the first.
+fn one_per_identity(mut made: Vec<Made>) -> Vec<ModuleRecord> {
+    made.sort_by(|a, b| {
+        identity(&a.record)
+            .cmp(&identity(&b.record))
+            .then(b.syntax_clean.cmp(&a.syntax_clean))
+    });
+    made.dedup_by(|later, kept| identity(&later.record) == identity(&kept.record));
+    made.into_iter().map(|m| m.record).collect()
+}
+
+fn parses_cleanly(text: &str) -> bool {
+    parse_source_with(text, ParseOptions::corpus())
+        .errors()
+        .iter()
+        .all(|e| e.severity != glint_syntax::Severity::Error)
+}
+
+/// The definitive identifier of the module called `name` in `text`.
+fn module_oid(text: &str, name: &str) -> Option<Oid> {
+    let parse = parse_source_with(text, ParseOptions::corpus());
+    let file = ast::SourceFile::cast(parse.syntax())?;
+    let module = file
+        .modules()
+        .find(|m| m.name().is_some_and(|n| n.text() == name))
+        .or_else(|| file.modules().next())?;
+    let model = ModuleModel::build(&module)?;
+    model.oid_group.as_ref().and_then(Evaluator::literal_oid)
+}
+
+/// Indexes of the candidates an override replaces: those of its document and module name, narrowed to its OID when
+/// it has one. Without an OID the document must define the name with at most one OID.
+fn replaced_by(candidates: &[Candidate], item: &Override) -> Result<Vec<usize>, String> {
+    let same_name: Vec<(usize, Option<Oid>)> = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| {
+            c.source.document.eq_ignore_ascii_case(&item.document) && c.name == item.module
+        })
+        .map(|(i, c)| (i, module_oid(&c.text, &c.name)))
+        .collect();
+    if let Some(oid) = &item.oid {
+        return Ok(same_name
+            .into_iter()
+            .filter(|(_, found)| found.as_ref() == Some(oid))
+            .map(|(i, _)| i)
+            .collect());
+    }
+    let mut oids: Vec<&Option<Oid>> = same_name.iter().map(|(_, oid)| oid).collect();
+    oids.sort();
+    oids.dedup();
+    if oids.len() > 1 {
+        return Err(format!(
+            "override of {} in {} is ambiguous: the document defines modules of that name with {} different OIDs; add `oid` to the entry",
+            item.module,
+            glint_corpus::document_title(&item.document),
+            oids.len()
+        ));
+    }
+    Ok(same_name.into_iter().map(|(i, _)| i).collect())
+}
+
+fn defined_by(records: &[ModuleRecord]) -> Defined {
+    Defined {
+        names: records.iter().map(|r| r.name.clone()).collect(),
+        oids: records.iter().filter_map(|r| r.oid.clone()).collect(),
+    }
+}
+
+/// Imports of `records` that nothing in the corpus satisfies: by OID when the import has a literal one, otherwise
+/// by name.
+fn unresolved_imports(records: &[ModuleRecord], defined: &Defined) -> HashSet<Need> {
     let mut missing = HashSet::new();
     for record in records {
         let parse = parse_source_with(&record.text, ParseOptions::corpus());
@@ -315,8 +463,19 @@ fn unresolved_imports(records: &[ModuleRecord]) -> HashSet<String> {
         for module in file.modules() {
             if let Some(model) = ModuleModel::build(&module) {
                 for clause in &model.imports {
-                    if !defined.contains(clause.module_name.as_str()) {
-                        missing.insert(clause.module_name.clone());
+                    let oid = match &clause.assigned {
+                        Some((AssignedId::Oid { group }, _)) => Evaluator::literal_oid(group),
+                        _ => None,
+                    };
+                    let satisfied = match &oid {
+                        Some(oid) => defined.oids.contains(oid),
+                        None => defined.names.contains(&clause.module_name),
+                    };
+                    if !satisfied {
+                        missing.insert(Need {
+                            name: clause.module_name.clone(),
+                            oid,
+                        });
                     }
                 }
             }
@@ -335,7 +494,7 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus) -> (ModuleOutcome, Vec<O
         oid_collisions: false,
         policy_checks: false,
         resolution_notes: false,
-        home_rfc: record.source.rfc,
+        home_document: Some(record.source.document.clone()),
         ..Options::default()
     };
     let parse = parse_source_with(&record.text, ParseOptions::corpus());
@@ -399,7 +558,7 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus) -> (ModuleOutcome, Vec<O
                     oid,
                     name,
                     module: record.name.clone(),
-                    rfc: record.source.rfc,
+                    document: record.source.document.clone(),
                 })
                 .collect()
         })

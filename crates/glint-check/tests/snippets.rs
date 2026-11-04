@@ -543,11 +543,7 @@ fn record(name: &str, rfc: u32, body: &str) -> ModuleRecord {
     ModuleRecord {
         name: name.to_owned(),
         oid: None,
-        source: ModuleSource {
-            rfc: Some(rfc),
-            section: None,
-            kind: SourceKind::Extracted,
-        },
+        source: ModuleSource::rfc(rfc, None, SourceKind::Extracted),
         rfc_status: None,
         obsoleted_by: Vec::new(),
         syntax_era: SyntaxEra::Neutral,

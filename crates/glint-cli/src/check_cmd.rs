@@ -31,8 +31,8 @@ pub struct Args {
     /// Corpus bundle to use instead of the embedded one
     #[arg(long)]
     corpus: Option<PathBuf>,
-    /// Resolve imports of `Name` to the module published in `rfcNNNN`
-    #[arg(long = "pin", value_name = "NAME=rfcNNNN")]
+    /// Resolve imports of `Name` to the module published in `rfcNNNN`, or to the module with that OID
+    #[arg(long = "pin", value_name = "NAME=rfcNNNN|OID")]
     pins: Vec<String>,
     /// Do not compare snippets in the text with the modules
     #[arg(long)]
@@ -68,11 +68,15 @@ pub fn run(args: &Args) -> ExitCode {
     let mut pins = Vec::new();
     for pin in &args.pins {
         match pin.split_once('=') {
-            Some((name, rfc)) if !name.is_empty() && rfc.starts_with("rfc") => {
-                pins.push((name.to_owned(), rfc.to_owned()));
+            Some((name, target))
+                if !name.is_empty()
+                    && (target.starts_with("rfc")
+                        || target.parse::<glint_corpus::Oid>().is_ok()) =>
+            {
+                pins.push((name.to_owned(), target.to_owned()));
             }
             _ => {
-                eprintln!("glint: --pin expects `Name=rfcNNNN`, got `{pin}`");
+                eprintln!("glint: --pin expects `Name=rfcNNNN` or `Name=<oid>`, got `{pin}`");
                 return ExitCode::from(EXIT_FAILURE);
             }
         }

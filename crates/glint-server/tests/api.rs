@@ -38,11 +38,7 @@ fn record(name: &str, rfc: u32, oid: Option<&str>, text: &str) -> ModuleRecord {
     ModuleRecord {
         name: name.to_owned(),
         oid: oid.map(|o| o.parse().unwrap()),
-        source: ModuleSource {
-            rfc: Some(rfc),
-            section: Some("Appendix A".to_owned()),
-            kind: SourceKind::Extracted,
-        },
+        source: ModuleSource::rfc(rfc, Some("Appendix A".to_owned()), SourceKind::Extracted),
         rfc_status: Some("proposed standard".to_owned()),
         obsoleted_by: Vec::new(),
         syntax_era: SyntaxEra::Neutral,
@@ -68,13 +64,13 @@ fn corpus() -> Corpus {
                 oid: "1.3.6.1.4.1.99".parse().unwrap(),
                 name: "id-base".to_owned(),
                 module: "Base".to_owned(),
-                rfc: Some(1000),
+                document: "rfc1000".to_owned(),
             },
             OidAssignment {
                 oid: "1.3.6.1.4.1.99.7".parse().unwrap(),
                 name: "id-seven".to_owned(),
                 module: "Base".to_owned(),
-                rfc: Some(1000),
+                document: "rfc1000".to_owned(),
             },
         ],
     })
@@ -466,8 +462,10 @@ async fn modules_are_searched_by_name_and_by_oid() {
         json!({
             "name": "Base",
             "oid": "1.3.6.1.4.1.99.1",
-            "source": "rfc1000",
-            "rfc": 1000,
+            "body": "rfc",
+            "document": "rfc1000",
+            "edition": null,
+            "url": null,
             "section": "Appendix A",
             "status": "clean",
             "obsoleted_by": [],
@@ -524,6 +522,71 @@ async fn a_module_comes_with_its_text_and_resolved_imports() {
     assert_eq!(body["error"]["code"], "not_found");
 }
 
+const TWIN_88: &str = "Twin { 1 3 6 1 4 1 99 8 } DEFINITIONS ::= BEGIN\n\
+    Old ::= INTEGER\n\
+    END\n";
+
+const TWIN_97: &str = "Twin { 1 3 6 1 4 1 99 9 } DEFINITIONS ::= BEGIN\n\
+    New ::= INTEGER\n\
+    END\n";
+
+fn twin_app() -> Router {
+    let corpus = Corpus::from_bundle(Bundle {
+        info: CorpusInfo::default(),
+        modules: vec![
+            record("Twin", 1002, Some("1.3.6.1.4.1.99.8"), TWIN_88),
+            record("Twin", 1002, Some("1.3.6.1.4.1.99.9"), TWIN_97),
+        ],
+        oid_assignments: Vec::new(),
+    });
+    let state = AppState::new(corpus, Arc::new(FakeFetcher::default()), settings());
+    router(state)
+}
+
+#[tokio::test]
+async fn modules_of_one_name_in_one_rfc_are_told_apart_by_oid() {
+    let (_, body) = send(twin_app(), get("/api/v1/modules?q=twin")).await;
+    assert_eq!(body["total"], 2);
+
+    let (status, body) = send(
+        twin_app(),
+        get("/api/v1/modules/rfc1002/Twin?oid=1.3.6.1.4.1.99.8"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["text"], TWIN_88);
+    assert_eq!(body["oid"], "1.3.6.1.4.1.99.8");
+
+    let (_, body) = send(
+        twin_app(),
+        get("/api/v1/modules/rfc1002/Twin?oid=1.3.6.1.4.1.99.9"),
+    )
+    .await;
+    assert_eq!(body["text"], TWIN_97);
+
+    // Without an OID the later edition (the larger OID) is shown.
+    let (_, body) = send(twin_app(), get("/api/v1/modules/rfc1002/Twin")).await;
+    assert_eq!(body["text"], TWIN_97);
+
+    let (status, _) = send(
+        twin_app(),
+        get("/api/v1/modules/rfc1002/Twin?oid=1.3.6.1.4.1.99.10"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // A module of the pair says which one it is when it is looked up by OID.
+    let (_, body) = send(twin_app(), get("/api/v1/oids/1.3.6.1.4.1.99.8")).await;
+    assert_eq!(
+        body["module"],
+        json!({ "source": "rfc1002", "name": "Twin", "oid": "1.3.6.1.4.1.99.8" })
+    );
+
+    let (status, body) = send(twin_app(), get("/api/v1/modules/rfc1002/Twin?oid=nope")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"]["code"], "bad_request");
+}
+
 #[tokio::test]
 async fn an_oid_lists_its_assignments_and_children() {
     let (status, body) = send(app(), get("/api/v1/oids/1.3.6.1.4.1.99")).await;
@@ -537,7 +600,7 @@ async fn an_oid_lists_its_assignments_and_children() {
     let (_, body) = send(app(), get("/api/v1/oids/1.3.6.1.4.1.99.1")).await;
     assert_eq!(
         body["module"],
-        json!({ "source": "rfc1000", "name": "Base" })
+        json!({ "source": "rfc1000", "name": "Base", "oid": "1.3.6.1.4.1.99.1" })
     );
 
     let (status, _) = send(app(), get("/api/v1/oids/not-an-oid")).await;

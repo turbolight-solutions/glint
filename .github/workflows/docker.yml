@@ -35,7 +35,7 @@ jobs:
         run: |
           cargo run --release --locked -p glint-corpus-build -- \
             --rfc-dir corpus/cache/rfc --overrides corpus/overrides \
-            --itu-manifest corpus/itu-modules.toml --out corpus/out --date "$(date +%F)"
+            --sources corpus/sources.toml --out corpus/out --date "$(date +%F)"
           cp corpus/out/corpus-*.bundle corpus.bundle
           sha256sum corpus.bundle | tee corpus.bundle.sha256
       - uses: actions/upload-artifact@v7

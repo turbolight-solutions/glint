@@ -150,9 +150,9 @@ pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
                 let finding = Finding::new(
                     "I105",
                     format!(
-                        "using curated version of {} from RFC {} ({tier_name}, errata {})",
+                        "using curated version of {} from {} ({tier_name}, errata {})",
                         rec.name,
-                        rec.source.rfc.unwrap_or_default(),
+                        glint_corpus::document_title(&rec.source.document),
                         errata_ids.join(", ")
                     ),
                     ctx.loc(clause.module_range),

@@ -13,6 +13,7 @@ use glint_check::{
 };
 use glint_corpus::{
     CorpusProvider, ModuleRecord, Oid, OidAssignment, ParseStatus, SyntaxEra, preferred,
+    unique_label,
 };
 use glint_diag::{Diagnostic, FileId};
 use glint_extract::{BlockKind, Format, detect_format};
@@ -244,14 +245,22 @@ struct FileInfo {
 struct ModuleRef {
     source: String,
     name: String,
+    /// Tells apart modules of one name in one source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    oid: Option<String>,
 }
 
 impl ModuleRef {
     fn from_label(label: &str) -> Option<Self> {
-        let (source, name) = label.split_once('#')?;
+        let (source, rest) = label.split_once('#')?;
+        let (name, oid) = match rest.split_once('@') {
+            Some((name, oid)) => (name, Some(oid.to_owned())),
+            None => (rest, None),
+        };
         Some(Self {
             source: source.to_owned(),
             name: name.to_owned(),
+            oid,
         })
     }
 }
@@ -544,8 +553,10 @@ async fn corpus_info(State(state): State<AppState>) -> Json<CorpusResponse> {
 struct ModuleListItem {
     name: String,
     oid: Option<String>,
-    source: String,
-    rfc: Option<u32>,
+    body: String,
+    document: String,
+    edition: Option<String>,
+    url: Option<String>,
     section: Option<String>,
     status: ParseStatus,
     obsoleted_by: Vec<u32>,
@@ -556,8 +567,10 @@ impl ModuleListItem {
         Self {
             name: module.name.clone(),
             oid: module.oid.as_ref().map(ToString::to_string),
-            source: module.source.label(),
-            rfc: module.source.rfc,
+            body: module.source.body.clone(),
+            document: module.source.document.clone(),
+            edition: module.source.edition.clone(),
+            url: module.source.url.clone(),
             section: module.source.section.clone(),
             status: module.parse_status,
             obsoleted_by: module.obsoleted_by.clone(),
@@ -626,7 +639,7 @@ async fn search_modules(
         .collect();
     hits.sort_by(|(ra, a), (rb, b)| {
         ra.cmp(rb)
-            .then_with(|| b.source.rfc.cmp(&a.source.rfc))
+            .then_with(|| b.source.recency().cmp(&a.source.recency()))
             .then_with(|| a.name.cmp(&b.name))
     });
     Json(ModulePage {
@@ -665,10 +678,25 @@ fn source_matches(module: &ModuleRecord, source: &str) -> bool {
         && label.eq_ignore_ascii_case(&format!("rfc{source}"))
 }
 
+#[derive(Deserialize)]
+struct DetailParams {
+    /// Picks one of several modules of the same name in a source.
+    oid: Option<String>,
+}
+
 async fn module_detail(
     State(state): State<AppState>,
     UrlPath((source, name)): UrlPath<(String, String)>,
+    Query(params): Query<DetailParams>,
 ) -> Result<Json<ModuleDetail>, ApiError> {
+    let wanted_oid = params
+        .oid
+        .as_deref()
+        .map(|text| {
+            text.parse::<Oid>()
+                .map_err(|_| ApiError::bad_request(format!("`{text}` is not a dotted OID")))
+        })
+        .transpose()?;
     let candidates: Vec<usize> = state
         .corpus
         .by_name(&name)
@@ -681,13 +709,22 @@ async fn module_detail(
                 .get(i)
                 .is_some_and(|m| source_matches(m, &source))
         })
+        .filter(|&i| {
+            wanted_oid.as_ref().is_none_or(|oid| {
+                state
+                    .corpus
+                    .modules()
+                    .get(i)
+                    .is_some_and(|m| m.oid.as_ref() == Some(oid))
+            })
+        })
         .collect();
     let record = preferred(state.corpus.as_ref(), &candidates)
         .and_then(|i| state.corpus.modules().get(i))
         .ok_or_else(|| ApiError::not_found(format!("no module `{name}` in `{source}`")))?
         .clone();
     let text = record.text.clone();
-    let label = record.label();
+    let label = unique_label(state.corpus.as_ref(), &record);
     let imports = state
         .run_blocking(move |corpus| {
             let options = CheckOptions {
@@ -717,7 +754,8 @@ async fn module_detail(
 }
 
 fn record_name(label: &str) -> &str {
-    label.split_once('#').map_or(label, |(_, name)| name)
+    let name = label.split_once('#').map_or(label, |(_, name)| name);
+    name.split_once('@').map_or(name, |(name, _)| name)
 }
 
 #[derive(Serialize)]
@@ -752,6 +790,7 @@ async fn oid_detail(
         .map(|m| ModuleRef {
             source: m.source.label(),
             name: m.name.clone(),
+            oid: m.oid.as_ref().map(ToString::to_string),
         });
     Ok(Json(OidResponse {
         oid: oid.to_string(),

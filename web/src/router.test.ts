@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashForTarget, moduleHash, parseHash } from "./router";
+import { hashForTarget, moduleHash, parseHash, rfcModuleHash } from "./router";
 
 describe("parseHash", () => {
   it("defaults to the checker", () => {
@@ -23,6 +23,27 @@ describe("parseHash", () => {
       from: 10,
       to: 20,
     });
+  });
+
+  it("reads the module a checker link points at", () => {
+    expect(parseHash(rfcModuleHash(5280, "PKIX1 Explicit"))).toEqual({ view: "checker", rfc: 5280, module: "PKIX1 Explicit" });
+    expect(parseHash("#draft-a-b-01?module=M")).toEqual({ view: "checker", draft: "draft-a-b-01", module: "M" });
+  });
+
+  it("tells two modules of one name apart by OID", () => {
+    const oid = "1.3.6.1.5.5.11.0.1.1";
+    expect(moduleHash("rfc4998", "ERS")).toBe("#module/rfc4998/ERS");
+    expect(parseHash(moduleHash("rfc4998", "ERS", undefined, oid))).toEqual({ view: "module", source: "rfc4998", name: "ERS", oid });
+    expect(parseHash(moduleHash("rfc4998", "ERS", { start: 1, end: 2 }, oid))).toEqual({
+      view: "module",
+      source: "rfc4998",
+      name: "ERS",
+      oid,
+      from: 1,
+      to: 2,
+    });
+    expect(parseHash(rfcModuleHash(4998, "ERS", oid))).toEqual({ view: "checker", rfc: 4998, module: "ERS", moduleOid: oid });
+    expect(parseHash("#draft-a-b-01?module=M&oid=1.2.3")).toEqual({ view: "checker", draft: "draft-a-b-01", module: "M", moduleOid: "1.2.3" });
   });
 
   it("ignores anything that is not a route", () => {

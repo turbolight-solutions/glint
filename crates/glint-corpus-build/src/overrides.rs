@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use glint_corpus::OverrideTier;
+use glint_corpus::{Oid, OverrideTier, document_title, rfc_number};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -16,8 +16,9 @@ enum TierName {
 #[derive(Debug, Deserialize)]
 struct Entry {
     tier: TierName,
-    rfc: u32,
+    document: String,
     module: String,
+    oid: Option<String>,
     #[serde(default)]
     errata_ids: Vec<String>,
     justification: Option<String>,
@@ -35,8 +36,12 @@ struct Meta {
 
 #[derive(Debug, Clone)]
 pub struct Override {
-    pub rfc: u32,
+    /// The document id of the module's source: `rfc4998`, `X.509`.
+    pub document: String,
     pub module: String,
+    /// Definitive identifier of the module this replaces, as extracted. Needed when the RFC defines several
+    /// modules with this name.
+    pub oid: Option<Oid>,
     pub tier: OverrideTier,
     pub errata_ids: Vec<String>,
     pub justification: Option<String>,
@@ -48,10 +53,10 @@ pub fn read_overrides(dir: &Path) -> Result<Vec<Override>, String> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Ok(out);
     };
-    let mut rfc_dirs: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
-    rfc_dirs.sort();
-    for rfc_dir in rfc_dirs.into_iter().filter(|p| p.is_dir()) {
-        let meta_path = rfc_dir.join("meta.toml");
+    let mut document_dirs: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
+    document_dirs.sort();
+    for document_dir in document_dirs.into_iter().filter(|p| p.is_dir()) {
+        let meta_path = document_dir.join("meta.toml");
         let meta_text = std::fs::read_to_string(&meta_path)
             .map_err(|e| format!("{}: {e}", meta_path.display()))?;
         let meta: Meta =
@@ -76,12 +81,22 @@ pub fn read_overrides(dir: &Path) -> Result<Vec<Override>, String> {
                     entry.module
                 ));
             }
-            let asn_path = rfc_dir.join(format!("{}.asn", entry.module));
+            let oid = entry
+                .oid
+                .as_deref()
+                .map(|text| {
+                    text.parse::<Oid>().map_err(|e| {
+                        format!("{}: oid of {}: {e}", meta_path.display(), entry.module)
+                    })
+                })
+                .transpose()?;
+            let asn_path = document_dir.join(override_file_name(&entry.module, oid.as_ref()));
             let text = std::fs::read_to_string(&asn_path)
                 .map_err(|e| format!("{}: {e}", asn_path.display()))?;
             out.push(Override {
-                rfc: entry.rfc,
+                document: entry.document,
                 module: entry.module,
+                oid,
                 tier,
                 errata_ids: entry.errata_ids,
                 justification: entry.justification,
@@ -90,6 +105,14 @@ pub fn read_overrides(dir: &Path) -> Result<Vec<Override>, String> {
         }
     }
     Ok(out)
+}
+
+/// `<Module>.asn`, or `<Module>-<oid>.asn` when the entry names the OID of the module it replaces.
+fn override_file_name(module: &str, oid: Option<&Oid>) -> String {
+    match oid {
+        Some(oid) => format!("{module}-{oid}.asn"),
+        None => format!("{module}.asn"),
+    }
 }
 
 fn significant_tokens(text: &str) -> Vec<String> {
@@ -110,16 +133,18 @@ pub fn check_extraction_tier(item: &Override, extracted: Option<&str>) -> Result
     }
     let Some(extracted) = extracted else {
         return Err(format!(
-            "extraction override of {} in RFC {} has no extracted module to compare with",
-            item.module, item.rfc
+            "extraction override of {} in {} has no module to compare with",
+            item.module,
+            document_title(&item.document)
         ));
     };
     if significant_tokens(extracted) == significant_tokens(&item.text) {
         Ok(())
     } else {
         Err(format!(
-            "extraction override of {} in RFC {} changes tokens; use the `correction` or `errata-verified` tier",
-            item.module, item.rfc
+            "extraction override of {} in {} changes tokens; use the `correction` or `errata-verified` tier",
+            item.module,
+            document_title(&item.document)
         ))
     }
 }
@@ -135,6 +160,7 @@ struct Erratum {
 }
 
 /// Checks that every erratum cited by an `errata-verified` override exists, belongs to the RFC and is Verified.
+/// Only RFCs have errata, so the tier is refused for modules of other documents.
 pub fn check_errata(items: &[Override], errata_json: &Path) -> Result<(), String> {
     let text = std::fs::read_to_string(errata_json)
         .map_err(|e| format!("{}: {e}", errata_json.display()))?;
@@ -144,24 +170,27 @@ pub fn check_errata(items: &[Override], errata_json: &Path) -> Result<(), String
         .iter()
         .filter(|i| matches!(i.tier, OverrideTier::ErrataVerified))
     {
+        let Some(number) = rfc_number(&item.document) else {
+            return Err(format!(
+                "`errata-verified` override of {} in {}: only RFCs have errata",
+                item.module, item.document
+            ));
+        };
         for cited in &item.errata_ids {
             let found = all.iter().find(|e| {
                 e.id.to_string().trim_matches('"') == cited
-                    && e.doc_id.eq_ignore_ascii_case(&format!("RFC{}", item.rfc))
+                    && e.doc_id.eq_ignore_ascii_case(&format!("RFC{number}"))
             });
             match found {
                 Some(e) if e.status.eq_ignore_ascii_case("Verified") => {}
                 Some(e) => {
                     return Err(format!(
-                        "erratum {cited} for RFC {} has status {}, not Verified",
-                        item.rfc, e.status
+                        "erratum {cited} for RFC {number} has status {}, not Verified",
+                        e.status
                     ));
                 }
                 None => {
-                    return Err(format!(
-                        "erratum {cited} is not an erratum of RFC {}",
-                        item.rfc
-                    ));
+                    return Err(format!("erratum {cited} is not an erratum of RFC {number}"));
                 }
             }
         }

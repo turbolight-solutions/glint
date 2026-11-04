@@ -86,13 +86,11 @@ fn check_assignments(ctx: &mut Ctx<'_, '_, '_>) {
             continue;
         }
         if let Some(first) = holders.first() {
-            let rfc = first
-                .rfc
-                .map_or_else(|| first.module.clone(), |n| format!("RFC {n}"));
+            let document = glint_corpus::document_title(&first.document);
             let finding = Finding::new(
                 "W140",
                 format!(
-                    "{oid} is already assigned in {rfc} to `{}` (module {})",
+                    "{oid} is already assigned in {document} to `{}` (module {})",
                     first.name, first.module
                 ),
                 ctx.loc(symbol.name_range),

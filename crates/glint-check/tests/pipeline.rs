@@ -84,11 +84,7 @@ fn missing_symbols_in_a_corpus_module_are_reported() {
     let record = ModuleRecord {
         name: "Base".to_owned(),
         oid: None,
-        source: ModuleSource {
-            rfc: Some(1000),
-            section: None,
-            kind: SourceKind::Extracted,
-        },
+        source: ModuleSource::rfc(1000, None, SourceKind::Extracted),
         rfc_status: None,
         obsoleted_by: Vec::new(),
         syntax_era: SyntaxEra::Neutral,
@@ -117,11 +113,7 @@ fn pins_from_the_command_line_apply() {
     let make = |rfc: u32, body: &str| ModuleRecord {
         name: "Base".to_owned(),
         oid: None,
-        source: ModuleSource {
-            rfc: Some(rfc),
-            section: None,
-            kind: SourceKind::Extracted,
-        },
+        source: ModuleSource::rfc(rfc, None, SourceKind::Extracted),
         rfc_status: None,
         obsoleted_by: Vec::new(),
         syntax_era: SyntaxEra::Neutral,

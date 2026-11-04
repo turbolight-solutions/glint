@@ -1,11 +1,11 @@
-//! `corpus-build`: builds the Glint RFC module corpus bundle and its report from a local RFC mirror.
+//! `corpus-build`: builds the Glint ASN.1 module corpus bundle and its report from a local RFC mirror.
 
 mod build;
 mod collect;
 mod index;
-mod itu;
 mod overrides;
 mod report;
+mod sources;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -16,7 +16,7 @@ use clap::Parser;
 #[command(
     name = "corpus-build",
     version,
-    about = "Builds the Glint RFC module corpus"
+    about = "Builds the Glint ASN.1 module corpus"
 )]
 struct Args {
     /// Directory with `rfcNNNN.txt`, `rfcNNNN.xml` and `rfc-index.xml` (see `corpus/fetch.sh`)
@@ -37,12 +37,12 @@ struct Args {
     /// Also write every finding, one per line, to this file (for triage)
     #[arg(long, value_name = "FILE")]
     dump_findings: Option<PathBuf>,
-    /// TOML manifest of ITU-T modules to bundle when RFC modules import them
+    /// TOML manifest of the standalone modules of other standards bodies (ITU-T, ETSI, ...) to bundle
     #[arg(long, value_name = "FILE")]
-    itu_manifest: Option<PathBuf>,
-    /// Where downloaded ITU-T modules are cached
-    #[arg(long, value_name = "DIR", default_value = "corpus/cache/itu")]
-    itu_cache: PathBuf,
+    sources: Option<PathBuf>,
+    /// Where downloaded standalone modules are cached
+    #[arg(long, value_name = "DIR", default_value = "corpus/cache/files")]
+    cache: PathBuf,
     /// RFC Editor `errata.json`, used to check `errata-verified` overrides
     #[arg(long, value_name = "FILE")]
     errata: Option<PathBuf>,
@@ -77,8 +77,8 @@ pub struct Settings {
     pub date: String,
     pub only: Vec<u32>,
     pub dump_findings: Option<PathBuf>,
-    pub itu_manifest: Option<PathBuf>,
-    pub itu_cache: PathBuf,
+    pub sources: Option<PathBuf>,
+    pub cache: PathBuf,
     pub errata: Option<PathBuf>,
 }
 
@@ -91,8 +91,8 @@ impl From<Args> for Settings {
             date: args.date,
             only: args.only,
             dump_findings: args.dump_findings,
-            itu_manifest: args.itu_manifest,
-            itu_cache: args.itu_cache,
+            sources: args.sources,
+            cache: args.cache,
             errata: args.errata,
         }
     }

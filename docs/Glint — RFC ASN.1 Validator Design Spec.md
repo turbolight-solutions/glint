@@ -163,7 +163,7 @@ Checks run per module after import resolution. Each code has a default severity,
 | --- | --- | --- | --- |
 | `E010` | Lexical error: leading zero in a number, name ending in or doubling a hyphen, bad `bstring`/`hstring` character, unterminated comment or string | 12.2–12.3, 12.6, 12.8–12.14 | error |
 | `E011` | Reserved word used as a reference name | 12.2.2, 12.38, 16.1, 16.6 | error |
-| `W100` | Imported module not found in draft, RFC corpus or ITU set; its symbols are treated as opaque | policy | warning |
+| `W100` | Imported module not found in the draft or the corpus; its symbols are treated as opaque | policy | warning |
 | `E101` | Imported symbol not defined in, or not exported by, the target module | 13.13, 13.14, 13.16 a–b | error |
 | `W102` | Module matched by name, but the IMPORTS OID differs from the corpus module's; the OID is definitive | 13.10, 13.11 | warning |
 | `I103` | Import resolved; names the RFC chosen when several candidates exist | policy | info |
@@ -312,9 +312,10 @@ The corpus is a versioned, read-only bundle built offline by `corpus-build`, com
 
 1. **Fetch** the RFC collection (RFC Editor rsync mirror or bulk download), `rfc-index.xml` for metadata (status, obsoletes/obsoleted-by, updates), and errata data from the RFC Editor errata service.
 2. **Extract** with `glint-extract`: XML for RFCs published in v3 format (RFC 8650 onward), text otherwise.
-3. **Apply overrides** from `corpus/overrides/rfcNNNN/<ModuleName>.asn` plus a `meta.toml` (reason, errata IDs applied, curator notes). An override replaces the extracted module wholesale.
+3. **Apply overrides** from `corpus/overrides/<document>/<ModuleName>.asn` plus a `meta.toml` (reason, errata IDs applied, curator notes); each entry names its `document` (`rfc5280`, `X.509`). An override replaces the module wholesale, whichever body published it, and keeps the module's document, edition and URL. A module is identified by document, name and OID, not by name: an RFC may define two modules with one name and different OIDs (RFC 4998 defines `ERS` for 1988 and for 1997 syntax). An override then carries `oid = "..."` (the identifier of the module it replaces, as extracted) and its file is `<document>/<ModuleName>-<oid>.asn`; without `oid` the override is refused if the document defines the name with more than one OID. An override that replaces no module of the corpus is refused. The `errata-verified` tier applies to RFCs only.
+   When one RFC shows the same module more than once (a header in the body and the full text in an appendix), the build keeps the copy that parses without syntax errors, then the first.
 4. **Parse and check** each module with no corpus (pass 1), then again with the partial corpus to resolve imports (pass 2). Record status: `clean`, `warnings`, `errors`, `unparseable`.
-5. **Index** by module name, by module OID, and by every OID value assigned (for `W140`).
+5. **Index** by module name (a name may map to several modules), by module OID, and by every OID value assigned (for `W140`).
 6. **Emit** `corpus-YYYY-MM-DD.bundle` (zstd-compressed, serde-encoded) and a human-readable `report.md` listing every module, its status and its diagnostics. The report is the curator's to-do list.
 
 ### Override policy
@@ -329,7 +330,7 @@ The corpus is a versioned, read-only bundle built offline by `corpus-build`, com
 
 - `CODEOWNERS` maps override paths to maintainers; initially the project owner owns everything, with area experts added later (e.g. LAMPS reviewers for PKIX modules).
 - `meta.toml` fields: `tier`, `rfc`, `module`, `errata_ids` (list), `justification` (required for `correction`), `author`, `date`.
-- Transparency: whenever a check uses an `errata-verified` or `correction` module, emit `I105 using curated version of <Module> from RFC <n> (<tier>, errata <ids>)` once per module. `extraction` overrides are silent.
+- Transparency: whenever a check uses an `errata-verified` or `correction` module, emit `I105 using curated version of <Module> from <document> (<tier>, errata <ids>)` once per module. `extraction` overrides are silent.
 - `report.md` lists every override with its tier, so readers can audit how far the corpus departs from the published text.
 
 ### Module record
@@ -338,7 +339,7 @@ The corpus is a versioned, read-only bundle built offline by `corpus-build`, com
 | --- | --- |
 | `name` | e.g. `PKIX1Explicit88` |
 | `oid` | Dotted form of the definitive identifier, if any |
-| `source` | RFC number, section, and whether extracted or overridden |
+| `source` | The standards `body` (`rfc`, `itu-t`, `etsi`, ...), the `document` within it (`rfc5280`, `X.509`), its `edition` and source `url` where it has them, the section, and whether the text was extracted, taken from a standalone file, or overridden. Every body's modules are records of this one shape |
 | `rfc_status` | Standards track, informational, etc.; obsoleted-by list |
 | `syntax_era` | `1988` (uses `ANY`/`MACRO`), `2002+` (uses X.681), or `neutral` |
 | `text` | The exact module text used |
@@ -350,26 +351,29 @@ The corpus is a versioned, read-only bundle built offline by `corpus-build`, com
 
 1. **OID first.** When IMPORTS gives an `AssignedIdentifier`, it is definitive (13.11) and the module name may differ (13.10). Evaluate a value-reference identifier per 13.9 first. Look for the OID in the draft's own modules, then in the corpus.
 2. **Version selection (13.16 f).** `WITH SUCCESSORS` picks the module whose OID equals the import's with the last arc incremented zero or more times, greatest wins. `WITH DESCENDANTS` picks the module at or below the import's node with the largest OID, comparing arc by arc and preferring the longer OID on a tie.
-3. **Name only.** With no `AssignedIdentifier`, match by name in the draft, then in the corpus. If several corpus modules match, prefer not obsoleted, then newest RFC, and emit `I103` naming the choice. Emit `W106` when the chosen module has a definitive OID (13.12).
-4. **Pins.** Author pins in config (`[pins] PKIX1Explicit88 = "rfc5280"`) override 1–3.
+3. **Name only.** With no `AssignedIdentifier`, match by name in the draft, then in the corpus. If several corpus modules match, prefer one from the importer's own document, then not obsoleted, then the most recent document (RFCs are ordered by number; other bodies have no order and fall through), then the largest OID (editions of a module differ in the last arc, so the larger is the later one), and emit `I103` naming the choice. Emit `W106` when the chosen module has a definitive OID (13.12).
+4. **Pins.** Author pins in config (`[pins] PKIX1Explicit88 = "rfc5280"`) override 1–3. A pin is a document id (`rfc5280`, `X.509`) or the module's dotted OID (`ERS = "1.3.6.1.5.5.11.0.1.1"`), the latter picking one of several modules of the same name, including two in one document.
 5. **Exports.**
    - An explicit `EXPORTS` list limits what can be imported.
    - An empty `Exports` or `EXPORTS ALL` exposes everything defined or imported, except symbols imported more than once (13.13–13.14).
    - A symbol the target itself imports can be re-imported only if it appears once there and is not defined there (13.16 a).
    - Named numbers, enumerations and named bits travel with their type (13.15, 13.18).
 
-The same module name is defined in several RFCs (e.g. PKIX modules in RFC 3280 and RFC 5280, and 2002-syntax rewrites in RFC 5912). That is why X.680 makes the OID definitive and Glint offers pins.
+The same module name is defined in several RFCs (e.g. PKIX modules in RFC 3280 and RFC 5280, and 2002-syntax rewrites in RFC 5912). That is why X.680 makes the OID definitive and Glint offers pins. The module name is only a reference within one module's scope, so Glint never uses it alone as a key: the corpus holds every module it finds, whatever its name, and `by_oid` is the exact lookup.
 
-### Non-RFC modules
+### Modules published as files of their own
 
-Many RFC modules import ITU-T X.500-series modules (`InformationFramework`, `AuthenticationFramework`, etc.). **Decision:** bundle only the ITU-T modules that some corpus RFC module actually imports, found by walking unresolved imports after pass 1 of the build.
+RFC modules import modules that other standards bodies publish as standalone files: ITU-T X.500-series modules (`InformationFramework`, `AuthenticationFramework`, etc.), and in time ETSI and others. **Decision:** these are corpus modules like any other. The only thing that differs by body is how the text arrives: RFC modules are extracted from prose; other bodies' modules are downloaded as `.asn` files.
 
-- `corpus-build` downloads them from the ITU-T ASN.1 module database at build time; they are never committed to the repo.
-- Each record keeps its source URL, Recommendation number and edition, with `source = "itu"`.
-- The bundle ships a notice crediting ITU-T for these modules, alongside the IETF Trust BSD notice for RFC code components.
-- Redistribution: the owner has decided to redistribute these modules in the bundle without seeking separate permission. Keep the ITU-T credit notice and each module's source URL.
+- `corpus/sources.toml` lists them. A `[[body]]` names a standards body (`id`) and carries the `notice` that credits it. A `[[module]]` has `body`, `document`, `edition`, `name`, `oid`, `url` and `include`. Adding a body or a document means adding entries there; no code changes.
+- The OID identifies an entry: editions of a document reuse the module name and change the OID, so each edition is its own entry. The build reports an entry whose `oid` differs from the downloaded module's own identifier.
+- `include = "when-imported"` (the default) bundles a module only when some corpus module imports it and nothing in the corpus satisfies the import, found by walking unresolved imports after pass 1. An import with a literal `AssignedIdentifier` takes the entry with that OID; an import without one takes the entries of that name while the corpus has no module of that name. `include = "always"` bundles it in every build.
+- `corpus-build` downloads the files at build time into `--cache`; they are never committed to the repo.
+- Each record keeps its body, document, edition and source URL, with `kind = "standalone"`.
+- The bundle ships the IETF Trust BSD notice for RFC code components and the notice of each body that has a module in the bundle (the ITU-T credit, for ITU-T).
+- Redistribution: the owner has decided to redistribute these modules in the bundle without seeking separate permission. Keep each body's credit notice and each module's source URL.
 
-Any import that resolves to neither the draft, the RFC corpus nor the ITU set falls back to an **opaque external module**: its imported symbols are accepted with unknown kind, checks that need their definitions are skipped, and `W100` is reported once per module.
+Any import that resolves to neither the draft nor the corpus falls back to an **opaque external module**: its imported symbols are accepted with unknown kind, checks that need their definitions are skipped, and `W100` is reported once per module.
 
 ## Diagnostics
 
@@ -407,12 +411,12 @@ The binary is `glint`, built with `clap`; the corpus bundle is embedded at compi
 | `glint check --draft draft-ietf-lamps-foo-03` | Fetch a draft from the IETF archive, then check |
 | `glint extract <file> -o <dir>` | Write each extracted module to `<dir>/<ModuleName>.asn` |
 | `glint corpus list [--filter <text>]` | List modules with RFC, OID and status |
-| `glint corpus show <name\|oid\|rfcNNNN>` | Print a module's text and metadata |
+| `glint corpus show <name\|oid\|document>` | Print a module's text and metadata; a document is `rfc5280`, `X.509`, ... |
 | `glint corpus oid <dotted-oid>` | Who assigns this OID, and its parent arcs |
 | `glint corpus update` | Download the latest published bundle to the user cache, overriding the embedded one |
 | `glint explain <code>` | Long description of a diagnostic code with examples |
 
-Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <bundle>`, `--pin Name=rfcNNNN`, `--no-snippets`, `--color auto|always|never`.
+Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <bundle>`, `--pin Name=rfcNNNN|<oid>`, `--no-snippets`, `--color auto|always|never`.
 
 Exit codes: `0` no errors, `1` errors found (or warnings with `--deny-warnings`), `2` usage or I/O failure.
 
@@ -447,7 +451,7 @@ Also ship a composite GitHub Action (`glint-action`) that downloads a release bi
 | `POST /check` | `{ document: { format?, name?, content }, options: { pins?, severity?, snippets? } }` | `{ corpus_version, blocks[], modules[], diagnostics[] }` |
 | `POST /check/draft` | `{ draft: "draft-ietf-lamps-foo", rev?: "03" }` or `{ rfc: 5280 }` | Same as `/check`, plus the fetched content |
 | `GET /modules?q=&offset=&limit=` | Search by name or OID substring, 50 per page by default (500 at most) | `{ total, offset, limit, modules: [{ name, oid, rfc, status }] }` |
-| `GET /modules/{rfc}/{name}` | — | Module text and metadata |
+| `GET /modules/{rfc}/{name}?oid=` | `oid` picks one of several modules of that name in the source; without it, the later edition (largest OID) | Module text and metadata |
 | `GET /oids/{dotted}` | — | Assignments of this OID and its children across the corpus |
 | `GET /corpus` | — | Corpus version, build date, module counts by status |
 | `GET /health` | — | `200` |
@@ -571,7 +575,7 @@ Seven milestones; M1–M5 are sequential, the web track (M6) can start once M3 l
 
 ### Open questions for the project owner
 
-- [x] ITU-T modules — decided: bundle only those RFCs import, fetched at build time and redistributed in the bundle with an ITU-T credit notice; unknown modules become opaque (`W100`).
+- [x] Non-RFC modules — decided: standards bodies' standalone modules (ITU-T, ETSI, ...) are corpus modules like RFC ones, listed in `corpus/sources.toml`, fetched at build time and redistributed in the bundle with a credit notice per body; by default only those RFCs import are bundled; unknown modules become opaque (`W100`).
 - [x] MACRO support — decided: opaque definitions and uses; `E172` for new macros in drafts, `W173` for uses.
 - [x] Override curation — decided: public repo, PRs, three review tiers, `I105` transparency note (section 8, Override policy).
 - [x] Hosting — decided: self-hosted Docker image now, Apache-2.0, proposal to the IETF Tools Team after M5 (section 11, Hosting).

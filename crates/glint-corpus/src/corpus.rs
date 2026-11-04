@@ -98,18 +98,42 @@ impl Corpus {
 }
 
 fn is_newer(candidate: &ModuleRecord, current: &ModuleRecord) -> bool {
-    let rank = |m: &ModuleRecord| (m.obsoleted_by.is_empty(), m.source.rfc);
+    let rank = |m: &ModuleRecord| (m.obsoleted_by.is_empty(), m.source.recency());
     rank(candidate) > rank(current)
 }
 
-/// Picks one of `candidates` by the import resolution policy: not obsoleted first, then the newest RFC.
+/// Picks one of `candidates` by the import resolution policy: not obsoleted first, then the most recent document, then the
+/// highest OID (editions of a module share a name and differ in the last arc, so the later one has the larger OID).
 pub fn preferred(corpus: &dyn CorpusProvider, candidates: &[usize]) -> Option<usize> {
     candidates
         .iter()
         .copied()
         .filter_map(|index| corpus.modules().get(index).map(|module| (index, module)))
-        .max_by_key(|(_, module)| (module.obsoleted_by.is_empty(), module.source.rfc))
+        .max_by_key(|(_, module)| {
+            (
+                module.obsoleted_by.is_empty(),
+                module.source.recency(),
+                module.oid.clone(),
+            )
+        })
         .map(|(index, _)| index)
+}
+
+/// [`ModuleRecord::label`], plus `@<oid>` when the source has another module of the same name (RFC 4998 has
+/// two `ERS`), so that the label names exactly one module.
+pub fn unique_label(corpus: &dyn CorpusProvider, record: &ModuleRecord) -> String {
+    let label = record.label();
+    let source = record.source.label();
+    let twins = corpus
+        .by_name(&record.name)
+        .iter()
+        .filter_map(|&index| corpus.modules().get(index))
+        .filter(|other| other.source.label() == source)
+        .count();
+    match &record.oid {
+        Some(oid) if twins > 1 => format!("{label}@{oid}"),
+        _ => label,
+    }
 }
 
 impl CorpusProvider for Corpus {
@@ -139,5 +163,67 @@ impl CorpusProvider for Corpus {
             .take_while(|(key, _)| oid.is_prefix_of(key))
             .flat_map(|(_, list)| list.iter())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Exports, ModuleSource, ParseStatus, SourceKind, SyntaxEra};
+
+    fn record(name: &str, rfc: u32, oid: &str) -> ModuleRecord {
+        ModuleRecord {
+            name: name.to_owned(),
+            oid: oid.parse().ok(),
+            source: ModuleSource::rfc(rfc, None, SourceKind::Extracted),
+            rfc_status: None,
+            obsoleted_by: Vec::new(),
+            syntax_era: SyntaxEra::Neutral,
+            text: String::new(),
+            exports: Exports::All,
+            parse_status: ParseStatus::Clean,
+            sha256: String::new(),
+        }
+    }
+
+    fn corpus(modules: Vec<ModuleRecord>) -> Corpus {
+        Corpus::from_bundle(Bundle {
+            info: CorpusInfo::default(),
+            modules,
+            oid_assignments: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn a_label_carries_the_oid_only_when_the_source_has_two_modules_of_the_name() {
+        let corpus = corpus(vec![
+            record("Twin", 1, "1.2.3.1"),
+            record("Twin", 1, "1.2.3.2"),
+            record("Twin", 2, "1.2.3.3"),
+            record("Solo", 1, "1.2.4.1"),
+        ]);
+        let label = |index: usize| unique_label(&corpus, &corpus.modules()[index]);
+        assert_eq!(label(0), "rfc1#Twin@1.2.3.1");
+        assert_eq!(label(1), "rfc1#Twin@1.2.3.2");
+        assert_eq!(
+            label(2),
+            "rfc2#Twin",
+            "another RFC's module of the name does not count"
+        );
+        assert_eq!(label(3), "rfc1#Solo");
+    }
+
+    #[test]
+    fn the_later_edition_is_preferred_when_nothing_else_differs() {
+        let corpus = corpus(vec![
+            record("Twin", 1, "1.2.3.2"),
+            record("Twin", 1, "1.2.3.1"),
+        ]);
+        let all: Vec<usize> = corpus.by_name("Twin").to_vec();
+        let chosen = preferred(&corpus, &all).unwrap();
+        assert_eq!(
+            corpus.modules()[chosen].oid.as_ref().unwrap().to_string(),
+            "1.2.3.2"
+        );
     }
 }

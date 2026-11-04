@@ -31,7 +31,7 @@ pub struct ReportData<'a> {
     pub skipped_smi: &'a [(u32, String)],
     pub unreadable: usize,
     pub extraction_notes: &'a BTreeMap<u32, Vec<String>>,
-    pub itu_problems: &'a [String],
+    pub source_problems: &'a [String],
     pub overrides: &'a [Override],
     pub oid_assignments: usize,
 }
@@ -136,7 +136,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     } else {
         let _ = writeln!(
             out,
-            "| RFC | Module | Tier | Errata | Justification |\n| --- | --- | --- | --- | --- |"
+            "| Document | Module | Tier | Errata | Justification |\n| --- | --- | --- | --- | --- |"
         );
         for item in data.overrides {
             let tier = match item.tier {
@@ -144,10 +144,11 @@ pub fn render_report(data: &ReportData<'_>) -> String {
                 OverrideTier::ErrataVerified => "errata-verified",
                 OverrideTier::Correction => "correction",
             };
+            let oid = item.oid.as_ref().map_or(String::new(), |o| format!(" {o}"));
             let _ = writeln!(
                 out,
-                "| {} | `{}` | {tier} | {} | {} |",
-                item.rfc,
+                "| {} | `{}`{oid} | {tier} | {} | {} |",
+                item.document,
                 item.module,
                 item.errata_ids.join(", "),
                 item.justification.as_deref().unwrap_or("")
@@ -165,9 +166,13 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         if outcome.status == ParseStatus::Clean {
             continue;
         }
+        let oid = record
+            .oid
+            .as_ref()
+            .map_or(String::new(), |o| format!(" {o}"));
         let _ = writeln!(
             out,
-            "### {} `{}` — {}\n",
+            "### {} `{}`{oid} — {}\n",
             record.source.label(),
             record.name,
             status_name(outcome.status)
@@ -190,21 +195,18 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     let _ = writeln!(out, "## All modules\n");
     let _ = writeln!(
         out,
-        "| RFC | Module | OID | Era | Status | Source |\n| --- | --- | --- | --- | --- | --- |"
+        "| Document | Module | OID | Era | Status | Source |\n| --- | --- | --- | --- | --- | --- |"
     );
     for (record, outcome) in data.records.iter().zip(data.outcomes) {
         let source = match &record.source.kind {
             SourceKind::Extracted => "extracted".to_owned(),
             SourceKind::Overridden { tier, .. } => format!("override ({tier:?})"),
-            SourceKind::Itu { recommendation, .. } => recommendation.clone(),
+            SourceKind::Standalone => record.source.body.clone(),
         };
         let _ = writeln!(
             out,
             "| {} | `{}` | {} | {} | {} | {source} |",
-            record
-                .source
-                .rfc
-                .map_or_else(String::new, |n| n.to_string()),
+            record.source.document,
             record.name,
             record
                 .oid
@@ -222,9 +224,9 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     }
     let _ = writeln!(out);
 
-    if !data.itu_problems.is_empty() {
-        let _ = writeln!(out, "## ITU-T modules that could not be fetched\n");
-        for problem in data.itu_problems {
+    if !data.source_problems.is_empty() {
+        let _ = writeln!(out, "## Standalone modules with problems\n");
+        for problem in data.source_problems {
             let _ = writeln!(out, "- {problem}");
         }
         let _ = writeln!(out);

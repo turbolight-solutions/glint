@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use glint_corpus::{ModuleSource, SourceKind};
 use glint_extract::{BlockKind, Format, extract, module_slices};
 use regex::Regex;
 
@@ -15,11 +16,10 @@ fn smi_pattern() -> Option<Regex> {
 
 #[derive(Debug, Clone)]
 pub struct Candidate {
-    pub rfc: u32,
     pub name: String,
-    pub section: Option<String>,
     pub text: String,
     pub smi: bool,
+    pub source: ModuleSource,
 }
 
 #[derive(Debug, Default)]
@@ -63,11 +63,14 @@ pub fn extract_rfc(dir: &Path, rfc: u32) -> Option<RfcExtraction> {
             let body = body.trim().to_owned();
             let smi_module = smi.as_ref().is_some_and(|re| re.is_match(&body));
             result.candidates.push(Candidate {
-                rfc,
                 name,
-                section: block.origin.section.as_ref().map(ToString::to_string),
                 text: body,
                 smi: smi_module,
+                source: ModuleSource::rfc(
+                    rfc,
+                    block.origin.section.as_ref().map(ToString::to_string),
+                    SourceKind::Extracted,
+                ),
             });
         }
     }

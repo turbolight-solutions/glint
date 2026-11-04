@@ -281,7 +281,7 @@ impl<'c> ModuleGraph<'c> {
             self.corpus
                 .modules()
                 .get(index)
-                .map(|m| std::cmp::Reverse((m.obsoleted_by.is_empty(), m.source.rfc)))
+                .map(|m| std::cmp::Reverse((m.obsoleted_by.is_empty(), m.source.recency())))
         });
         records.truncate(LIMIT);
         for &record in &records {
@@ -332,11 +332,13 @@ impl<'c> ModuleGraph<'c> {
         let importer_origin = importer.origin;
         let importer_oid = importer.oid.clone();
         let importer_name = importer.model.name.clone();
-        let importer_rfc = match importer_origin {
-            Origin::Corpus { record } => {
-                self.corpus.modules().get(record).and_then(|r| r.source.rfc)
-            }
-            Origin::Draft => self.options.home_rfc,
+        let importer_document = match importer_origin {
+            Origin::Corpus { record } => self
+                .corpus
+                .modules()
+                .get(record)
+                .map(|r| r.source.document.clone()),
+            Origin::Draft => self.options.home_document.clone(),
             Origin::Builtin => None,
         };
 
@@ -427,15 +429,15 @@ impl<'c> ModuleGraph<'c> {
             }
         }
         let candidates: Vec<usize> = self.corpus.by_name(&clause.module_name).to_vec();
-        let same_rfc = importer_rfc.and_then(|rfc| {
+        let same_document = importer_document.and_then(|document| {
             candidates.iter().copied().find(|&index| {
                 self.corpus
                     .modules()
                     .get(index)
-                    .is_some_and(|m| m.source.rfc == Some(rfc))
+                    .is_some_and(|m| m.source.document == document)
             })
         });
-        let chosen = same_rfc.or_else(|| preferred(self.corpus, &candidates));
+        let chosen = same_document.or_else(|| preferred(self.corpus, &candidates));
         match chosen {
             Some(record) => {
                 let target = self.load_corpus_module(record);
@@ -455,14 +457,34 @@ impl<'c> ModuleGraph<'c> {
         }
     }
 
+    /// `pin` is a document id (`rfcNNNN`, `X.509`) or the dotted OID of the module. A document that defines
+    /// several modules of the name needs the OID form to say which.
     fn pinned_record(&self, name: &str, pin: &str) -> Option<usize> {
-        let rfc: u32 = pin.strip_prefix("rfc")?.parse().ok()?;
-        self.corpus.by_name(name).iter().copied().find(|&index| {
-            self.corpus
-                .modules()
-                .get(index)
-                .is_some_and(|m| m.source.rfc == Some(rfc))
-        })
+        let by_name = self.corpus.by_name(name);
+        let matching: Vec<usize> = if let Ok(oid) = pin.parse::<Oid>() {
+            by_name
+                .iter()
+                .copied()
+                .filter(|&index| {
+                    self.corpus
+                        .modules()
+                        .get(index)
+                        .is_some_and(|m| m.oid.as_ref() == Some(&oid))
+                })
+                .collect()
+        } else {
+            by_name
+                .iter()
+                .copied()
+                .filter(|&index| {
+                    self.corpus
+                        .modules()
+                        .get(index)
+                        .is_some_and(|m| m.source.document.eq_ignore_ascii_case(pin))
+                })
+                .collect()
+        };
+        preferred(self.corpus, &matching)
     }
 
     fn find_exact_oid(&self, oid: &Oid) -> Option<Candidate> {

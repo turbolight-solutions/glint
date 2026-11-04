@@ -127,7 +127,10 @@ impl Mapper<'_> {
                 if !self.corpus_files.contains_key(&record)
                     && let Some(module) = self.corpus.modules().get(record)
                 {
-                    let entry = self.files.add(module.label(), module.text.clone());
+                    let entry = self.files.add(
+                        glint_corpus::unique_label(self.corpus, module),
+                        module.text.clone(),
+                    );
                     self.corpus_files.insert(record, entry);
                 }
                 match self.corpus_files.get(&record) {
@@ -339,10 +342,12 @@ fn summarize(
                             .target
                             .and_then(|t| analysis.graph.module(t))
                             .map(|t| match t.origin {
-                                Origin::Corpus { record } => corpus
-                                    .modules()
-                                    .get(record)
-                                    .map_or_else(|| t.model.name.clone(), |r| r.label()),
+                                Origin::Corpus { record } => {
+                                    corpus.modules().get(record).map_or_else(
+                                        || t.model.name.clone(),
+                                        |r| glint_corpus::unique_label(corpus, r),
+                                    )
+                                }
                                 Origin::Draft | Origin::Builtin => t.model.name.clone(),
                             });
                     let _ = Matched::Opaque;

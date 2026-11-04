@@ -21,6 +21,26 @@ export interface Diagnostic {
 export interface ModuleRef {
   source: string;
   name: string;
+  /** Present when the source has several modules of this name. */
+  oid?: string;
+}
+
+/** `rfc4998#ERS`, with the OID when the source has several modules of that name. */
+export function moduleLabel(ref: ModuleRef): string {
+  return `${ref.source}#${ref.name}${ref.oid ? ` (${ref.oid})` : ""}`;
+}
+
+/** `5280` for the document id `rfc5280`; null for documents of other standards bodies. */
+export function rfcNumber(document: string): number | null {
+  const match = /^rfc(\d+)$/i.exec(document);
+  return match ? Number(match[1]) : null;
+}
+
+/** `RFC 5280` for `rfc5280`; other document ids are titles already. */
+export function documentTitle(document: string, edition?: string | null): string {
+  const number = rfcNumber(document);
+  const title = number === null ? document : `RFC ${number}`;
+  return edition ? `${title} (${edition})` : title;
 }
 
 export interface FileInfo {
@@ -71,8 +91,13 @@ export interface CheckResponse {
 export interface ModuleListItem {
   name: string;
   oid: string | null;
-  source: string;
-  rfc: number | null;
+  /** The standards body: `rfc`, `itu-t`, `etsi`. */
+  body: string;
+  /** The document within the body: `rfc5280`, `X.509`. */
+  document: string;
+  edition: string | null;
+  /** Where the module's text was downloaded from, for modules published as files of their own. */
+  url: string | null;
   section: string | null;
   status: "clean" | "warnings" | "errors" | "unparseable";
   obsoleted_by: number[];
@@ -91,7 +116,7 @@ export interface OidAssignment {
   oid: string;
   name: string;
   module: string;
-  rfc: number | null;
+  document: string;
 }
 
 export interface OidResponse {
@@ -184,7 +209,7 @@ export const api = {
   corpus: () => request<CorpusResponse>("/corpus"),
   modules: (q: string, offset: number, limit: number, signal?: AbortSignal) =>
     request<ModulePage>(`/modules?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`, { signal }),
-  module: (source: string, name: string) =>
-    request<ModuleDetail>(`/modules/${encodeURIComponent(source)}/${encodeURIComponent(name)}`),
+  module: (source: string, name: string, oid?: string) =>
+    request<ModuleDetail>(`/modules/${encodeURIComponent(source)}/${encodeURIComponent(name)}${oid ? `?oid=${encodeURIComponent(oid)}` : ""}`),
   oid: (dotted: string) => request<OidResponse>(`/oids/${encodeURIComponent(dotted)}`),
 };

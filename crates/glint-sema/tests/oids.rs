@@ -113,7 +113,7 @@ fn corpus_with_assignment(oid: &str, name: &str) -> Corpus {
             oid: oid.parse().unwrap(),
             name: name.to_owned(),
             module: "PKIX1Explicit88".to_owned(),
-            rfc: Some(5280),
+            document: "rfc5280".to_owned(),
         }],
         ..Bundle::default()
     })

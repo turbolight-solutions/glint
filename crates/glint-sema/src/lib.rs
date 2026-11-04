@@ -37,7 +37,8 @@ use glint_syntax::Parse;
 /// Settings that change how a check runs.
 #[derive(Debug, Clone)]
 pub struct Options {
-    /// `Name -> "rfcNNNN"` (design spec, "Import resolution order", rule 4).
+    /// `Name -> document id` (`rfcNNNN`, `X.509`) or `Name -> dotted OID` (design spec, "Import resolution order",
+    /// rule 4).
     pub pins: HashMap<String, String>,
     /// Extra spellings that count as an OID placeholder, besides `TBD`, `TBDn` and `id-TBD` (I141).
     pub placeholders: Vec<String>,
@@ -45,9 +46,9 @@ pub struct Options {
     pub oid_collisions: bool,
     /// Report `I103` and `I105` notes about how imports were resolved.
     pub resolution_notes: bool,
-    /// The RFC the checked modules are published in, when checking a corpus module: imports prefer modules of the
-    /// same RFC.
-    pub home_rfc: Option<u32>,
+    /// The document the checked modules are published in, when checking a corpus module: imports prefer modules of
+    /// the same document.
+    pub home_document: Option<String>,
     /// Report Glint's own style rules for new text (`W170`, `W171`, `E172`, `W173`); off for published modules.
     pub policy_checks: bool,
 }
@@ -59,7 +60,7 @@ impl Default for Options {
             placeholders: Vec::new(),
             oid_collisions: true,
             resolution_notes: true,
-            home_rfc: None,
+            home_document: None,
             policy_checks: true,
         }
     }

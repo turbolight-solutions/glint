@@ -1,0 +1,93 @@
+# Standalone ASN.1 modules that the corpus bundles besides the ones extracted from RFCs: modules that standards
+# bodies publish as files of their own (ITU-T Recommendations, ETSI specifications, ...). A new body or document
+# needs entries here and nothing else. The files are never committed.
+#
+# A `[[body]]` names a standards body and carries the notice that credits it in the bundle. The notice ships when
+# the bundle holds a module of the body.
+#
+# A `[[module]]` is one downloadable module. `document` is the specification it is published in (`X.509`) and
+# `edition` its edition; the module's `oid` is its definitive identifier and identifies the entry: editions of a
+# specification reuse the module name and change the OID, so list each edition you want as its own entry.
+# corpus-build reports an entry whose `oid` differs from the downloaded module's.
+#
+# `include` says when the module is bundled:
+#   "when-imported" (default)  only when some corpus module imports it and nothing in the corpus satisfies the
+#                              import. An import that gives an OID takes the entry with that OID; an import
+#                              without one takes the entries of that name while the corpus has no module of the name.
+#   "always"                   in every build.
+
+[[body]]
+id = "itu-t"
+notice = "Modules from ITU-T Recommendations are the property of ITU-T and are included with credit to ITU-T."
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "InformationFramework"
+oid = "2.5.1.1.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/InformationFramework.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "UsefulDefinitions"
+oid = "2.5.1.0.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/UsefulDefinitions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.509"
+edition = "10/2012"
+name = "AuthenticationFramework"
+oid = "2.5.1.7.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x509/2012/AuthenticationFramework.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.509"
+edition = "10/2012"
+name = "CertificateExtensions"
+oid = "2.5.1.26.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x509/2012/CertificateExtensions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.520"
+edition = "10/2012"
+name = "SelectedAttributeTypes"
+oid = "2.5.1.5.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x520/2012/SelectedAttributeTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.521"
+edition = "10/2012"
+name = "SelectedObjectClasses"
+oid = "2.5.1.6.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x521/2012/SelectedObjectClasses.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTSAbstractService"
+oid = "2.6.3.0.1.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSAbstractService.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTSUpperBounds"
+oid = "2.6.3.0.3.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSUpperBounds.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSAbstractService"
+oid = "2.6.1.0.3.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSAbstractService.asn"

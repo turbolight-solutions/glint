@@ -8,9 +8,9 @@ mod oid;
 mod record;
 
 pub use bundle::{BUNDLE_FORMAT_VERSION, BundleError, read_bundle, write_bundle};
-pub use corpus::{Corpus, CorpusProvider, EmptyCorpus, preferred};
+pub use corpus::{Corpus, CorpusProvider, EmptyCorpus, preferred, unique_label};
 pub use oid::{Oid, OidParseError};
 pub use record::{
-    Bundle, CorpusInfo, Exports, ModuleRecord, ModuleSource, OidAssignment, OverrideTier,
-    ParseStatus, SourceKind, SyntaxEra,
+    BODY_RFC, Bundle, CorpusInfo, Exports, ModuleRecord, ModuleSource, OidAssignment, OverrideTier,
+    ParseStatus, SourceKind, SyntaxEra, document_title, rfc_number,
 };

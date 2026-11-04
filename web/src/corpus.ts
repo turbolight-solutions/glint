@@ -1,8 +1,9 @@
-import { type CorpusResponse, type ImportInfo, type ModuleDetail, type ModuleListItem, type ModulePage, type OidAssignment, api } from "./api";
+import { type CorpusResponse, type ImportInfo, type ModuleDetail, type ModuleListItem, type ModulePage, type OidAssignment, api, documentTitle, moduleLabel, rfcNumber } from "./api";
 import { createEditor } from "./editor";
 import { debounce, h, replace } from "./dom";
+import { parseOid } from "./oid";
 import { OffsetMap } from "./offsets";
-import { corpusHash, moduleHash, oidHash } from "./router";
+import { corpusHash, moduleHash, oidHash, rfcModuleHash } from "./router";
 
 const STATUS_BADGE: Record<ModuleListItem["status"], string> = {
   clean: "text-bg-success",
@@ -20,6 +21,12 @@ function message(text: string, kind = "text-secondary"): HTMLElement {
 }
 
 const PAGE_SIZE = 50;
+
+/** An RFC module opens in the editor at its place in the RFC; modules of other documents have no text to open it in. */
+function moduleLink(m: ModuleListItem): string {
+  const rfc = m.body === "rfc" ? rfcNumber(m.document) : null;
+  return rfc !== null ? rfcModuleHash(rfc, m.name, m.oid) : moduleHash(m.document, m.name, undefined, m.oid);
+}
 
 export interface CorpusBrowser {
   show(query: string): void;
@@ -98,7 +105,7 @@ export function createCorpusBrowser(root: HTMLElement): CorpusBrowser {
         h(
           "thead",
           {},
-          h("tr", {}, h("th", {}, "Module"), h("th", {}, "Source"), h("th", {}, "Section"), h("th", {}, "OID"), h("th", {}, "Status")),
+          h("tr", {}, h("th", {}, "Module"), h("th", {}, "Document"), h("th", {}, "Section"), h("th", {}, "OID"), h("th", {}, "Status")),
         ),
         h(
           "tbody",
@@ -107,11 +114,11 @@ export function createCorpusBrowser(root: HTMLElement): CorpusBrowser {
             h(
               "tr",
               {},
-              h("td", {}, h("a", { href: moduleHash(m.source, m.name) }, m.name)),
+              h("td", {}, h("a", { href: moduleLink(m) }, m.name)),
               h(
                 "td",
                 {},
-                m.source,
+                documentTitle(m.document, m.edition),
                 m.obsoleted_by.length > 0 ? h("span", { class: "badge text-bg-light ms-1" }, `obsoleted by RFC ${m.obsoleted_by.join(", ")}`) : null,
               ),
               h("td", {}, m.section ?? "—"),
@@ -154,7 +161,7 @@ export function createCorpusBrowser(root: HTMLElement): CorpusBrowser {
 }
 
 export interface ModuleViewer {
-  show(source: string, name: string, from?: number, to?: number): void;
+  show(source: string, name: string, from?: number, to?: number, oid?: string): void;
 }
 
 export function createModuleViewer(root: HTMLElement): ModuleViewer {
@@ -197,7 +204,7 @@ export function createModuleViewer(root: HTMLElement): ModuleViewer {
               i.symbols.join(", "),
               " from ",
               i.target
-                ? h("a", { href: moduleHash(i.target.source, i.target.name) }, `${i.target.source}#${i.target.name}`)
+                ? h("a", { href: moduleHash(i.target.source, i.target.name, undefined, i.target.oid) }, moduleLabel(i.target))
                 : h("span", { class: "text-warning-emphasis" }, `${i.module} (not resolved)`),
             ),
           ),
@@ -207,7 +214,10 @@ export function createModuleViewer(root: HTMLElement): ModuleViewer {
   }
 
   function renderHeader(m: ModuleDetail): void {
-    const rfcLink = m.rfc ? h("a", { href: `https://www.rfc-editor.org/rfc/rfc${m.rfc}`, rel: "noopener" }, `RFC ${m.rfc}`) : m.source;
+    const rfc = m.body === "rfc" ? rfcNumber(m.document) : null;
+    const title = documentTitle(m.document, m.edition);
+    const href = rfc !== null ? `https://www.rfc-editor.org/rfc/rfc${rfc}` : m.url;
+    const rfcLink = href ? h("a", { href, rel: "noopener" }, title) : title;
     replace(
       header,
       h("h1", { class: "h4 mb-1" }, m.name),
@@ -220,14 +230,14 @@ export function createModuleViewer(root: HTMLElement): ModuleViewer {
         h("span", {}, `syntax ${m.syntax_era}`),
         m.rfc_status ? h("span", {}, m.rfc_status) : null,
         m.obsoleted_by.length > 0 ? h("span", {}, `obsoleted by RFC ${m.obsoleted_by.join(", ")}`) : null,
-        m.source_kind.kind !== "extracted" ? h("span", { class: "badge text-bg-info" }, m.source_kind.kind) : null,
+        m.source_kind.kind === "overridden" ? h("span", { class: "badge text-bg-info" }, m.source_kind.kind) : null,
       ),
     );
   }
 
   return {
-    show(source, name, from, to) {
-      const key = `${source}/${name}`;
+    show(source, name, from, to, oid) {
+      const key = `${source}/${name}/${oid ?? ""}`;
       if (key === loaded) {
         reveal(from, to);
         return;
@@ -236,7 +246,7 @@ export function createModuleViewer(root: HTMLElement): ModuleViewer {
       const mine = ++requested;
       replace(header, message("Loading…"));
       replace(importsBox);
-      api.module(source, name).then(
+      api.module(source, name, oid).then(
         (module) => {
           if (mine !== requested) return;
           renderHeader(module);
@@ -255,6 +265,8 @@ export function createModuleViewer(root: HTMLElement): ModuleViewer {
   };
 }
 
+const EXAMPLE_OID = "1.3.6.1.5.5.7";
+
 export interface OidPage {
   show(oid?: string): void;
 }
@@ -264,17 +276,39 @@ export function createOidPage(root: HTMLElement): OidPage {
   const input = h("input", {
     class: "form-control font-monospace",
     type: "text",
-    placeholder: "1.3.6.1.5.5.7",
+    placeholder: EXAMPLE_OID,
+    title: "Dotted digits, or names with numbers in parentheses such as iso(1) identified-organization(3) dod(6)",
     "aria-label": "Object identifier",
   });
+  const notes = h("div", { class: "mt-2" });
   const output = h("div", { class: "mt-3" });
   let loaded = "\u0000";
+
+  function showNotes(warnings: string[]): void {
+    replace(notes, ...warnings.map((w) => h("div", { class: "small text-warning-emphasis" }, w)));
+  }
+
+  /** An empty box looks up the example shown as its placeholder; text that is not an OID says so. */
+  function submit(): void {
+    const parsed = parseOid(input.value.trim() === "" ? EXAMPLE_OID : input.value);
+    if (!parsed) {
+      showNotes([]);
+      loaded = "\u0000";
+      replace(output, message("That is not an OID. Use dotted digits or names with numbers in parentheses, such as iso(1) identified-organization(3).", "text-danger"));
+      return;
+    }
+    showNotes(parsed.warnings);
+    const hash = oidHash(parsed.oid);
+    // Looking up what is already shown does not change the hash, so there is no event to wait for.
+    if (window.location.hash === hash) void lookup(parsed.oid);
+    else window.location.hash = hash;
+  }
 
   function table(rows: OidAssignment[]): HTMLElement {
     return h(
       "table",
       { class: "table table-sm align-middle" },
-      h("thead", {}, h("tr", {}, h("th", {}, "OID"), h("th", {}, "Name"), h("th", {}, "Module"), h("th", {}, "RFC"))),
+      h("thead", {}, h("tr", {}, h("th", {}, "OID"), h("th", {}, "Name"), h("th", {}, "Module"), h("th", {}, "Document"))),
       h(
         "tbody",
         {},
@@ -284,8 +318,8 @@ export function createOidPage(root: HTMLElement): OidPage {
             {},
             h("td", { class: "font-monospace small" }, h("a", { href: oidHash(a.oid) }, a.oid)),
             h("td", {}, a.name),
-            h("td", {}, a.rfc ? h("a", { href: moduleHash(`rfc${a.rfc}`, a.module) }, a.module) : a.module),
-            h("td", {}, a.rfc ? `RFC ${a.rfc}` : "—"),
+            h("td", {}, h("a", { href: moduleHash(a.document, a.module) }, a.module)),
+            h("td", {}, documentTitle(a.document)),
           ),
         ),
       ),
@@ -305,7 +339,7 @@ export function createOidPage(root: HTMLElement): OidPage {
           { class: "d-flex flex-wrap gap-3 mb-3 small" },
           h("span", { class: "font-monospace fw-semibold" }, result.oid),
           result.parent ? h("a", { href: oidHash(result.parent) }, "parent") : null,
-          result.module ? h("a", { href: moduleHash(result.module.source, result.module.name) }, `module ${result.module.name}`) : null,
+          result.module ? h("a", { href: moduleHash(result.module.source, result.module.name, undefined, result.module.oid) }, `module ${result.module.name}`) : null,
         ),
         result.assignments.length > 0 ? h("div", {}, h("h2", { class: "h6" }, "Assigned as"), table(result.assignments)) : message("No assignment of this exact OID in the corpus."),
         result.children.length > 0
@@ -336,13 +370,13 @@ export function createOidPage(root: HTMLElement): OidPage {
           class: "input-group",
           onsubmit: (event) => {
             event.preventDefault();
-            const value = input.value.trim();
-            if (value) window.location.hash = oidHash(value);
+            submit();
           },
         },
         input,
         h("button", { class: "btn btn-primary", type: "submit" }, "Look up"),
       ),
+      notes,
       output,
     ),
   );
@@ -352,6 +386,7 @@ export function createOidPage(root: HTMLElement): OidPage {
       if (!oid) {
         loaded = "\u0000";
         replace(output);
+        showNotes([]);
         return;
       }
       if (oid !== loaded) {

@@ -505,12 +505,20 @@ impl<'t> Parser<'t> {
             _ => return false,
         }
         let mut offset = n;
+        let mut depth = 0usize;
         loop {
             let next = offset.saturating_add(1);
-            if self.nth_is(next, SyntaxKind::Assign) {
-                return true;
+            match self.nth(next) {
+                Some(SyntaxKind::Assign) if depth == 0 => return true,
+                None => return false,
+                Some(SyntaxKind::LBrace) => depth = depth.saturating_add(1),
+                // A `}` that closes a group opened before this line: the line continues that group
+                // (`version(1)} DEFINITIONS ::=`), it does not start an assignment.
+                Some(SyntaxKind::RBrace) if depth == 0 => return false,
+                Some(SyntaxKind::RBrace) => depth = depth.saturating_sub(1),
+                Some(_) => {}
             }
-            if self.nth(next).is_none() || self.is_line_start(next) {
+            if self.is_line_start(next) {
                 return false;
             }
             offset = next;

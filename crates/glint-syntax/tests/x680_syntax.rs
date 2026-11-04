@@ -43,6 +43,17 @@ fn x680_13_1_note_2_module_body_without_a_header() {
 }
 
 #[test]
+fn x680_13_1_module_identifier_may_close_on_a_continuation_line_with_definitions() {
+    // The ITU-T modules are written this way (X.411 MTSAbstractService): the line holding the last arcs also
+    // closes the group and carries `DEFINITIONS ... ::=`, which must not read as a new assignment.
+    let parse = assert_clean(
+        "MTSAbstractService {joint-iso-itu-t mhs(6) mts(3) modules(0)\n  mts-abstract-service(1) version-1999(1)} DEFINITIONS IMPLICIT TAGS ::=\nBEGIN\nX ::= INTEGER\nEND",
+    );
+    assert_eq!(count(&parse, SyntaxKind::ModuleDefinition), 1);
+    assert_eq!(count(&parse, SyntaxKind::TypeAssignment), 1);
+}
+
+#[test]
 fn x680_13_1_exports_forms() {
     clean_module("EXPORTS ALL;");
     clean_module("EXPORTS;");
@@ -497,6 +508,13 @@ fn recovery_keeps_later_good_assignments_in_the_tree() {
 fn unclosed_brace_is_reported_once_and_stops_at_the_next_assignment() {
     let found = module_codes("A ::= INTEGER { a(1)\nB ::= BOOLEAN");
     assert!(!found.is_empty() && found.len() <= 2, "{found:?}");
+}
+
+#[test]
+fn unclosed_brace_still_stops_at_a_parameterized_assignment() {
+    // `B{T} ::=` has balanced braces before its `::=`; it is still the start of the next assignment.
+    let parse = parse(&module("A ::= INTEGER { a(1)\nB{T} ::= BOOLEAN"));
+    assert_eq!(count(&parse, SyntaxKind::TypeAssignment), 2);
 }
 
 #[test]

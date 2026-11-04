@@ -33,11 +33,12 @@ cargo run -p glint-asn1 -- extract draft.md -o modules/ --fragments
 ```sh
 corpus/fetch.sh                                  # mirror the RFCs into corpus/cache/rfc
 cargo run --release -p glint-corpus-build -- --rfc-dir corpus/cache/rfc --overrides corpus/overrides \
-    --itu-manifest corpus/itu-modules.toml --out corpus/out --date $(date +%F)   # bundle + report.md
+    --sources corpus/sources.toml --out corpus/out --date $(date +%F)   # bundle + report.md
 cp corpus/out/corpus-*.bundle corpus/embedded.bundle      # embedded into the next `cargo build` (git-ignored)
+# Modules that other standards bodies publish as files (ITU-T, ETSI, ...) are listed in corpus/sources.toml.
 
 cargo run -p glint-asn1 -- check draft.xml                # extract, parse, resolve imports, run the checks
-cargo run -p glint-asn1 -- check draft.txt --format json --pin PKIX1Explicit88=rfc5280
+cargo run -p glint-asn1 -- check draft.txt --format json --pin PKIX1Explicit88=rfc5280   # or --pin ERS=1.3.6.1.5.5.11.0.1.1
 cargo run -p glint-asn1 -- corpus list --filter pkix      # also: corpus show <name|oid|rfcNNNN>, corpus oid <dotted>
 cargo run -p glint-asn1 -- check draft.xml --format sarif > glint.sarif    # for GitHub code scanning
 cargo run -p glint-asn1 -- check --draft draft-ietf-lamps-foo-03          # fetch from the IETF archive, then check

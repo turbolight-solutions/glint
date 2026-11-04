@@ -112,19 +112,21 @@ fn list(corpus: &Corpus, filter: Option<&str>, out: &mut impl Write) -> u8 {
 }
 
 fn find(corpus: &Corpus, key: &str) -> Vec<usize> {
-    if let Some(number) = key.strip_prefix("rfc").and_then(|n| n.parse::<u32>().ok()) {
-        return corpus
-            .modules()
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| m.source.rfc == Some(number))
-            .map(|(i, _)| i)
-            .collect();
-    }
     if let Ok(oid) = key.parse::<Oid>() {
         return corpus.by_oid(&oid).into_iter().collect();
     }
-    corpus.by_name(key).to_vec()
+    let by_document: Vec<usize> = corpus
+        .modules()
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.source.document.eq_ignore_ascii_case(key))
+        .map(|(i, _)| i)
+        .collect();
+    if by_document.is_empty() {
+        corpus.by_name(key).to_vec()
+    } else {
+        by_document
+    }
 }
 
 fn describe(module: &ModuleRecord) -> String {
@@ -196,9 +198,7 @@ fn oid_info(corpus: &Corpus, text: &str, out: &mut impl Write) -> u8 {
     let mut walk = Some(oid.clone());
     while let Some(current) = walk {
         for a in corpus.assignments_of(&current) {
-            let owner = a
-                .rfc
-                .map_or_else(|| a.module.clone(), |n| format!("RFC {n}"));
+            let owner = glint_corpus::document_title(&a.document);
             let _ = writeln!(
                 out,
                 "  {current}  {}  ({owner}, module {})",

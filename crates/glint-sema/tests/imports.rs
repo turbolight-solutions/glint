@@ -156,6 +156,50 @@ fn a_pin_overrides_the_choice() {
     assert!(!has(&check_with(text, &corpus, &options), "E101"));
 }
 
+/// One RFC may define two modules with the same name and different OIDs (RFC 4998 does).
+fn twin_corpus() -> glint_corpus::Corpus {
+    corpus(&[
+        Rec {
+            name: "Twin",
+            oid: Some("1.2.3.1"),
+            rfc: 1000,
+            text: "Twin { 1 2 3 1 } DEFINITIONS ::= BEGIN Old ::= INTEGER END",
+        },
+        Rec {
+            name: "Twin",
+            oid: Some("1.2.3.2"),
+            rfc: 1000,
+            text: "Twin { 1 2 3 2 } DEFINITIONS ::= BEGIN New ::= INTEGER END",
+        },
+    ])
+}
+
+#[test]
+fn an_import_with_an_oid_picks_the_module_of_that_oid_among_same_named_ones() {
+    let corpus = twin_corpus();
+    for (symbol, oid) in [("Old", "1 2 3 1"), ("New", "1 2 3 2")] {
+        let text = format!(
+            "M DEFINITIONS ::= BEGIN IMPORTS {symbol} FROM Twin {{ {oid} }}; T ::= SEQUENCE {{ n {symbol} }} END"
+        );
+        let findings = without_notes(check_with(&text, &corpus, &Options::default()));
+        assert!(findings.is_empty(), "{symbol}: {:?}", codes(&findings));
+    }
+}
+
+#[test]
+fn a_pin_can_name_the_oid_of_one_of_several_same_named_modules() {
+    let corpus = twin_corpus();
+    let text = "M DEFINITIONS ::= BEGIN IMPORTS Old FROM Twin; T ::= SEQUENCE { n Old } END";
+    let mut options = Options::default();
+    // Name only: the later edition (the larger OID) is preferred, which has no `Old`.
+    assert!(has(&check_with(text, &corpus, &options), "E101"));
+    // `rfc1000` cannot say which; the later edition is chosen again.
+    options.pins.insert("Twin".to_owned(), "rfc1000".to_owned());
+    assert!(has(&check_with(text, &corpus, &options), "E101"));
+    options.pins.insert("Twin".to_owned(), "1.2.3.1".to_owned());
+    assert!(!has(&check_with(text, &corpus, &options), "E101"));
+}
+
 // X.680 13.16 f
 #[test]
 fn with_successors_picks_the_greatest_incremented_oid() {

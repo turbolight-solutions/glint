@@ -56,7 +56,7 @@ function main(): void {
         corpus.show(current.q);
         break;
       case "module":
-        modules.show(current.source, current.name, current.from, current.to);
+        modules.show(current.source, current.name, current.from, current.to, current.oid);
         break;
       case "oid":
         oids.show(current.oid);

@@ -26,11 +26,7 @@ pub fn corpus(records: &[Rec<'_>]) -> Corpus {
         .map(|r| ModuleRecord {
             name: r.name.to_owned(),
             oid: r.oid.map(|o| o.parse::<Oid>().unwrap()),
-            source: ModuleSource {
-                rfc: Some(r.rfc),
-                section: None,
-                kind: SourceKind::Extracted,
-            },
+            source: ModuleSource::rfc(r.rfc, None, SourceKind::Extracted),
             rfc_status: None,
             obsoleted_by: Vec::new(),
             syntax_era: SyntaxEra::Neutral,
