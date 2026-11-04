@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashForTarget, moduleHash, parseHash, rfcModuleHash } from "./router";
+import { corpusHash, hashForTarget, moduleHash, parseHash } from "./router";
 
 describe("parseHash", () => {
   it("defaults to the checker", () => {
@@ -16,34 +16,32 @@ describe("parseHash", () => {
     expect(parseHash("#corpus?q=pkix")).toEqual({ view: "corpus", q: "pkix" });
     expect(parseHash("#oid/1.3.6.1")).toEqual({ view: "oid", oid: "1.3.6.1" });
     expect(parseHash("#oid")).toEqual({ view: "oid", oid: undefined });
-    expect(parseHash(moduleHash("rfc5280", "PKIX1Explicit88", { start: 10, end: 20 }))).toEqual({
-      view: "module",
-      source: "rfc5280",
-      name: "PKIX1Explicit88",
-      from: 10,
-      to: 20,
-    });
+  });
+
+  it("keeps the corpus sort in the URL", () => {
+    expect(corpusHash("pkix", { key: "status", direction: "desc" })).toBe("#corpus?q=pkix&sort=-status");
+    expect(corpusHash("", { key: "oid", direction: "asc" })).toBe("#corpus?sort=oid");
+    expect(corpusHash("pkix")).toBe("#corpus?q=pkix");
+    expect(parseHash("#corpus?q=pkix&sort=-status")).toEqual({ view: "corpus", q: "pkix", sort: { key: "status", direction: "desc" } });
+    expect(parseHash("#corpus?sort=oid")).toEqual({ view: "corpus", q: "", sort: { key: "oid", direction: "asc" } });
+    expect(parseHash("#corpus?sort=bogus")).toEqual({ view: "corpus", q: "" });
   });
 
   it("reads the module a checker link points at", () => {
-    expect(parseHash(rfcModuleHash(5280, "PKIX1 Explicit"))).toEqual({ view: "checker", rfc: 5280, module: "PKIX1 Explicit" });
+    expect(parseHash(moduleHash("rfc5280", "PKIX1 Explicit"))).toEqual({ view: "checker", rfc: 5280, module: "PKIX1 Explicit" });
     expect(parseHash("#draft-a-b-01?module=M")).toEqual({ view: "checker", draft: "draft-a-b-01", module: "M" });
   });
 
   it("tells two modules of one name apart by OID", () => {
     const oid = "1.3.6.1.5.5.11.0.1.1";
-    expect(moduleHash("rfc4998", "ERS")).toBe("#module/rfc4998/ERS");
-    expect(parseHash(moduleHash("rfc4998", "ERS", undefined, oid))).toEqual({ view: "module", source: "rfc4998", name: "ERS", oid });
-    expect(parseHash(moduleHash("rfc4998", "ERS", { start: 1, end: 2 }, oid))).toEqual({
-      view: "module",
-      source: "rfc4998",
-      name: "ERS",
-      oid,
-      from: 1,
-      to: 2,
-    });
-    expect(parseHash(rfcModuleHash(4998, "ERS", oid))).toEqual({ view: "checker", rfc: 4998, module: "ERS", moduleOid: oid });
+    expect(moduleHash("rfc4998", "ERS")).toBe("#rfc4998?module=ERS");
+    expect(parseHash(moduleHash("rfc4998", "ERS", oid))).toEqual({ view: "checker", rfc: 4998, module: "ERS", moduleOid: oid });
     expect(parseHash("#draft-a-b-01?module=M&oid=1.2.3")).toEqual({ view: "checker", draft: "draft-a-b-01", module: "M", moduleOid: "1.2.3" });
+  });
+
+  it("opens a module of another standards body as a document of its own", () => {
+    expect(moduleHash("X.509", "Itu1")).toBe("#X.509?module=Itu1");
+    expect(parseHash(moduleHash("X.509", "Itu1", "2.5.1.1.7"))).toEqual({ view: "checker", document: "X.509", module: "Itu1", moduleOid: "2.5.1.1.7" });
   });
 
   it("ignores anything that is not a route", () => {

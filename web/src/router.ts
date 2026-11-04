@@ -1,7 +1,13 @@
+import { type Sort, formatSort, parseSort } from "./modulesort";
+
+/**
+ * A checker route names one document to open. `draft` and `rfc` are documents the server fetches whole;
+ * `document` is any other corpus document, whose modules are files of their own, so it comes with the
+ * `module` to open. For a draft or RFC, `module` says where the cursor goes once the document is open.
+ */
 export type Route =
-  | { view: "checker"; draft?: string; rfc?: number; module?: string; moduleOid?: string }
-  | { view: "corpus"; q: string }
-  | { view: "module"; source: string; name: string; oid?: string; from?: number; to?: number }
+  | { view: "checker"; draft?: string; rfc?: number; document?: string; module?: string; moduleOid?: string }
+  | { view: "corpus"; q: string; sort?: Sort }
   | { view: "oid"; oid?: string };
 
 const DRAFT = /^draft-[a-z0-9-]+$/;
@@ -14,43 +20,24 @@ export function parseHash(hash: string): Route {
   const params = new URLSearchParams(query);
   const parts = path.split("/").map((part) => decodeURIComponent(part));
   const first = (parts[0] ?? "").toLowerCase();
-  if (first === "corpus") return { view: "corpus", q: params.get("q") ?? "" };
+  if (first === "corpus") return { view: "corpus", q: params.get("q") ?? "", sort: parseSort(params.get("sort")) ?? undefined };
   if (first === "oid") return { view: "oid", oid: parts[1] || undefined };
-  if (first === "module" && parts[1] && parts[2]) {
-    const from = params.get("from");
-    const to = params.get("to");
-    return {
-      view: "module",
-      source: parts[1],
-      name: parts[2],
-      oid: params.get("oid") || undefined,
-      from: from === null ? undefined : Number(from),
-      to: to === null ? undefined : Number(to),
-    };
-  }
   const module = params.get("module") || undefined;
   const moduleOid = params.get("oid") || undefined;
   if (DRAFT.test(first)) return { view: "checker", draft: first, module, moduleOid };
   const rfc = RFC.exec(first);
   if (rfc?.[1]) return { view: "checker", rfc: Number(rfc[1]), module, moduleOid };
+  const document = parts[0];
+  if (document && module) return { view: "checker", document, module, moduleOid };
   return { view: "checker" };
 }
 
 /**
- * A module is named by its source and name. An RFC can define two modules with one name and different OIDs, so
- * the OID says which one.
+ * Where a corpus module opens: in the checker, with the cursor at the module's start, whatever body it comes
+ * from. An RFC can define two modules with one name and different OIDs, so the OID says which one.
  */
-export function moduleHash(source: string, name: string, range?: { start: number; end: number }, oid?: string | null): string {
-  const base = `#module/${encodeURIComponent(source)}/${encodeURIComponent(name)}`;
-  const query: string[] = [];
-  if (oid) query.push(`oid=${encodeURIComponent(oid)}`);
-  if (range) query.push(`from=${range.start}`, `to=${range.end}`);
-  return query.length > 0 ? `${base}?${query.join("&")}` : base;
-}
-
-/** Opens an RFC in the checker with the cursor at the start of one of its modules. */
-export function rfcModuleHash(rfc: number, module: string, oid?: string | null): string {
-  const base = `#rfc${rfc}?module=${encodeURIComponent(module)}`;
+export function moduleHash(source: string, name: string, oid?: string | null): string {
+  const base = `#${encodeURIComponent(source)}?module=${encodeURIComponent(name)}`;
   return oid ? `${base}&oid=${encodeURIComponent(oid)}` : base;
 }
 
@@ -58,8 +45,9 @@ export function oidHash(oid: string): string {
   return `#oid/${encodeURIComponent(oid)}`;
 }
 
-export function corpusHash(q: string): string {
-  return q ? `#corpus?q=${encodeURIComponent(q)}` : "#corpus";
+export function corpusHash(q: string, sort?: Sort | null): string {
+  const params = [q ? `q=${encodeURIComponent(q)}` : "", sort ? `sort=${encodeURIComponent(formatSort(sort))}` : ""].filter(Boolean);
+  return params.length > 0 ? `#corpus?${params.join("&")}` : "#corpus";
 }
 
 /** Turns what an author types into a hash: `RFC 5280`, `5280`, or a draft name. */

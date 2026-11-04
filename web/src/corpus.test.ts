@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModuleListItem, ModulePage } from "./api";
-import { createCorpusBrowser, createModuleViewer, createOidPage } from "./corpus";
+import { createCorpusBrowser, createOidPage } from "./corpus";
 
 const TOTAL = 120;
 
@@ -64,7 +64,7 @@ describe("corpus browser paging", () => {
     expect(root.textContent).toContain("51–100 of 120");
   });
 
-  it("links an RFC module to the editor and a module of another body to the module page", async () => {
+  it("links an RFC module to the editor and a module of another body to its own document", async () => {
     const itu = { ...item(1), name: "Itu1", body: "itu-t", document: "X.509", edition: "10/2012", url: null };
     vi.stubGlobal(
       "fetch",
@@ -79,7 +79,7 @@ describe("corpus browser paging", () => {
     createCorpusBrowser(root).show("");
     await settle();
     expect(root.querySelector('a[href="#rfc1000?module=Module0"]')).not.toBeNull();
-    expect(root.querySelector('a[href="#module/X.509/Itu1"]')).not.toBeNull();
+    expect(root.querySelector('a[href="#X.509?module=Itu1"]')).not.toBeNull();
   });
 
   it("links each of two same-named modules in one RFC to its own OID", async () => {
@@ -99,7 +99,7 @@ describe("corpus browser paging", () => {
     await settle();
     expect(root.querySelector('a[href="#rfc4998?module=ERS&oid=1.3.6.1.5.5.11.0.1.1"]')).not.toBeNull();
     expect(root.querySelector('a[href="#rfc4998?module=ERS&oid=1.3.6.1.5.5.11.0.2.1"]')).not.toBeNull();
-    expect(root.querySelector('a[href="#module/X.509/Itu1?oid=2.5.1.1.7"]')).not.toBeNull();
+    expect(root.querySelector('a[href="#X.509?module=Itu1&oid=2.5.1.1.7"]')).not.toBeNull();
   });
 
   it("explains a server that still answers with a bare array", async () => {
@@ -112,38 +112,75 @@ describe("corpus browser paging", () => {
   });
 });
 
-describe("module viewer", () => {
-  function detail(oid: string | null): Response {
-    const body = { ...item(0), name: "ERS", oid, rfc_status: null, syntax_era: "neutral", source_kind: { kind: "extracted" }, exports: "all", sha256: "x", text: "ERS DEFINITIONS ::= BEGIN END", imports: [] };
-    return new Response(JSON.stringify(body), { status: 200 });
-  }
-
-  it("asks for the module with the OID the link carries, and reloads when only the OID changes", async () => {
-    const fetchMock = vi.fn(async (_url: string) => detail("1.2.3"));
+describe("corpus browser sorting", () => {
+  it("sorts the whole list by severity across pages and pages through the sorted list", async () => {
+    // Module119 is the only module with errors, and it would be on the third page in the server's order.
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/v1/corpus")) return respond(url);
+      const modules = Array.from({ length: TOTAL }, (_, i) => ({ ...item(i), status: i === TOTAL - 1 ? ("errors" as const) : ("clean" as const) }));
+      const params = new URL(url, "http://localhost").searchParams;
+      const offset = Number(params.get("offset"));
+      const limit = Number(params.get("limit"));
+      return new Response(JSON.stringify({ total: TOTAL, offset, limit, modules: modules.slice(offset, offset + limit) }), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
-    const viewer = createModuleViewer(root);
-    viewer.show("rfc4998", "ERS", undefined, undefined, "1.2.3");
+    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+    window.location.hash = "";
+    const browser = createCorpusBrowser(root);
+    browser.show("");
     await settle();
-    viewer.show("rfc4998", "ERS", undefined, undefined, "1.2.4");
-    await settle();
-    viewer.show("rfc4998", "ERS", undefined, undefined, "1.2.4");
-    await settle();
-    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "/api/v1/modules/rfc4998/ERS?oid=1.2.3",
-      "/api/v1/modules/rfc4998/ERS?oid=1.2.4",
-    ]);
+    expect(root.textContent).not.toContain("Module119");
+
+    button(root, "Status").click();
+    expect(root.querySelector("th[aria-sort]")?.getAttribute("aria-sort")).toBe("descending");
+    expect(root.querySelector("tbody tr")?.textContent).toContain("Module119");
+    expect(root.textContent).toContain("1–50 of 120");
+
+    button(root, "Next").click();
+    expect(root.textContent).toContain("51–100 of 120");
+
+    button(root, "Status ▼").click();
+    expect(root.querySelector("th[aria-sort]")?.getAttribute("aria-sort")).toBe("ascending");
+    expect(root.textContent).toContain("1–50 of 120");
+    expect(root.textContent).not.toContain("Module119");
+
+    button(root, "Status ▲").click();
+    expect(root.querySelector("th[aria-sort]")).toBeNull();
+    expect(window.location.hash).toBe("#corpus");
+
+    button(root, "OID").click();
+    expect(window.location.hash).toBe("#corpus?sort=oid");
+    button(root, "OID ▲").click();
+    expect(window.location.hash).toBe("#corpus?sort=-oid");
+
+    // Opening a link with a sort in it shows that sort, and moving between sorts does not fetch again.
+    browser.show("", { key: "status", direction: "desc" });
+    expect(root.querySelector("tbody tr")?.textContent).toContain("Module119");
+    browser.show("", null);
+    expect(root.querySelector("th[aria-sort]")).toBeNull();
+
+    // The list was fetched once, in one request, and sorting and paging never went back to the server.
+    const moduleRequests = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/modules"));
+    expect(moduleRequests).toHaveLength(1);
+    expect(String(moduleRequests[0]?.[0])).toContain("limit=500");
   });
 
-  it("links an import to the module of the OID the server resolved it to", async () => {
-    const imports = [{ module: "ERS", resolved_to: "rfc4998#ERS@1.2.3", target: { source: "rfc4998", name: "ERS", oid: "1.2.3" }, symbols: ["X"] }];
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...(await detail("1.2.9").json()), imports }), { status: 200 })));
+  it("keeps fetching until it has every module when the server answers with less than asked", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/api/v1/corpus")) return respond(url);
+      const params = new URL(url, "http://localhost").searchParams;
+      const offset = Number(params.get("offset"));
+      const count = Math.min(70, TOTAL - offset);
+      return new Response(JSON.stringify({ total: TOTAL, offset, limit: 70, modules: Array.from({ length: count }, (_, i) => item(offset + i)) }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
-    createModuleViewer(root).show("rfc4999", "Other");
+    createCorpusBrowser(root).show("");
     await settle();
-    expect(root.querySelector('a[href="#module/rfc4998/ERS?oid=1.2.3"]')?.textContent).toBe("rfc4998#ERS (1.2.3)");
+    expect(root.textContent).toContain("1–50 of 120");
   });
 });
 

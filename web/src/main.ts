@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { createChecker } from "./checker";
-import { createCorpusBrowser, createModuleViewer, createOidPage } from "./corpus";
+import { createCorpusBrowser, createOidPage } from "./corpus";
 import { safeStorage } from "./dom";
 import { parseHash } from "./router";
 import "./style.css";
@@ -33,30 +33,24 @@ function main(): void {
   const views = {
     checker: element("view-checker"),
     corpus: element("view-corpus"),
-    module: element("view-module"),
     oid: element("view-oid"),
   };
   const checker = createChecker(views.checker);
   const corpus = createCorpusBrowser(views.corpus);
-  const modules = createModuleViewer(views.module);
   const oids = createOidPage(views.oid);
 
   function route(): void {
     const current = parseHash(window.location.hash);
     for (const [name, section] of Object.entries(views)) section.hidden = name !== current.view;
-    const navView = current.view === "module" ? "corpus" : current.view;
     for (const link of document.querySelectorAll<HTMLElement>("#main-nav .nav-link")) {
-      link.classList.toggle("active", link.dataset.view === navView);
+      link.classList.toggle("active", link.dataset.view === current.view);
     }
     switch (current.view) {
       case "checker":
         checker.show(current);
         break;
       case "corpus":
-        corpus.show(current.q);
-        break;
-      case "module":
-        modules.show(current.source, current.name, current.from, current.to, current.oid);
+        corpus.show(current.q, current.sort ?? null);
         break;
       case "oid":
         oids.show(current.oid);

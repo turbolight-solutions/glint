@@ -81,8 +81,7 @@ describe("checker view", () => {
     checkButton(root)?.click();
     await vi.waitFor(() => expect(root.textContent).toContain("differs from its definition"));
     expect(root.textContent).toContain("1 error");
-    expect(root.querySelector('a[href="#module/rfc1000/Base"]')).not.toBeNull();
-    expect(root.querySelector('a[href^="#module/rfc1000/Base?from=10&to=14"]')).not.toBeNull();
+    expect(root.querySelector('a[href="#rfc1000?module=Base"]')).not.toBeNull();
     expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/v1/check");
   });
 
@@ -132,9 +131,9 @@ describe("checker view", () => {
     createChecker(root);
     checkButton(root)?.click();
     await vi.waitFor(() => expect(root.textContent).toContain("differs from its definition"));
-    const importLink = root.querySelector('a[href="#module/rfc4998/ERS?oid=1.2.3.2"]');
-    expect(importLink?.textContent).toBe("rfc4998#ERS (1.2.3.2)");
-    expect(root.querySelector('a[href="#module/rfc4998/ERS?oid=1.2.3.2&from=10&to=14"]')).not.toBeNull();
+    const links = [...root.querySelectorAll('a[href="#rfc4998?module=ERS&oid=1.2.3.2"]')].map((a) => a.textContent);
+    expect(links).toContain("rfc4998#ERS (1.2.3.2)");
+    expect(links).toContain("defined here — rfc4998#ERS@1.2.3.2:2:1");
   });
 });
 
@@ -338,6 +337,26 @@ describe("module panels and module links", () => {
     await vi.waitFor(() => expect(head(root)).toBe(secondStart));
     checker.show({ view: "checker", rfc: 1000, module: "First" });
     await vi.waitFor(() => expect(head(root)).toBe(0));
+  });
+
+  it("opens a module of another standards body in the checker and puts the cursor at its start", async () => {
+    const text = "-- a comment\nItu1 DEFINITIONS ::= BEGIN\nA ::= INTEGER\nEND\n";
+    const start = text.indexOf("Itu1");
+    const response: CheckResponse = {
+      ...RESPONSE,
+      document: { name: "X.509#Itu1", format: "bare" },
+      diagnostics: [],
+      modules: [{ name: "Itu1", oid: null, section: null, start, end: text.length, imports: [] }],
+    };
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
+      url.startsWith("/api/v1/modules/") ? new Response(JSON.stringify({ name: "Itu1", text }), { status: 200 }) : new Response(JSON.stringify(response), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const root = mount();
+    createChecker(root).show({ view: "checker", document: "X.509", module: "Itu1" });
+    await vi.waitFor(() => expect(head(root)).toBe(start));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/modules/X.509/Itu1");
+    expect(root.textContent).toContain("A ::= INTEGER");
   });
 
   describe("when a document has two modules of one name", () => {

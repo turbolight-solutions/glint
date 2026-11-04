@@ -338,11 +338,19 @@ export function createChecker(root: HTMLElement): CheckerView {
     }
   }
 
+  /** What a route opens, as it appears in the URL hash and names the tab that holds it. */
+  function targetOf(route: Extract<Route, { view: "checker" }>): string {
+    if (route.rfc !== undefined) return `rfc${route.rfc}`;
+    if (route.draft) return route.draft;
+    // Each module of another body is a file of its own, so it names the tab along with its document.
+    return route.document && route.module ? moduleHash(route.document, route.module, route.moduleOid).slice(1) : "";
+  }
+
   async function loadTarget(route: Extract<Route, { view: "checker" }>): Promise<void> {
     const tab = claimTab();
     const { mine, signal } = startRun(tab);
     tab.pendingModule = route.module ? { name: route.module, oid: route.moduleOid } : null;
-    const label = route.draft ?? `rfc${route.rfc}`;
+    const label = targetOf(route);
     tab.target = label;
     tab.fetching = true;
     setStatus(tab, `Fetching ${label}…`);
@@ -351,6 +359,10 @@ export function createChecker(root: HTMLElement): CheckerView {
     renderTabs();
     syncUrl();
     try {
+      if (route.document && route.module) {
+        await loadModule(tab, mine, route.document, route.module, route.moduleOid);
+        return;
+      }
       const request = route.rfc !== undefined ? { rfc: route.rfc } : { draft: route.draft ?? "" };
       const response = await api.checkDraft(request, options(), signal);
       if (mine !== tab.sequence) return;
@@ -378,6 +390,19 @@ export function createChecker(root: HTMLElement): CheckerView {
     }
   }
 
+  /** A module of another standards body is a file of its own: its text is fetched from the corpus and checked as it is. */
+  async function loadModule(tab: Tab, mine: number, document: string, name: string, oid?: string): Promise<void> {
+    const module = await api.module(document, name, oid);
+    if (mine !== tab.sequence) return;
+    tab.fetching = false;
+    tab.name = `${document}#${name}`;
+    tab.format = "bare";
+    edit(tab, () => highlightingSpec(true));
+    edit(tab, (state) => replaceTextSpec(state, module.text));
+    syncChrome(tab);
+    await runCheck(tab);
+  }
+
   function toMarker(diagnostic: Diagnostic, response: CheckResponse, offsets: OffsetMap): LintDiagnostic | null {
     const documentId = response.files.find((f) => f.kind === "document")?.id;
     if (diagnostic.primary.file !== documentId) return null;
@@ -398,7 +423,7 @@ export function createChecker(root: HTMLElement): CheckerView {
         actions.push({
           name: `Open ${module.source}#${module.name}`,
           apply: () => {
-            window.location.hash = moduleHash(module.source, module.name, secondary.span, module.oid);
+            window.location.hash = moduleHash(module.source, module.name, module.oid);
           },
         });
       }
@@ -467,7 +492,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     const where = describeLabel(label, response);
     const text = label.text ? `${label.text} — ${where}` : where;
     if (file?.module) {
-      return h("a", { href: moduleHash(file.module.source, file.module.name, label.span, file.module.oid) }, text);
+      return h("a", { href: moduleHash(file.module.source, file.module.name, file.module.oid) }, text);
     }
     return h(
       "a",
@@ -649,7 +674,7 @@ export function createChecker(root: HTMLElement): CheckerView {
                     "td",
                     {},
                     i.target
-                      ? h("a", { href: moduleHash(i.target.source, i.target.name, undefined, i.target.oid) }, moduleLabel(i.target))
+                      ? h("a", { href: moduleHash(i.target.source, i.target.name, i.target.oid) }, moduleLabel(i.target))
                       : i.resolved_to
                         ? `${i.resolved_to} (this document)`
                         : h("span", { class: "text-warning-emphasis" }, "not resolved"),
@@ -875,7 +900,7 @@ export function createChecker(root: HTMLElement): CheckerView {
 
   return {
     show(route) {
-      const wanted = route.rfc !== undefined ? `rfc${route.rfc}` : (route.draft ?? "");
+      const wanted = targetOf(route);
       if (!wanted) return;
       if (wanted === handledHash) {
         handledHash = "";
