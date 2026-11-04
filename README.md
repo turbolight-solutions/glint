@@ -1,5 +1,9 @@
 # Glint
 
+> **Disclaimer:** This project is vibe-coded, and the code has undergone very little review. Expect bugs, and verify anything important independently before relying on it.
+>
+> A web UI is available at <https://glint.turbolightsolutions.com>.
+
 Glint (binary `glint`) is an ASN.1 checker for Internet-Draft and RFC authors. It parses modules per ITU-T X.680–X.683 (2021), resolves `IMPORTS` against a bundled corpus of every ASN.1 module published in an RFC, and verifies that ASN.1 quoted in a draft's prose matches the draft's own module.
 
 The full design is in [`docs/`](docs/). Work follows the milestones in that spec; **M1 (X.680 core syntax)**, **M2 (extraction)**, **M3 (corpus, imports, core semantics)**, **M4 (X.681–X.683)**, **M5 (snippet consistency)**, **M6 (server and web UI)** and **M7 (distribution)** are what exist today.
