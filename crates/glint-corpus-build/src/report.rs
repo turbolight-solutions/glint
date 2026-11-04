@@ -225,7 +225,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     let _ = writeln!(out);
 
     if !data.source_problems.is_empty() {
-        let _ = writeln!(out, "## Standalone modules with problems\n");
+        let _ = writeln!(out, "## Source problems\n");
         for problem in data.source_problems {
             let _ = writeln!(out, "- {problem}");
         }

@@ -465,7 +465,7 @@ Server rules: request body limit 5 MB; per-request CPU timeout of 10 s via a blo
 - **Layout:** left pane is the document editor; right pane has tabs for Diagnostics, Modules (extracted, with parse status), and Imports (each import and which RFC it resolved to, linked to the corpus viewer).
 - **Inline feedback:** diagnostics become CodeMirror lint markers; clicking a snippet mismatch jumps to the module definition (secondary label).
 - **Inputs:** paste, file upload, or draft name/RFC number box. Re-check on demand plus debounced auto-check (800 ms) for documents under 200 KB.
-- **Corpus browser:** search box over `/modules`, module viewer with clickable imports, and an OID lookup page.
+- **Corpus browser:** search box over `/modules`, modules open in the checker at their start line, and an OID lookup page.
 - **Shareable state:** keep the draft name in the URL hash (`#draft-ietf-lamps-foo-03`); never put pasted content in the URL.
 
 ### Later: run in the browser

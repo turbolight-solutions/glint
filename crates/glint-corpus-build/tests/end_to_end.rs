@@ -279,6 +279,14 @@ fn one_rfc_can_define_two_modules_with_the_same_name() {
         report.contains(ERS_88) && report.contains(ERS_97),
         "{report}"
     );
+    for oid in [ERS_88, ERS_97] {
+        assert!(
+            report.contains(&format!(
+                "ERS ({oid}) is defined twice in rfc9998 with different text"
+            )),
+            "the dropped header is named in the report: {report}"
+        );
+    }
 }
 
 #[test]

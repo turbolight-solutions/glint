@@ -85,7 +85,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         .map(|c| make_record(c, meta_of(&meta, c)))
         .collect();
     let mut unreadable = made.iter().filter(|m| m.is_none()).count();
-    let mut records = one_per_identity(made.into_iter().flatten().collect());
+    let (mut records, collapsed) = one_per_identity(made.into_iter().flatten().collect());
+    source_problems.extend(collapsed);
     let mut fetched_oids: HashSet<Oid> = HashSet::new();
     for _ in 0..4 {
         let mut defined = defined_by(&records);
@@ -383,14 +384,49 @@ fn apply_overrides(
 }
 
 /// Keeps one record per identity, preferring the one that parses without syntax errors, then the first.
-fn one_per_identity(mut made: Vec<Made>) -> Vec<ModuleRecord> {
+///
+/// A module shown twice with the same text is nothing to report. One shown twice with different text (a header
+/// stub beside the full module, or two modules that really are different) is named, so a curator can tell
+/// which was kept.
+fn one_per_identity(mut made: Vec<Made>) -> (Vec<ModuleRecord>, Vec<String>) {
     made.sort_by(|a, b| {
         identity(&a.record)
             .cmp(&identity(&b.record))
             .then(b.syntax_clean.cmp(&a.syntax_clean))
     });
-    made.dedup_by(|later, kept| identity(&later.record) == identity(&kept.record));
-    made.into_iter().map(|m| m.record).collect()
+    let mut kept: Vec<Made> = Vec::with_capacity(made.len());
+    let mut notes = Vec::new();
+    for later in made {
+        match kept.last() {
+            Some(first) if identity(&first.record) == identity(&later.record) => {
+                if first.record.text != later.record.text {
+                    notes.push(duplicate_note(&first.record, &later.record));
+                }
+            }
+            _ => kept.push(later),
+        }
+    }
+    (kept.into_iter().map(|m| m.record).collect(), notes)
+}
+
+fn duplicate_note(kept: &ModuleRecord, dropped: &ModuleRecord) -> String {
+    let place = |record: &ModuleRecord| match &record.source.section {
+        Some(section) => format!("{} {section}", record.source.document),
+        None => record.source.document.clone(),
+    };
+    let oid = kept
+        .oid
+        .as_ref()
+        .map_or_else(String::new, |oid| format!(" ({oid})"));
+    format!(
+        "{}{oid} is defined twice in {} with different text; kept {} ({} lines), dropped {} ({} lines)",
+        kept.name,
+        kept.source.document,
+        place(kept),
+        kept.text.lines().count(),
+        place(dropped),
+        dropped.text.lines().count()
+    )
 }
 
 fn parses_cleanly(text: &str) -> bool {
