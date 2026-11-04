@@ -18,7 +18,7 @@ import { hashForTarget, moduleHash, oidHash, type Route } from "./router";
 import { createTabStrip, nextActive } from "./tabs";
 
 const AUTO_CHECK_MS = 500;
-const AUTO_CHECK_MAX_BYTES = 200_000;
+const AUTO_CHECK_MAX_BYTES = 1_000_000;
 const MAX_UPLOAD_BYTES = 8_000_000;
 
 const SEVERITY_BADGE: Record<Diagnostic["severity"], string> = {
@@ -199,7 +199,12 @@ export function createChecker(root: HTMLElement): CheckerView {
       controller: null,
       sequence: 0,
       scheduleAuto: debounce(() => {
-        if (auto.checked && tabs.includes(tab) && textOf(tab).length < AUTO_CHECK_MAX_BYTES) void runCheck(tab);
+        if (!auto.checked || !tabs.includes(tab)) return;
+        if (textOf(tab).length >= AUTO_CHECK_MAX_BYTES) {
+          setStatus(tab, "Document too large to auto-check; press Check to update the results.");
+          return;
+        }
+        void runCheck(tab);
       }, AUTO_CHECK_MS),
     };
     return tab;
