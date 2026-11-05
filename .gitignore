@@ -37,7 +37,6 @@ rustc-ice-*.txt
 # RFC sources downloaded by corpus-build
 /corpus/cache/
 /corpus/out/
-/corpus/embedded.bundle
 
 # Web frontend
 /web/node_modules/

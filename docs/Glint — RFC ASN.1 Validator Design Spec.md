@@ -4,7 +4,7 @@ Nov 2, 2026 · @C B
 
 ## Purpose and scope
 
-Build Glint (binary `glint`), a Rust ASN.1 checker for Internet-Draft and RFC authors: it parses modules per ITU-T X.680–X.683 (2021 editions), resolves IMPORTS against a bundled corpus of every ASN.1 module published in an RFC, and verifies that ASN.1 fragments quoted in a draft's prose match the draft's own module. It ships as a CLI and as a web app backed by the same Rust core.
+Build Glint (binary `glint`), a Rust ASN.1 checker for Internet-Draft and RFC authors: it parses modules per ITU-T X.680–X.683 (2021 editions), resolves IMPORTS against a corpus of every ASN.1 module published in an RFC or an active Internet-Draft, and verifies that ASN.1 fragments quoted in a draft's prose match the draft's own module. It ships as a CLI and as a static web app running the same Rust core in the browser.
 
 This spec is written for an implementing model (Claude Sonnet). Sections 3–12 describe what to build; section 13 orders the work into milestones with acceptance criteria; section 14 lists rules for the implementer and open questions for the project owner.
 
@@ -21,7 +21,7 @@ This spec is written for an implementing model (Claude Sonnet). Sections 3–12 
 - Encoding or decoding (BER/DER/PER), code generation, or runtime libraries. Decoding example encodings in drafts is planned after v1 (section 5, Resolved type model).
 - SMIv1/SMIv2 MIB modules. They use ASN.1 macros but have their own rules; point users to `smilint`. Detect and skip them with an info diagnostic.
 - Any X.208 macro engine. `MACRO` definitions and their uses are kept opaque (section 4, Legacy MACRO handling).
-- Storing user-submitted drafts. Unpublished drafts are confidential; the server is stateless.
+- Storing user-submitted drafts. Unpublished drafts are confidential; the web UI checks them in the browser and sends them nowhere.
 
 ## Author workflows
 
@@ -30,7 +30,7 @@ Three entry points, one engine; every path produces the same diagnostic list.
 | Workflow | Input | Output |
 | --- | --- | --- |
 | Web: paste or upload | RFCXML v3, kramdown-rfc/mmark Markdown, plain text, or a bare `.asn` module | Annotated editor view, diagnostics panel, resolved import graph |
-| Web: fetch by name | A draft name such as `draft-ietf-lamps-foo-03`, or an RFC number | Same as above; the server fetches the document |
+| Web: open by name | A draft name such as `draft-ietf-lamps-foo-03`, or an RFC number | Same as above; the text comes from the published data (`documents.bin`), which has every RFC and active draft with an ASN.1 module |
 | CLI, local | File path(s) or stdin | Human-readable diagnostics, exit code |
 | CI | Repo files via GitHub Action | SARIF for code scanning annotations, or JSON |
 | Corpus browsing | Module name, module OID, or any OID | Module source, origin RFC/section, exports, who assigns a given OID |
@@ -39,23 +39,23 @@ Typical author loop: write the module in the draft's appendix, quote pieces of i
 
 ## Architecture
 
-A single Cargo workspace with a pure core (no filesystem, network or threads) wrapped by thin CLI and server shells. The core takes text plus a `CorpusProvider` trait object and returns diagnostics, so it can also compile to WebAssembly later.
+A single Cargo workspace with a pure core (no filesystem, network or threads) wrapped by thin shells: the CLI, and `glint-wasm` for the web UI. The core takes text plus a `CorpusProvider` trait object and returns diagnostics.
 
 &#91;embedded content: check pipeline · 6 core stages, 2 shells, offline corpus build\]
 
-The dashed box runs offline at release time; everything inside the shaded core is pure and shared by the CLI, the server and a future WASM build.
+The dashed box runs offline every day (the data); everything inside the shaded core is pure and shared by the CLI and the WASM build (the code).
 
 | Crate | Responsibility | Key dependencies |
 | --- | --- | --- |
 | `glint-syntax` | Lexer, parser, lossless CST, typed AST views, spans | `logos` (lexer), `rowan` (CST) |
 | `glint-sema` | Symbol tables, import resolution, type/value/class checking, tagging | — |
 | `glint-extract` | Pull ASN.1 blocks out of RFCXML, Markdown and text, with source maps | `roxmltree` or `quick-xml`, `pulldown-cmark` |
-| `glint-corpus` | Corpus data model, `CorpusProvider` trait, bundle loader | `serde`, `zstd` |
+| `glint-corpus` | Corpus data model, `CorpusProvider` trait, the data files (`corpus.json`, `documents.bin`, `latest.json`), the OID label table | `serde`, `serde_json` |
 | `glint-check` | Snippet consistency, lint rules, diagnostic codes, config | — |
 | `glint-diag` | Diagnostic types and renderers (human, JSON, SARIF) | `ariadne` or `miette`, `serde_json` |
 | `glint-cli` | The `glint` binary | `clap` |
-| `glint-server` | HTTP API, static frontend hosting, draft fetching | `axum`, `tokio`, `tower-http`, `reqwest` |
-| `corpus-build` | Offline pipeline that builds the corpus bundle from RFC sources | `reqwest`, `rayon` |
+| `glint-wasm` | The web UI's engine in the browser: checks, documents by name, corpus queries, completion | `wasm-bindgen` |
+| `corpus-build` | Offline pipeline that builds the data from RFC and Internet-Draft sources | `reqwest`, `rayon` |
 | `web/` | TypeScript frontend (not a crate) | Vite, Bootstrap 5, CodeMirror 6 |
 
 **Naming.** The project is Glint: the glint that catches a reviewer's eye. The binary is `glint`, the config file `glint.toml`, comment directives `-- glint: ...`, environment variables `GLINT_*`, and every workspace crate is `glint-<role>` (the offline builder is crate `glint-corpus-build`, binary `corpus-build`). On crates.io, `glint` (a commit-message tool) and `glint-core`/`glint-common` are already taken, so never use those package names. All workspace crates set `publish = false` except the CLI, which is published as package `glint-asn1` with `[[bin]] name = "glint"`.
@@ -306,17 +306,17 @@ Also make elision markers configurable (`elision_comments = ["-- (snip)", "-- ..
 
 ## RFC module corpus
 
-The corpus is a versioned, read-only bundle built offline by `corpus-build`, committed as a release artifact, and embedded in the CLI and server. Automatic extraction plus a hand-curated override directory is the only workable design: many published modules have errata, and extraction from old text RFCs is lossy.
+The corpus is data, not code: `corpus-build` builds it every day, and it is published on the Glint site as `data/v<schema>/<build>/corpus.json` (with `documents.bin`, the texts of the documents, for the web UI) and a `data/v<schema>/latest.json` pointer. The build id is `<UTC date>.<hash of the content>`; code accepts exactly one schema, and every result names both the code version and the data build. The CLI and the web UI carry no data; `glint corpus update` downloads it. Automatic extraction plus a hand-curated override directory is the only workable design: many published modules have errata, and extraction from old text RFCs is lossy.
 
 ### Build pipeline
 
-1. **Fetch** the RFC collection (RFC Editor rsync mirror or bulk download), `rfc-index.xml` for metadata (status, obsoletes/obsoleted-by, updates), and errata data from the RFC Editor errata service.
+1. **Fetch** the RFC collection (RFC Editor rsync mirror or bulk download), `rfc-index.xml` for metadata (status, obsoletes/obsoleted-by, updates), the active Internet-Drafts with `all_id2.txt` (IETF rsync mirror), and errata data from the RFC Editor errata service.
 2. **Extract** with `glint-extract`: XML for RFCs published in v3 format (RFC 8650 onward), text otherwise.
 3. **Apply overrides** from `corpus/overrides/<document>/<ModuleName>.asn` plus a `meta.toml` (reason, errata IDs applied, curator notes); each entry names its `document` (`rfc5280`, `X.509`). An override replaces the module wholesale, whichever body published it, and keeps the module's document, edition and URL. A module is identified by document, name and OID, not by name: an RFC may define two modules with one name and different OIDs (RFC 4998 defines `ERS` for 1988 and for 1997 syntax). An override then carries `oid = "..."` (the identifier of the module it replaces, as extracted) and its file is `<document>/<ModuleName>-<oid>.asn`; without `oid` the override is refused if the document defines the name with more than one OID. An override that replaces no module of the corpus is refused. The `errata-verified` tier applies to RFCs only.
    When one RFC shows the same module more than once (a header in the body and the full text in an appendix), the build keeps the copy that parses without syntax errors, then the first.
 4. **Parse and check** each module with no corpus (pass 1), then again with the partial corpus to resolve imports (pass 2). Record status: `clean`, `warnings`, `errors`, `unparseable`.
-5. **Index** by module name (a name may map to several modules), by module OID, and by every OID value assigned (for `W140`).
-6. **Emit** `corpus-YYYY-MM-DD.bundle` (zstd-compressed, serde-encoded) and a human-readable `report.md` listing every module, its status and its diagnostics. The report is the curator's to-do list.
+5. **Index** by module name (a name may map to several modules), by module OID, by every OID value assigned (for `W140`), and by the `name(number)` labels published modules write for each arc (the label table, for `W142`–`W144`; drafts are not evidence). Import resolution by name prefers a current RFC or a module of another body, then an active draft (newest first), then an obsoleted RFC.
+6. **Emit** `data/v<schema>/<build>/corpus.json` and `documents.bin` with `.sha256` files, the `latest.json` pointer, and a human-readable `report.md` listing every module, its status and its diagnostics, and an audit of every module against the label table. The report is the curator's to-do list.
 
 ### Override policy
 
@@ -370,8 +370,8 @@ RFC modules import modules that other standards bodies publish as standalone fil
 - `include = "when-imported"` (the default) bundles a module only when some corpus module imports it and nothing in the corpus satisfies the import, found by walking unresolved imports after pass 1. An import with a literal `AssignedIdentifier` takes the entry with that OID; an import without one takes the entries of that name while the corpus has no module of that name. `include = "always"` bundles it in every build.
 - `corpus-build` downloads the files at build time into `--cache`; they are never committed to the repo.
 - Each record keeps its body, document, edition and source URL, with `kind = "standalone"`.
-- The bundle ships the IETF Trust BSD notice for RFC code components and the notice of each body that has a module in the bundle (the ITU-T credit, for ITU-T).
-- Redistribution: the owner has decided to redistribute these modules in the bundle without seeking separate permission. Keep each body's credit notice and each module's source URL.
+- The data ships the IETF Trust BSD notice for RFC code components and the notice of each body that has a module in the corpus (the ITU-T credit, for ITU-T).
+- Redistribution: the owner has decided to redistribute these modules in the published data without seeking separate permission. Keep each body's credit notice and each module's source URL.
 
 Any import that resolves to neither the draft nor the corpus falls back to an **opaque external module**: its imported symbols are accepted with unknown kind, checks that need their definitions are skipped, and `W100` is reported once per module.
 
@@ -403,7 +403,7 @@ Renderers: `human` (colored, with source excerpts, via `ariadne` or `miette`), `
 
 ## CLI
 
-The binary is `glint`, built with `clap`; the corpus bundle is embedded at compile time so it works offline.
+The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus update` downloads the data once, and checks then work offline.
 
 | Command | Purpose |
 | --- | --- |
@@ -413,10 +413,10 @@ The binary is `glint`, built with `clap`; the corpus bundle is embedded at compi
 | `glint corpus list [--filter <text>]` | List modules with RFC, OID and status |
 | `glint corpus show <name\|oid\|document>` | Print a module's text and metadata; a document is `rfc5280`, `X.509`, ... |
 | `glint corpus oid <dotted-oid>` | Who assigns this OID, and its parent arcs |
-| `glint corpus update` | Download the latest published bundle to the user cache, overriding the embedded one |
+| `glint corpus update` | Download the latest published data (or `--build <id>`) to the user cache; without data, commands that need it say to run this |
 | `glint explain <code>` | Long description of a diagnostic code with examples |
 
-Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <bundle>`, `--pin Name=rfcNNNN|<oid>`, `--no-snippets`, `--color auto|always|never`.
+Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <corpus.json>`, `--pin Name=rfcNNNN|<oid>`, `--no-snippets`, `--color auto|always|never`.
 
 Exit codes: `0` no errors, `1` errors found (or warnings with `--deny-warnings`), `2` usage or I/O failure.
 
@@ -440,23 +440,25 @@ placeholders = ["TBD", "TBD1", "TBD2"]
 
 Also ship a composite GitHub Action (`glint-action`) that downloads a release binary, runs `glint check --format sarif`, and uploads the result for code-scanning annotations.
 
-## Web: API and frontend
+## Web: static site and frontend
 
-**Decision: a TypeScript single-page app calling a Rust `axum` API, served by the same binary. Not Django.** The app has no users, accounts or database, so Django would add a second language and runtime for nothing. One Rust binary serving both `/api` and the static frontend is one container to deploy.
+**Decision: a static site; Glint runs in the browser.** The page loads `glint.wasm` (the `glint-wasm` crate) in a Web Worker and the published data beside it: the `latest.json` pointer and the `corpus.json` it names while the wasm compiles, then `documents.bin` in the background. Nothing is sent anywhere, so unpublished drafts stay on the author's machine, and there is no server to run: nginx serves files. A draft or RFC is opened by name from `documents.bin` instead of being fetched from the IETF (which a browser could not do across origins).
 
-### API (`/api/v1`, JSON)
+### In-browser API
 
-| Method and path | Request | Response |
+`web/src/api.ts` is the page's interface to the worker; each call answers with the JSON of the matching method of `glint-wasm`.
+
+| Call | Request | Response |
 | --- | --- | --- |
-| `POST /check` | `{ document: { format?, name?, content }, options: { pins?, severity?, snippets? } }` | `{ corpus_version, blocks[], modules[], diagnostics[] }` |
-| `POST /check/draft` | `{ draft: "draft-ietf-lamps-foo", rev?: "03" }` or `{ rfc: 5280 }` | Same as `/check`, plus the fetched content |
-| `GET /modules?q=&offset=&limit=` | Search by name or OID substring, 50 per page by default (500 at most) | `{ total, offset, limit, modules: [{ name, oid, rfc, status }] }` |
-| `GET /modules/{rfc}/{name}?oid=` | `oid` picks one of several modules of that name in the source; without it, the later edition (largest OID) | Module text and metadata |
-| `GET /oids/{dotted}` | — | Assignments of this OID and its children across the corpus |
-| `GET /corpus` | — | Corpus version, build date, module counts by status |
-| `GET /health` | — | `200` |
+| `check` | `{ content, name?, format?, options: { pins?, severity?, snippets? } }` | `{ glint_version, data_build, document, files[], blocks[], modules[], diagnostics[] }` |
+| `checkDocument` | `{ draft: "draft-ietf-lamps-foo", rev?: "03" }` or `{ rfc: 5280 }` | Same as `check`, plus the document's text |
+| `modules(q, offset, limit)` | Search by name or OID substring | `{ total, offset, limit, modules: [...] }` |
+| `module(source, name, oid?)` | `oid` picks one of several modules of that name in the source | Module text and metadata |
+| `oid(dotted)` | — | Labels, assignments of this OID and its children across the corpus |
+| `corpus()` | — | Code version, data build, counts |
+| `complete(text, name, format, position)` | — | Completions at the position: module names after `FROM`, exported symbols in `IMPORTS`, known arcs in an OID, the module's names |
 
-Server rules: request body limit 5 MB; per-request CPU timeout of 10 s via a blocking task pool; no logging of request bodies; draft fetching restricted to an allowlist of IETF hosts; simple per-IP rate limit via `tower` middleware. The corpus loads once at startup into an `Arc`.
+Data of another schema, or a file of another build than the pointer names, is refused and logged; pasted text can still be checked.
 
 ### Frontend
 
@@ -465,21 +467,16 @@ Server rules: request body limit 5 MB; per-request CPU timeout of 10 s via a blo
 - **Layout:** left pane is the document editor; right pane has tabs for Diagnostics, Modules (extracted, with parse status), and Imports (each import and which RFC it resolved to, linked to the corpus viewer).
 - **Inline feedback:** diagnostics become CodeMirror lint markers; clicking a snippet mismatch jumps to the module definition (secondary label).
 - **Inputs:** paste, file upload, or draft name/RFC number box. Re-check on demand plus debounced auto-check (800 ms) for documents under 1 MB; larger ones show a notice and wait for the Check button.
-- **Corpus browser:** search box over `/modules`, modules open in the checker at their start line, and an OID lookup page.
+- **Corpus browser:** search box over `modules`, modules open in the checker at their start line, and an OID lookup page.
 - **Shareable state:** keep the draft name in the URL hash (`#draft-ietf-lamps-foo-03`); never put pasted content in the URL.
-
-### Later: run in the browser
-
-Because the core is pure, compile it with `wasm-bindgen` and load the corpus bundle as a static file. Validation then happens client-side, which removes any privacy concern for unpublished drafts and allows static hosting. Keep the API for draft fetching and for non-browser clients.
 
 ### Hosting
 
 **Decision: self-host first, built for adoption by the IETF Tools Team.** The IETF [Author Tools web service](https://authors.ietf.org/author-tools-web-service) already chains xml2rfc, kramdown-rfc and idnits and invites new tasks, and the [tools catalog](https://authors.ietf.org/tools-catalog) lists no ASN.1 validator.
 
-1. **Now:** one Docker image (server, built frontend, embedded corpus), deployed on any small host the owner controls. Stateless, so no volumes or database.
-2. **Adoption-ready from day one:** license the project Apache-2.0; all configuration via environment variables (`GLINT_BIND`, `GLINT_CORPUS`, `GLINT_MAX_BODY`, `GLINT_FETCH_ALLOWLIST`); `/health` endpoint; structured JSON logs without request bodies; no host-specific code.
+1. **Now:** a static site on any small host the owner controls: each code release is a directory switched in with a symlink, and the data is published daily beside it (`deploy/`).
+2. **Adoption-ready from day one:** license the project Apache-2.0; static files only, so any web server can host it; no host-specific code.
 3. **After M5:** propose it to the IETF Tools Team, either as an Author Tools task ("Validate ASN.1" beside idnits) or as a standalone service on their infrastructure.
-4. **WASM:** remains the M7 stretch goal, for authors who want unpublished text never to leave the browser.
 
 ## Testing
 
@@ -495,7 +492,7 @@ The RFC corpus is the main test suite: the parse rate over all extracted modules
 | Extraction | Real drafts in each format (RFCXML v2/v3, kramdown-rfc, text) with expected block lists and source-map round-trip tests (every mapped offset points at the same character) |
 | Snippets | Synthetic drafts with deliberate mismatches: renamed component, changed tag, dropped `OPTIONAL`, changed constraint, elided components with and without `partial` |
 | Robustness | `cargo-fuzz` targets for lexer, parser and extractor; no panics, bounded time on 1 MB input |
-| API | `axum` integration tests with `tower::ServiceExt::oneshot`; body limit and timeout tests |
+| Web engine | Native tests of `glint-wasm` (checks by name, corpus queries, completion); the page's tests use a stand-in for the worker |
 
 Also evaluate the `rasn-compiler` crate early: as a reference for tricky grammar cases, and to decide whether any part is worth reusing. The design assumes an owned parser because spans, recovery and the lossless tree are central.
 
@@ -530,7 +527,7 @@ Seven milestones; M1–M5 are sequential, the web track (M6) can start once M3 l
    - Done when: the synthetic mismatch suite passes; the RFC 5280 blind test (section 12) finds a Section 4 divergence and the owner confirms it; five recent LAMPS working group drafts run with no unexplained false positives.
 6. **M6 — Server and web UI** (after M3, in parallel with M4–M5). `axum` API, draft fetching, TypeScript frontend with Bootstrap and CodeMirror, corpus browser, OID lookup.
    - Done when: API integration tests pass, including body-limit and timeout tests; a draft checked by name shows inline markers and import links end to end.
-7. **M7 — Distribution.** JSON and SARIF output, `glint explain`, release binaries for Linux/macOS/Windows, the GitHub Action, `corpus update`, Docker image configured by environment variables, Apache-2.0 license files; WASM build as a stretch goal.
+7. **M7 — Distribution.** JSON and SARIF output, `glint explain`, release binaries for Linux/macOS/Windows, the GitHub Action, `corpus update`, Apache-2.0 license files, and the web UI as a static site running a WASM build.
    - Done when: a sample i-d-template repo shows SARIF annotations on a pull request; release artifacts build in CI.
 
 ## Notes for the implementer, risks, open questions
@@ -544,7 +541,7 @@ Seven milestones; M1–M5 are sequential, the web track (M6) can start once M3 l
 - Follow the code conventions below in every crate, including tools and tests where stated.
 - Prefer widely used crates; justify each new dependency in the PR description and add it only to `[workspace.dependencies]` (convention 4).
 - Every diagnostic code gets a fixture, an `explain` entry, and a row in `docs/diagnostics.md`.
-- Never hand-edit the generated corpus bundle; fix the extractor or add an override.
+- Never hand-edit the generated corpus data; fix the extractor or add an override.
 
 **Normative sources.** `spec/fetch.sh` downloads the pinned 02/2021 editions of X.680–X.683, plus X.660, into a git-ignored `spec/` directory; never commit them, and do not use the older 2002 texts. Clauses to consult per milestone: M1 — X.680 clauses 5, 11–13, 16–54 and Annex L; M3 — X.680 clauses 8, 13–14, 25–33, 49–53 and Annex C; M4 — X.681 clauses 7–15 and Annexes A–C and F, X.682 clauses 8–11 and Annex A, then X.683 clauses 8–10 and Annex A; M5 — X.680 Annex C.3.
 
@@ -556,7 +553,7 @@ Seven milestones; M1–M5 are sequential, the web track (M6) can start once M3 l
    - Where an invariant truly guarantees success, keep the call but mark it: an `// INFALLIBLE: <why the invariant holds>` comment directly above, plus `#[expect(clippy::<lint>)]` on that statement. A reviewer must be able to verify the reason locally.
    - Prefer restructuring over `INFALLIBLE`: return `Option`/`Result`, use iterators instead of indices, use `checked_*` arithmetic.
    - Test code (`#[cfg(test)]`, `tests/`, fuzz targets) may panic freely.
-3. **No backward compatibility between iterations.** Until a 1.0 release, change APIs, CLI flags, config keys, JSON output and the corpus bundle format freely. No deprecation shims, migration code, or compatibility flags. Update all callers, fixtures and docs in the same change. Still bump `schema_version` and the bundle format version when they change, so mismatched files fail loudly.
+3. **No backward compatibility between iterations.** Until a 1.0 release, change APIs, CLI flags, config keys, JSON output and the data format freely. No deprecation shims, migration code, or compatibility flags. Update all callers, fixtures and docs in the same change. Still bump `schema_version` and the data schema when they change, so mismatched files fail loudly.
 4. **All dependencies and versions live in the workspace root.** Every external crate, its exact version and its default features are declared once under `[workspace.dependencies]` in the root `Cargo.toml`. Member crates write only `name = { workspace = true }`, optionally adding `features = [...]` or `optional = true`; a version or path in a member `Cargo.toml` is a review failure. Internal crates are listed there too, by path. Shared `[workspace.package]` fields (edition, license, repository, rust-version) and `[workspace.lints]` are inherited the same way. Commit `Cargo.lock`.
 5. **Use well-known crates instead of hand-rolled code.** Before writing infrastructure, check for an established crate and use it. Examples: `logos` for tokenizing, `rowan` for the syntax tree, `roxmltree`/`quick-xml` for XML, `pulldown-cmark` for Markdown, `clap` for arguments, `serde`/`serde_json` for serialization, `ariadne` or `miette` for diagnostic rendering, `serde-sarif` for SARIF types, `base64`, `hex` and `pem` for encodings, `zstd` for compression, `similar` for text diffs, `toml` for config, `thiserror` for error types, `insta` for snapshots, `proptest` for property tests, `tower-http` for limits, timeouts and static files.
    - "Well known" means widely downloaded, actively maintained, and permissively licensed (compatible with Apache-2.0). Check with `cargo deny` in CI for licenses and advisories.
@@ -578,5 +575,5 @@ Seven milestones; M1–M5 are sequential, the web track (M6) can start once M3 l
 - [x] Non-RFC modules — decided: standards bodies' standalone modules (ITU-T, ETSI, ...) are corpus modules like RFC ones, listed in `corpus/sources.toml`, fetched at build time and redistributed in the bundle with a credit notice per body; by default only those RFCs import are bundled; unknown modules become opaque (`W100`).
 - [x] MACRO support — decided: opaque definitions and uses; `E172` for new macros in drafts, `W173` for uses.
 - [x] Override curation — decided: public repo, PRs, three review tiers, `I105` transparency note (section 8, Override policy).
-- [x] Hosting — decided: self-hosted Docker image now, Apache-2.0, proposal to the IETF Tools Team after M5 (section 11, Hosting).
+- [x] Hosting — decided: a self-hosted static site (code releases plus daily data), Apache-2.0, proposal to the IETF Tools Team after M5 (section 11, Hosting).
 - [x] Example encodings — decided: not in v1; the resolved type model is a public API now, and a decoder is planned as M8 (section 5, Resolved type model).

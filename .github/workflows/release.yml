@@ -1,5 +1,8 @@
 name: release
 
+# A release is code only: the CLI binaries and the site (index.html, the scripts and glint.wasm). The data is built
+# and published every day by data.yml.
+
 on:
   push:
     tags: ["v*"]
@@ -12,33 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  corpus:
-    name: corpus bundle
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y rsync
-      - run: corpus/fetch.sh
-      - name: Build the bundle
-        run: |
-          cargo run --release --locked -p glint-corpus-build -- \
-            --rfc-dir corpus/cache/rfc --overrides corpus/overrides \
-            --sources corpus/sources.toml --out corpus/out --date "$(date +%F)"
-          cp corpus/out/corpus-*.bundle corpus.bundle
-          sha256sum corpus.bundle | tee corpus.bundle.sha256
-      - uses: actions/upload-artifact@v7
-        with:
-          name: corpus
-          path: |
-            corpus.bundle
-            corpus.bundle.sha256
-            corpus/out/report.md
-
   binaries:
     name: binary (${{ matrix.target }})
-    needs: corpus
     strategy:
       fail-fast: false
       matrix:
@@ -54,13 +32,6 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/download-artifact@v8
-        with:
-          name: corpus
-          path: corpus-download
-      - name: Embed the corpus
-        shell: bash
-        run: cp corpus-download/corpus.bundle corpus/embedded.bundle
       - run: cargo build --release --locked --target ${{ matrix.target }} -p glint-asn1
       - name: Package
         shell: bash
@@ -80,7 +51,8 @@ jobs:
           if command -v sha256sum >/dev/null; then sha256sum "$name" > "$name.sha256"; else shasum -a 256 "$name" > "$name.sha256"; fi
           "dist/$bin" --version
           "dist/$bin" explain E110 | head -n 3
-          "dist/$bin" corpus list | head -n 3
+          # Glint carries no data; without any it must say how to get some.
+          ("dist/$bin" corpus list 2>&1 || true) | grep -q "glint corpus update"
       - uses: actions/upload-artifact@v7
         with:
           name: glint-${{ matrix.target }}
@@ -88,10 +60,46 @@ jobs:
             glint-${{ matrix.target }}.${{ matrix.archive }}
             glint-${{ matrix.target }}.${{ matrix.archive }}.sha256
 
+  site:
+    name: site (code zip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install wasm-bindgen (the version Cargo.lock pins)
+        run: |
+          version="$(cargo metadata --format-version 1 --locked | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y brotli
+      - name: Build
+        working-directory: web
+        run: npm ci && npm run build && npm test
+      - name: Package
+        run: |
+          set -euo pipefail
+          name="glint-site-${GITHUB_REF_NAME}"
+          deploy/precompress.sh web/dist
+          (cd web/dist && zip -qr "../../$name.zip" .)
+          sha256sum "$name.zip" > "$name.zip.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: glint-site
+          path: |
+            glint-site-*.zip
+            glint-site-*.zip.sha256
+
   publish:
     name: GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [corpus, binaries]
+    needs: [binaries, site]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -106,35 +114,29 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" --generate-notes \
-            artifacts/glint-* artifacts/corpus.bundle artifacts/corpus.bundle.sha256 artifacts/corpus/out/report.md
+            artifacts/glint-*
 
-  docker:
-    name: container image
-    needs: corpus
+  deploy:
+    name: deploy the site
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [site]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    environment: glint-site
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          name: corpus
-          path: corpus-download
-      - run: cp corpus-download/corpus.bundle corpus/embedded.bundle
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
-        if: startsWith(github.ref, 'refs/tags/v')
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          name: glint-site
+      - name: Publish to the site
+        env:
+          DEPLOY_TARGET: ${{ secrets.GLINT_DEPLOY_TARGET }}
+          SSH_KEY: ${{ secrets.GLINT_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.GLINT_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_TARGET" ]; then echo "::notice::No deploy target configured; the site is only an artifact"; exit 0; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          mkdir site && unzip -q "glint-site-${{ github.ref_name }}.zip" -d site
+          deploy/deploy.sh code site "${{ github.ref_name }}"

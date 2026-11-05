@@ -1,0 +1,71 @@
+name: data
+
+# Builds the corpus data every day from the RFC Editor and IETF mirrors and publishes it to the Glint site. The data
+# is versioned on its own (data/v<schema>/<build>/) and never carried by the code.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.build.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y rsync brotli
+      - run: corpus/fetch.sh
+      - name: Build the data
+        id: build
+        run: |
+          set -euo pipefail
+          cargo run --release --locked -p glint-corpus-build -- \
+            --rfc-dir corpus/cache/rfc --drafts-dir corpus/cache/drafts --overrides corpus/overrides \
+            --sources corpus/sources.toml --errata corpus/cache/errata.json --out corpus/out
+          build="$(jq -r .build corpus/out/data/v*/latest.json)"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          deploy/precompress.sh corpus/out/data/v*/"$build"
+          (cd corpus/out && zip -qr "../../glint-data-$build.zip" data)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: glint-data-${{ steps.build.outputs.build }}
+          path: |
+            glint-data-${{ steps.build.outputs.build }}.zip
+            corpus/out/report.md
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: glint-site
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: glint-data-${{ needs.build.outputs.build }}
+      - name: Publish to the site
+        env:
+          DEPLOY_TARGET: ${{ secrets.GLINT_DEPLOY_TARGET }}
+          SSH_KEY: ${{ secrets.GLINT_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.GLINT_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_TARGET" ]; then echo "::notice::No deploy target configured; the data is only an artifact"; exit 0; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          mkdir site && unzip -q "glint-data-${{ needs.build.outputs.build }}.zip" -d site
+          deploy/deploy.sh data site

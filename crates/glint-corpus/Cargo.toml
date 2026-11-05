@@ -1,7 +1,7 @@
 [package]
 name = "glint-corpus"
 version = "0.1.0"
-description = "Corpus data model, provider trait and bundle format for Glint"
+description = "Corpus data model, provider trait and published data files for Glint"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

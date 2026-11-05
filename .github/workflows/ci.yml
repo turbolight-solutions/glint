@@ -32,14 +32,17 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p glint-asn1 -p glint-server
+      - run: cargo build --release --locked -p glint-asn1
       - name: Smoke test
         shell: bash
         run: |
           target/release/glint --version
           target/release/glint explain E110
           printf 'M DEFINITIONS ::= BEGIN T ::= SEQUENCE { n Missing } END' > bad.asn
-          (target/release/glint check --format sarif bad.asn || true) | grep -q '"ruleId": "E110"'
+          # Glint carries no data: an empty corpus of the current schema stands in for the published one.
+          schema="$(sed -n 's/^pub const SCHEMA: u32 = \([0-9][0-9]*\);$/\1/p' crates/glint-corpus/src/data.rs)"
+          printf '{"schema":%s,"info":{"build":"2026-01-01.00000000","notices":[]},"documents":[],"modules":[],"oid_assignments":[],"oid_nodes":[],"oid_allowlist":[]}' "$schema" > corpus.json
+          (target/release/glint check --corpus corpus.json --format sarif bad.asn || true) | grep -q '"ruleId": "E110"'
 
   deny:
     runs-on: ubuntu-latest
