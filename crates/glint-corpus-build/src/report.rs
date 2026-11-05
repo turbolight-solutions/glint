@@ -48,6 +48,8 @@ pub struct ReportData<'a> {
     pub oid_nodes: usize,
     pub allowlist: &'a [AllowedOid],
     pub label_audit: &'a [AuditLine],
+    /// Entries read from the IANA module identifier registries.
+    pub iana_module_ids: usize,
 }
 
 fn status_name(status: ParseStatus) -> &'static str {
@@ -137,7 +139,12 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     let _ = writeln!(out, "| OIDs with labels | {} |", data.oid_nodes);
     let _ = writeln!(
         out,
-        "| Label table findings (W142, W143, W144) | {} |",
+        "| IANA module identifier entries | {} |",
+        data.iana_module_ids
+    );
+    let _ = writeln!(
+        out,
+        "| Label table and registry findings (W142, W143, W144, W146) | {} |",
         data.label_audit.len()
     );
     let _ = writeln!(out);
@@ -190,8 +197,9 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     let _ = writeln!(out, "## OID label audit\n");
     let _ = writeln!(
         out,
-        "Each module checked against the label table without its own document's evidence. A finding here is a \
-         candidate erratum, or an OID for the allowlist (`corpus/overrides/oid-allowlist.toml`).\n"
+        "Each module checked against the label table without its own document's evidence, and its identifier \
+         against the IANA module identifier registries (`W146`). A finding here is a candidate erratum, or an OID for \
+         the allowlist (`corpus/overrides/oid-allowlist.toml`).\n"
     );
     if data.label_audit.is_empty() {
         let _ = writeln!(out, "None.\n");

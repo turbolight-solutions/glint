@@ -1,5 +1,6 @@
 //! Curated overrides (design spec, "Override policy").
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use glint_corpus::{AllowedOid, Oid, OverrideTier, document_title, rfc_number};
@@ -198,13 +199,31 @@ struct Erratum {
     status: String,
 }
 
+impl Erratum {
+    fn id(&self) -> String {
+        self.id.to_string().trim_matches('"').to_owned()
+    }
+}
+
+fn read_errata(errata_json: &Path) -> Result<Vec<Erratum>, String> {
+    let text = std::fs::read_to_string(errata_json)
+        .map_err(|e| format!("{}: {e}", errata_json.display()))?;
+    serde_json::from_str(&text)
+        .map_err(|e| format!("{}: unexpected errata format: {e}", errata_json.display()))
+}
+
+/// The document id (`rfc6210`) each erratum is reported against, by erratum id.
+pub fn errata_documents(errata_json: &Path) -> Result<HashMap<String, String>, String> {
+    Ok(read_errata(errata_json)?
+        .into_iter()
+        .map(|e| (e.id(), e.doc_id.to_ascii_lowercase()))
+        .collect())
+}
+
 /// Checks that every erratum cited by an `errata-verified` override exists, belongs to the RFC and is Verified.
 /// Only RFCs have errata, so the tier is refused for modules of other documents.
 pub fn check_errata(items: &[Override], errata_json: &Path) -> Result<(), String> {
-    let text = std::fs::read_to_string(errata_json)
-        .map_err(|e| format!("{}: {e}", errata_json.display()))?;
-    let all: Vec<Erratum> = serde_json::from_str(&text)
-        .map_err(|e| format!("{}: unexpected errata format: {e}", errata_json.display()))?;
+    let all = read_errata(errata_json)?;
     for item in items
         .iter()
         .filter(|i| matches!(i.tier, OverrideTier::ErrataVerified))
@@ -217,8 +236,7 @@ pub fn check_errata(items: &[Override], errata_json: &Path) -> Result<(), String
         };
         for cited in &item.errata_ids {
             let found = all.iter().find(|e| {
-                e.id.to_string().trim_matches('"') == cited
-                    && e.doc_id.eq_ignore_ascii_case(&format!("RFC{number}"))
+                e.id() == *cited && e.doc_id.eq_ignore_ascii_case(&format!("RFC{number}"))
             });
             match found {
                 Some(e) if e.status.eq_ignore_ascii_case("Verified") => {}

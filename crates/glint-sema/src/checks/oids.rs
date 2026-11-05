@@ -1,9 +1,9 @@
 //! Object identifier checks: E130, E134, W140, I141 (X.680 32.x; X.660), the label table checks W142, W143, W144,
-//! I145, and the diagnostics of OID evaluation.
+//! I145, the IANA registry check W146, and the diagnostics of OID evaluation.
 
 use std::collections::HashSet;
 
-use glint_corpus::{LabelProblem, Oid, document_title, same_document};
+use glint_corpus::{LabelProblem, Oid, document_title, iana_conflict, same_document};
 use glint_diag::Severity;
 use glint_syntax::SyntaxNode;
 
@@ -64,7 +64,50 @@ fn check_header(ctx: &mut Ctx<'_, '_, '_>) -> Option<OidEval> {
             ctx.report(finding);
         }
     }
+    if ctx.graph.options().oid_labels {
+        check_iana(ctx, &group, &result);
+    }
     Some(result)
+}
+
+// policy: the module identifier against the IANA module identifier registries (W146)
+fn check_iana(ctx: &mut Ctx<'_, '_, '_>, group: &SyntaxNode, result: &OidEval) {
+    let Some(oid) = &result.oid else {
+        return;
+    };
+    let options = ctx.graph.options();
+    let document = options
+        .own_document
+        .as_deref()
+        .or(options.home_document.as_deref());
+    let label = result
+        .labels
+        .iter()
+        .find(|l| &l.oid == oid)
+        .map(|l| l.name.as_str());
+    let name = &ctx.loaded.model.name;
+    let Some(entry) = iana_conflict(ctx.graph.corpus(), name, document, oid, label) else {
+        return;
+    };
+    let what = if &entry.oid == oid {
+        format!("module identifier {oid}")
+    } else {
+        format!("arc {} of module identifier {oid}", entry.oid)
+    };
+    let finding = Finding::new(
+        "W146",
+        format!(
+            "IANA registers {what} as `{}` for {}, not for module `{name}`",
+            entry.description,
+            entry.registrant()
+        ),
+        ctx.loc(crate::view::trimmed_range(group)),
+    )
+    .with_note(format!("registry: {}", entry.registry))
+    .with_help(
+        "check the arcs of the module identifier; IANA's registry is the authority for this arc",
+    );
+    ctx.report(finding);
 }
 
 // X.680 32.3-32.13; policy W140

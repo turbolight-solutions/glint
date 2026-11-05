@@ -580,13 +580,27 @@ A label that the corpus uses under several parents (`id-mod(0)`, say) is not rep
 
 ## W144
 
-`IMPORTS` names a module with an identifier that belongs to a different module in the corpus, while the corpus has the named module under another identifier. The identifier is definitive, so the import resolves to the other module; usually the identifier was copied from the wrong place. (When no module has the identifier and the import resolves by name, `W102` reports the difference instead; that is how erratum 9255 of RFC 5912 shows up.)
+`IMPORTS` names a module with an identifier that belongs to a different module in the corpus, while the corpus has the named module under another identifier. The identifier is definitive, so the import resolves to the other module; usually the identifier was copied from the wrong place. (When no module has the identifier and the import resolves by name, `W102` reports the difference instead.)
 
 ```asn1 untested
 M DEFINITIONS ::= BEGIN
 IMPORTS Certificate FROM PKIX1Explicit88
     { iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5)
       pkix(7) id-mod(0) id-pkix1-implicit(19) };
+END
+```
+
+## W146
+
+A module's own identifier is in an arc whose identifiers IANA assigns (the "SMI Security for ... Module Identifier" registries: PKIX, S/MIME, LTANS, msec and IPsec ASN.1 modules), and IANA registers that identifier for another module. Usually an arc was copied from the wrong place, or a number was reused. The entry belongs to the module when it cites the module's document, when a document it cites defines a module of the same name, or when its description is the module's label; the check is quiet when IANA does not register the arc or cites only documents outside the corpus. Glint only warns: the module's identifier is still the one imports resolve against.
+
+RFC 5912 gives `AttributeCertificateVersion1-2009` the S/MIME identifier 1.2.840.113549.1.9.16.0.49, which IANA registers as `id-mod-MD5-XOR-EXPERIMENT` (RFC 6210, erratum 3866); IANA registers the module under PKIX as 1.3.6.1.5.5.7.0.49 (erratum 9255). An import that gives the IANA identifier gets `W102` with a note naming both entries.
+
+```asn1 untested
+AttributeCertificateVersion1-2009
+    {iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs-9(9)
+    smime(16) modules(0) id-mod-v1AttrCert-02(49)}
+DEFINITIONS EXPLICIT TAGS ::= BEGIN
 END
 ```
 

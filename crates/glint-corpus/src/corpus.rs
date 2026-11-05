@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{CorpusData, CorpusInfo, DocumentRecord, ModuleRecord, Oid, OidAssignment, OidLabels};
+use crate::{
+    CorpusData, CorpusInfo, DocumentRecord, IanaModuleId, ModuleRecord, Oid, OidAssignment,
+    OidLabels, draft_name,
+};
 
 /// Read access to the corpus. The check pipeline sees only this trait, so it stays free of I/O.
 pub trait CorpusProvider {
@@ -16,6 +19,10 @@ pub trait CorpusProvider {
     fn assignments_under(&self, oid: &Oid) -> Vec<&OidAssignment>;
     /// The OID label table.
     fn oid_labels(&self) -> &OidLabels;
+    /// The IANA module identifier entry for `oid`, or for the nearest arc above it that IANA registers.
+    fn iana_module_id(&self, _oid: &Oid) -> Option<&IanaModuleId> {
+        None
+    }
 }
 
 /// A corpus with nothing in it.
@@ -65,6 +72,7 @@ pub struct Corpus {
     assignments: BTreeMap<Oid, Vec<OidAssignment>>,
     documents: Vec<DocumentRecord>,
     labels: OidLabels,
+    iana: BTreeMap<Oid, IanaModuleId>,
 }
 
 impl Corpus {
@@ -96,6 +104,11 @@ impl Corpus {
             assignments,
             documents: data.documents,
             labels: OidLabels::new(data.oid_nodes, data.oid_allowlist),
+            iana: data
+                .iana_module_ids
+                .into_iter()
+                .map(|entry| (entry.oid.clone(), entry))
+                .collect(),
         }
     }
 
@@ -113,6 +126,7 @@ impl Corpus {
             oid_assignments: self.assignments.into_values().flatten().collect(),
             oid_nodes: self.labels.nodes(),
             oid_allowlist: self.labels.allowlist().to_vec(),
+            iana_module_ids: self.iana.into_values().collect(),
         }
     }
 }
@@ -181,6 +195,115 @@ impl CorpusProvider for Corpus {
     fn oid_labels(&self) -> &OidLabels {
         &self.labels
     }
+
+    fn iana_module_id(&self, oid: &Oid) -> Option<&IanaModuleId> {
+        let mut current = Some(oid.clone());
+        while let Some(arc) = current {
+            if let Some(entry) = self.iana.get(&arc) {
+                return Some(entry);
+            }
+            current = arc.parent();
+        }
+        None
+    }
+}
+
+/// Whether the cited `document` (an IANA reference, maybe a draft without revision) is `ours`.
+fn cites(document: &str, ours: &str) -> bool {
+    let strip = |d: &str| draft_name(d).unwrap_or(d).to_ascii_lowercase();
+    strip(document) == strip(ours)
+}
+
+/// `id-mod-v1AttrCert-02` and `v1AttrCert-02` alike.
+fn normalized_label(label: &str) -> String {
+    let lower = label.to_ascii_lowercase();
+    let rest = lower
+        .strip_prefix("id-mod-")
+        .or_else(|| lower.strip_prefix("id-"))
+        .unwrap_or(&lower);
+    rest.to_owned()
+}
+
+/// What the IANA module identifier registries say about a module's identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IanaVerdict<'c> {
+    /// The entry is the module's.
+    Registered(&'c IanaModuleId),
+    /// The entry is another module's.
+    Conflict(&'c IanaModuleId),
+}
+
+/// What IANA registers the module identifier `oid` (or the arc above it that IANA registers) for, given a module
+/// `name` defined in `document` with the label `label` on its last arc; `None` when IANA does not register the arc
+/// or the entry cannot be judged.
+///
+/// The entry is the module's when it cites the module's own document or an RFC that obsoletes it, when a document it
+/// cites defines a module of the same name (IANA keeps the reference current as a module is republished), or when its
+/// description is the module's label or name. Otherwise it is another module's, but only when a cited document is in the corpus, so that
+/// what it defines is known.
+pub fn iana_verdict<'c>(
+    corpus: &'c dyn CorpusProvider,
+    name: &str,
+    document: Option<&str>,
+    oid: &Oid,
+    label: Option<&str>,
+) -> Option<IanaVerdict<'c>> {
+    let entry = corpus.iana_module_id(oid)?;
+    if entry.documents.is_empty() {
+        return None;
+    }
+    let registered = Some(IanaVerdict::Registered(entry));
+    if document.is_some_and(|ours| entry.documents.iter().any(|d| cites(d, ours))) {
+        return registered;
+    }
+    let description = normalized_label(&entry.description);
+    if label.is_some_and(|label| normalized_label(label) == description)
+        || entry.description.eq_ignore_ascii_case(name)
+    {
+        return registered;
+    }
+    let mut known = false;
+    for module in corpus.modules() {
+        // An RFC that obsoletes the module's own may rename the module (RFC 9582's `RPKI-ROA-2023` for RFC 6482's
+        // `RPKI-ROA`), and IANA then cites the new RFC.
+        if module.name == name
+            && document.is_some_and(|ours| cites(&module.source.document, ours))
+            && module.obsoleted_by.iter().any(|number| {
+                entry
+                    .documents
+                    .iter()
+                    .any(|d| cites(d, &format!("rfc{number}")))
+            })
+        {
+            return registered;
+        }
+        if !entry
+            .documents
+            .iter()
+            .any(|d| cites(d, &module.source.document))
+        {
+            continue;
+        }
+        known = true;
+        if module.name == name {
+            return registered;
+        }
+    }
+    known.then_some(IanaVerdict::Conflict(entry))
+}
+
+/// The entry of [`iana_verdict`] when it is another module's: warn only, the entry is evidence, not a correction.
+pub fn iana_conflict<'c>(
+    corpus: &'c dyn CorpusProvider,
+    name: &str,
+    document: Option<&str>,
+    oid: &Oid,
+    label: Option<&str>,
+) -> Option<&'c IanaModuleId> {
+    match iana_verdict(corpus, name, document, oid, label)? {
+        IanaVerdict::Conflict(entry) => Some(entry),
+        IanaVerdict::Registered(_) => None,
+    }
 }
 
 #[cfg(test)]
@@ -240,6 +363,37 @@ mod tests {
         assert_eq!(
             corpus.modules()[chosen].oid.as_ref().unwrap().to_string(),
             "1.2.3.2"
+        );
+    }
+
+    #[test]
+    fn an_iana_entry_citing_the_rfc_that_obsoletes_the_module_is_the_modules() {
+        let mut old = record("RPKI-ROA", 6482, "1.2.840.113549.1.9.16.0.61");
+        old.obsoleted_by = vec![9582];
+        let new = record("RPKI-ROA-2023", 9582, "1.2.840.113549.1.9.16.0.73");
+        let mut data = corpus(vec![old, new]).into_data();
+        data.iana_module_ids = vec![IanaModuleId {
+            oid: "1.2.840.113549.1.9.16.0.61".parse().unwrap(),
+            description: "id-mod-rpkiROA".to_owned(),
+            registry: String::new(),
+            documents: vec!["rfc9582".to_owned()],
+            errata: Vec::new(),
+        }];
+        let corpus = Corpus::from_data(data);
+        let oid: Oid = "1.2.840.113549.1.9.16.0.61".parse().unwrap();
+        let verdict = |name, document| iana_verdict(&corpus, name, Some(document), &oid, None);
+        assert!(matches!(
+            verdict("RPKI-ROA", "rfc6482"),
+            Some(IanaVerdict::Registered(_))
+        ));
+        assert!(matches!(
+            verdict("Unrelated", "rfc9999"),
+            Some(IanaVerdict::Conflict(_))
+        ));
+        assert_eq!(
+            corpus.iana_module_id(&oid.child(1)).map(|e| e.oid.clone()),
+            Some(oid.clone()),
+            "an arc below a registered one has its entry"
         );
     }
 }

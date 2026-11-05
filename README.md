@@ -38,7 +38,7 @@ cargo run -p glint-asn1 -- extract draft.md -o modules/ --fragments
 corpus/fetch.sh                                  # mirror the RFCs, active drafts and errata into corpus/cache
 cargo run --release -p glint-corpus-build -- --rfc-dir corpus/cache/rfc --drafts-dir corpus/cache/drafts \
     --overrides corpus/overrides --sources corpus/sources.toml --errata corpus/cache/errata.json \
-    --out corpus/out                             # corpus/out/data/v<schema>/... + report.md
+    --iana corpus/cache/smi-numbers.xml --out corpus/out                             # corpus/out/data/v<schema>/... + report.md
 # Modules that other standards bodies publish as files (ITU-T, ETSI, ...) are listed in corpus/sources.toml.
 
 cargo run -p glint-asn1 -- corpus update                  # download the published data into the user cache

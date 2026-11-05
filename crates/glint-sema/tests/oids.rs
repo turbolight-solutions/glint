@@ -6,7 +6,7 @@
 )]
 mod common;
 use common::*;
-use glint_corpus::{AllowedOid, Corpus, CorpusData, OidAssignment, OidLabels};
+use glint_corpus::{AllowedOid, Corpus, CorpusData, IanaModuleId, OidAssignment, OidLabels};
 use glint_sema::Options;
 
 fn run(text: &str) -> Vec<&'static str> {
@@ -327,4 +327,177 @@ fn upper_case_placeholders_are_noted_not_malformed() {
         run(&module("o OBJECT IDENTIFIER ::= { 1 3 Foo }")),
         ["E131"]
     );
+}
+
+const SMIME_49: &str = "1.2.840.113549.1.9.16.0.49";
+const PKIX_49: &str = "1.3.6.1.5.5.7.0.49";
+
+fn iana(oid: &str, description: &str, documents: &[&str], errata: &[&str]) -> IanaModuleId {
+    IanaModuleId {
+        oid: oid.parse().unwrap(),
+        description: description.to_owned(),
+        registry: "SMI Security for S/MIME Module Identifier (1.2.840.113549.1.9.16.0)".to_owned(),
+        documents: documents.iter().map(|d| (*d).to_owned()).collect(),
+        errata: errata.iter().map(|e| (*e).to_owned()).collect(),
+    }
+}
+
+/// RFC 5912 and RFC 6210 as erratum 9255 finds them, with the IANA entries of both arcs.
+fn registry_corpus() -> Corpus {
+    let modules = corpus(&[
+        Rec {
+            name: "AttributeCertificateVersion1-2009",
+            oid: Some(SMIME_49),
+            rfc: 5912,
+            text: "AttributeCertificateVersion1-2009 { 1 2 840 113549 1 9 16 0 49 } DEFINITIONS ::= BEGIN AttributeCertificateV1 ::= INTEGER END",
+        },
+        Rec {
+            name: "MD5-HASH-EXPERIMENT",
+            oid: Some("1.2.840.113549.1.9.16.0.999"),
+            rfc: 6210,
+            text: "MD5-HASH-EXPERIMENT { 1 2 840 113549 1 9 16 0 999 } DEFINITIONS ::= BEGIN END",
+        },
+        Rec {
+            name: "PKIX1Explicit88",
+            oid: Some("1.3.6.1.5.5.7.0.18"),
+            rfc: 5280,
+            text: "PKIX1Explicit88 { 1 3 6 1 5 5 7 0 18 } DEFINITIONS ::= BEGIN END",
+        },
+    ]);
+    let mut data = modules.into_data();
+    data.iana_module_ids = vec![
+        iana(
+            SMIME_49,
+            "id-mod-MD5-XOR-EXPERIMENT",
+            &["rfc6210"],
+            &["3866"],
+        ),
+        iana(PKIX_49, "id-mod-v1AttrCert-02", &["rfc5912"], &[]),
+        iana(
+            "1.3.6.1.5.5.7.0.18",
+            "id-mod-pkix1-explicit",
+            &["rfc5280"],
+            &[],
+        ),
+        iana(
+            "1.3.6.1.5.5.7.0.20",
+            "id-mod-qualified-cert-88",
+            &["rfc3039"],
+            &[],
+        ),
+        iana("1.3.6.1.5.5.7.0.21", "id-mod-foo", &["rfc5280"], &[]),
+    ];
+    Corpus::from_data(data)
+}
+
+fn as_document(document: &str) -> Options {
+    Options {
+        own_document: Some(document.to_owned()),
+        ..Options::default()
+    }
+}
+
+// W146
+#[test]
+fn a_module_identifier_that_iana_registers_for_another_module() {
+    let text = "AttributeCertificateVersion1-2009
+        { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs-9(9) smime(16) modules(0) id-mod-v1AttrCert-02(49) }
+        DEFINITIONS ::= BEGIN END";
+    let findings = check_with(text, &registry_corpus(), &as_document("rfc5912"));
+    assert_eq!(codes(&findings), ["W146"]);
+    let message = &findings[0].message;
+    assert!(message.contains("`id-mod-MD5-XOR-EXPERIMENT`"), "{message}");
+    assert!(message.contains("RFC 6210 (erratum 3866)"), "{message}");
+
+    let fixed = "AttributeCertificateVersion1-2009
+        { iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5) pkix(7) id-mod(0)
+          id-mod-v1AttrCert-02(49) }
+        DEFINITIONS ::= BEGIN END";
+    assert!(check_with(fixed, &registry_corpus(), &as_document("rfc5912")).is_empty());
+}
+
+#[test]
+fn a_draft_that_reuses_a_registered_module_identifier() {
+    let text = "NewModule-2026 { 1 3 6 1 5 5 7 0 49 } DEFINITIONS ::= BEGIN END";
+    let findings = check_with(
+        text,
+        &registry_corpus(),
+        &as_document("draft-ietf-lamps-new-00"),
+    );
+    assert_eq!(codes(&findings), ["W146"]);
+    assert!(
+        findings[0].message.contains("for RFC 5912"),
+        "{}",
+        findings[0].message
+    );
+}
+
+#[test]
+fn an_entry_citing_a_later_edition_of_the_module_is_the_modules() {
+    // IANA cites RFC 5280 for the module that RFC 3280 published first.
+    let text = "PKIX1Explicit88 { 1 3 6 1 5 5 7 0 18 } DEFINITIONS ::= BEGIN END";
+    assert!(check_with(text, &registry_corpus(), &as_document("rfc3280")).is_empty());
+}
+
+#[test]
+fn an_entry_whose_label_matches_or_whose_documents_are_unknown_is_not_judged() {
+    // RFC 5280 does not define `Foo`, but the label is the entry's, its `id-mod-` prefix aside.
+    let labelled = "Foo { 1 3 6 1 5 5 7 0 foo(21) } DEFINITIONS ::= BEGIN END";
+    assert!(check_with(labelled, &registry_corpus(), &as_document("rfc9999")).is_empty());
+    let unlabelled = "Foo { 1 3 6 1 5 5 7 0 21 } DEFINITIONS ::= BEGIN END";
+    assert_eq!(
+        codes(&check_with(
+            unlabelled,
+            &registry_corpus(),
+            &as_document("rfc9999")
+        )),
+        ["W146"]
+    );
+    let unknown = "Qualified { 1 3 6 1 5 5 7 0 20 } DEFINITIONS ::= BEGIN END";
+    assert!(
+        check_with(unknown, &registry_corpus(), &as_document("rfc9999")).is_empty(),
+        "RFC 3039 is not in the corpus"
+    );
+    let unregistered = "Fresh { 1 3 6 1 5 5 7 0 500 } DEFINITIONS ::= BEGIN END";
+    assert!(check_with(unregistered, &registry_corpus(), &as_document("rfc9999")).is_empty());
+}
+
+#[test]
+fn registry_checks_are_off_with_the_label_checks() {
+    let text = "NewModule-2026 { 1 3 6 1 5 5 7 0 49 } DEFINITIONS ::= BEGIN END";
+    let options = Options {
+        oid_labels: false,
+        ..as_document("draft-ietf-lamps-new-00")
+    };
+    assert!(check_with(text, &registry_corpus(), &options).is_empty());
+}
+
+// W102 with the registry note
+#[test]
+fn an_import_with_the_registered_identifier_says_which_side_iana_takes() {
+    let text = "M DEFINITIONS ::= BEGIN
+        IMPORTS AttributeCertificateV1 FROM AttributeCertificateVersion1-2009
+            { iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5) pkix(7) id-mod(0)
+              id-mod-v1AttrCert-02(49) };
+        T ::= AttributeCertificateV1
+        END";
+    let findings = without_notes(check_with(text, &registry_corpus(), &Options::default()));
+    assert_eq!(codes(&findings), ["W102"]);
+    let notes = findings[0].notes.join("\n");
+    assert!(
+        notes.contains("IANA registers 1.3.6.1.5.5.7.0.49 as `id-mod-v1AttrCert-02` for RFC 5912"),
+        "{notes}"
+    );
+    assert!(notes.contains("`id-mod-MD5-XOR-EXPERIMENT`"), "{notes}");
+
+    // Without the registry, W102 says only what X.680 says.
+    let plain = corpus(&[Rec {
+        name: "AttributeCertificateVersion1-2009",
+        oid: Some(SMIME_49),
+        rfc: 5912,
+        text: "AttributeCertificateVersion1-2009 { 1 2 840 113549 1 9 16 0 49 } DEFINITIONS ::= BEGIN AttributeCertificateV1 ::= INTEGER END",
+    }]);
+    let findings = without_notes(check_with(text, &plain, &Options::default()));
+    assert_eq!(codes(&findings), ["W102"]);
+    assert_eq!(findings[0].notes.len(), 1);
 }

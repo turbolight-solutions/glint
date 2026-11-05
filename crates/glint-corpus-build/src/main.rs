@@ -3,6 +3,7 @@
 
 mod build;
 mod collect;
+mod iana;
 mod index;
 mod overrides;
 mod report;
@@ -51,6 +52,10 @@ struct Args {
     /// RFC Editor `errata.json`, used to check `errata-verified` overrides
     #[arg(long, value_name = "FILE")]
     errata: Option<PathBuf>,
+    /// IANA's SMI Numbers registry, `smi-numbers.xml`: the module identifier registries the module headers are
+    /// checked against (`W146`); errata it cites are resolved with `--errata`
+    #[arg(long, value_name = "FILE")]
+    iana: Option<PathBuf>,
     /// Number of worker threads; defaults to the number of CPUs
     #[arg(long)]
     jobs: Option<usize>,
@@ -88,6 +93,7 @@ pub struct Settings {
     pub sources: Option<PathBuf>,
     pub cache: PathBuf,
     pub errata: Option<PathBuf>,
+    pub iana: Option<PathBuf>,
 }
 
 impl Settings {
@@ -103,6 +109,7 @@ impl Settings {
             sources: args.sources,
             cache: args.cache,
             errata: args.errata,
+            iana: args.iana,
         }
     }
 }

@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use glint_corpus::SourceKind;
+use glint_corpus::{IanaVerdict, ModuleRecord, Oid, SourceKind, iana_conflict, iana_verdict};
 
 use super::Ctx;
 use crate::finding::Finding;
@@ -91,7 +91,7 @@ pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
             && let (Some(given), Some(actual)) = (&resolved.assigned_oid, &target.oid)
             && given != actual
         {
-            let finding = Finding::new(
+            let mut finding = Finding::new(
                 "W102",
                 format!(
                     "module `{}` was matched by name, but its identifier is {actual}, not {given}",
@@ -100,6 +100,9 @@ pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
                 ctx.loc(clause.module_range),
             )
             .with_note("the object identifier is definitive (X.680 13.11)");
+            if let Some(note) = registry_note(ctx, &clause.module_name, record, given, actual) {
+                finding = finding.with_note(note);
+            }
             ctx.report(finding);
         }
 
@@ -287,4 +290,33 @@ fn clause_uses_no_references(ctx: &Ctx<'_, '_, '_>, clause: &crate::model::Impor
             .references
             .is_empty(),
     }
+}
+
+/// For `W102`: when the IANA module identifier registries side with the identifier the import gives, against the one
+/// the corpus module declares (as for RFC 5912's `AttributeCertificateVersion1-2009`, erratum 9255).
+fn registry_note(
+    ctx: &Ctx<'_, '_, '_>,
+    name: &str,
+    record: Option<(usize, &ModuleRecord)>,
+    given: &Oid,
+    actual: &Oid,
+) -> Option<String> {
+    let corpus = ctx.graph.corpus();
+    let document = record.map(|(_, r)| r.source.document.as_str());
+    let against = iana_conflict(corpus, name, document, actual, None)?;
+    let Some(IanaVerdict::Registered(entry)) = iana_verdict(corpus, name, None, given, None) else {
+        return None;
+    };
+    if &entry.oid != given {
+        return None;
+    }
+    let source = record.map_or_else(String::new, |(_, r)| format!(" in {}", r.source.title()));
+    Some(format!(
+        "IANA registers {given} as `{}` for {}; the identifier {actual} that the module declares{source} is \
+         registered as `{}` for {} (W146)",
+        entry.description,
+        entry.registrant(),
+        against.description,
+        against.registrant()
+    ))
 }

@@ -197,6 +197,12 @@ const CODES: &[CodeInfo] = &[
         basis: "policy",
     },
     CodeInfo {
+        code: "W146",
+        severity: Severity::Warning,
+        title: "Module identifier is registered by IANA for another module",
+        basis: "policy",
+    },
+    CodeInfo {
         code: "I109",
         severity: Severity::Info,
         title: "Import resolved to a module of an Internet-Draft",

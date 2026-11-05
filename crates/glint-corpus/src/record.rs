@@ -226,6 +226,40 @@ pub struct OidAssignment {
     pub document: String,
 }
 
+/// An entry of an IANA registry of ASN.1 module identifiers (the "SMI Security for ... Module Identifier"
+/// registries): the authority for which module an identifier in those arcs belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IanaModuleId {
+    pub oid: Oid,
+    /// What the registry lists: usually the label of the last arc (`id-mod-v1AttrCert-02`), sometimes the module name.
+    pub description: String,
+    /// The registry's title.
+    pub registry: String,
+    /// The documents the entry cites, as document ids (`rfc5912`, `draft-ietf-lamps-foo`), errata resolved to the
+    /// document they are reported against.
+    pub documents: Vec<String>,
+    /// The errata the entry cites (IANA assigns some identifiers through an erratum).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errata: Vec<String>,
+}
+
+impl IanaModuleId {
+    /// `RFC 6210 (erratum 3866)`, or `RFC 5912 and RFC 6268`: whom IANA registers the identifier for.
+    pub fn registrant(&self) -> String {
+        let documents: Vec<String> = self.documents.iter().map(|d| document_title(d)).collect();
+        let mut text = documents.join(" and ");
+        if !self.errata.is_empty() {
+            let word = if self.errata.len() > 1 {
+                "errata"
+            } else {
+                "erratum"
+            };
+            text = format!("{text} ({word} {})", self.errata.join(", "));
+        }
+        text
+    }
+}
+
 /// Identifies a build of the data.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CorpusInfo {
@@ -260,6 +294,9 @@ pub struct CorpusData {
     pub oid_nodes: Vec<OidNode>,
     /// Wrong but deployed OIDs, whose subtrees the label checks leave alone.
     pub oid_allowlist: Vec<AllowedOid>,
+    /// The IANA registries of module identifiers; absent from data built without them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub iana_module_ids: Vec<IanaModuleId>,
 }
 
 impl Default for CorpusData {
@@ -272,6 +309,7 @@ impl Default for CorpusData {
             oid_assignments: Vec::new(),
             oid_nodes: Vec::new(),
             oid_allowlist: Vec::new(),
+            iana_module_ids: Vec::new(),
         }
     }
 }

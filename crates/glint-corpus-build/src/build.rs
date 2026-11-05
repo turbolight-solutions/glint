@@ -20,9 +20,10 @@ use sha2::{Digest, Sha256};
 
 use crate::Settings;
 use crate::collect::{Candidate, extract_draft, extract_rfc};
+use crate::iana::read_iana;
 use crate::index::{RfcMeta, read_drafts, read_index};
 use crate::overrides::{
-    Override, check_errata, check_extraction_tier, read_allowlist, read_overrides,
+    Override, check_errata, check_extraction_tier, errata_documents, read_allowlist, read_overrides,
 };
 use crate::report::{AuditLine, FindingLine, ModuleOutcome, ReportData, render_report};
 use crate::sources::{Defined, Fetched, Manifest, Need, fetch, read_manifest, select};
@@ -112,6 +113,16 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     if let Some(errata) = &settings.errata {
         check_errata(&overrides, errata)?;
     }
+    let iana_module_ids = match &settings.iana {
+        Some(path) => {
+            let errata = match &settings.errata {
+                Some(errata) => errata_documents(errata)?,
+                None => HashMap::new(),
+            };
+            read_iana(path, &errata)?
+        }
+        None => Vec::new(),
+    };
     let mut pending = overrides;
     let mut applied: Vec<Override> = Vec::new();
     apply_overrides(&mut candidates, &mut pending, &mut applied)?;
@@ -217,6 +228,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         oid_assignments: oid_assignments.clone(),
         oid_nodes: labels.nodes(),
         oid_allowlist: labels.allowlist().to_vec(),
+        iana_module_ids: iana_module_ids.clone(),
         ..CorpusData::default()
     });
     let audit: Vec<AuditLine> = records
@@ -236,6 +248,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         oid_assignments,
         oid_nodes: labels.nodes(),
         oid_allowlist: labels.allowlist().to_vec(),
+        iana_module_ids,
         ..CorpusData::default()
     };
     // The build id names the content: the same data built twice on one day gets the same id.
@@ -263,6 +276,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         oid_nodes: corpus_data.oid_nodes.len(),
         allowlist: &corpus_data.oid_allowlist,
         label_audit: &audit,
+        iana_module_ids: corpus_data.iana_module_ids.len(),
     };
     let report = render_report(&data);
     if let Some(path) = &settings.dump_findings {
@@ -770,7 +784,7 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]
     }
 }
 
-/// The label table findings (W142, W143, W144) for one corpus module, its own document's evidence left out.
+/// The label table and registry findings (W142, W143, W144, W146) for one corpus module, its own document's evidence left out.
 fn audit_record(record: &ModuleRecord, corpus: &Corpus) -> Vec<AuditLine> {
     let options = Options {
         oid_collisions: false,
@@ -793,7 +807,7 @@ fn audit_record(record: &ModuleRecord, corpus: &Corpus) -> Vec<AuditLine> {
         .findings
         .iter()
         .filter(|f| f.primary.source == SourceId(0))
-        .filter(|f| matches!(f.code, "W142" | "W143" | "W144"))
+        .filter(|f| matches!(f.code, "W142" | "W143" | "W144" | "W146"))
         .map(|finding| AuditLine {
             document: record.source.document.clone(),
             module: record.name.clone(),

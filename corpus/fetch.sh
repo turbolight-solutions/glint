@@ -10,5 +10,9 @@ rsync -az --delete --include='rfc[0-9]*.txt' --include='rfc[0-9]*.xml' --include
 rsync -az --delete --include='draft-*.txt' --include='draft-*.xml' --include='all_id2.txt' --exclude='*' \
   rsync.ietf.org::internet-drafts/ cache/drafts/
 curl --fail --silent --show-error --location --output cache/errata.json https://www.rfc-editor.org/errata.json
+# IANA's SMI Numbers registry: its module identifier registries are the authority for W146.
+curl --fail --silent --show-error --location --output cache/smi-numbers.xml \
+  https://www.iana.org/assignments/smi-numbers/smi-numbers.xml
 echo "now run: cargo run --release -p glint-corpus-build -- --rfc-dir corpus/cache/rfc --drafts-dir corpus/cache/drafts \\"
-echo "           --overrides corpus/overrides --sources corpus/sources.toml --errata corpus/cache/errata.json --out corpus/out"
+echo "           --overrides corpus/overrides --sources corpus/sources.toml --errata corpus/cache/errata.json \\"
+echo "           --iana corpus/cache/smi-numbers.xml --out corpus/out"

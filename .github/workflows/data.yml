@@ -35,7 +35,8 @@ jobs:
           set -euo pipefail
           cargo run --release --locked -p glint-corpus-build -- \
             --rfc-dir corpus/cache/rfc --drafts-dir corpus/cache/drafts --overrides corpus/overrides \
-            --sources corpus/sources.toml --errata corpus/cache/errata.json --out corpus/out
+            --sources corpus/sources.toml --errata corpus/cache/errata.json --iana corpus/cache/smi-numbers.xml \
+            --out corpus/out
           build="$(jq -r .build corpus/out/data/v*/latest.json)"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           deploy/precompress.sh corpus/out/data/v*/"$build"

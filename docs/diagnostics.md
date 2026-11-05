@@ -49,6 +49,7 @@ Implemented so far (M1, M2, M3, M4, M5):
 | `W142` | warning | OID label has another number under the same parent in the corpus label table | policy | `tests/oids.rs`, `glint-corpus` `labels.rs` |
 | `W143` | warning | OID label with this number is only under another parent in the corpus label table | policy | `tests/oids.rs`, `glint-corpus` `labels.rs` |
 | `W144` | warning | Module identifier in `IMPORTS` belongs to another corpus module than the one named | policy | `tests/oids.rs` |
+| `W146` | warning | Module identifier is registered by IANA (module identifier registries of `smi-numbers.xml`) for another module | policy | `tests/oids.rs`, `glint-corpus-build` `iana.rs` |
 | `I145` | info | OID label differs from the corpus's name for the arc (off unless `[oid] synonym_labels = true`) | policy | `tests/oids.rs` |
 | `E150` | error | Bad field reference: a field that the class does not have, a chain through a field that is not an object or object set field, `Class.&objectField`, or an information-from-objects combination that Table 1 forbids (a type or variable-type field read from an object set, a variable-type value set from an object, a non-type read where a type is needed) | X.681 9.14, 14.5, 15.4–15.5, 15.11 | `tests/x681.rs` |
 | `E151` | error | Component relation path does not resolve: unknown identifier, a path through a component that is not a `SET`, `SEQUENCE` or `CHOICE`, more dots than enclosing constructions, or `@` outside any `SET` or `SEQUENCE` | X.682 10.8–10.10 | `tests/x682.rs` |
