@@ -52,6 +52,8 @@ pub enum SourceKind {
 
 /// The standards body of RFCs. Other bodies are named by the sources manifest (`itu-t`, `etsi`, ...).
 pub const BODY_RFC: &str = "rfc";
+/// Internet-Drafts: active drafts at their latest revision.
+pub const BODY_DRAFT: &str = "draft";
 
 /// Where a module was published: the document of a standards body, whatever the way its text was obtained.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +83,22 @@ impl ModuleSource {
         }
     }
 
+    /// A module of the Internet-Draft `document` (`draft-ietf-lamps-foo-03`), revised on `date` (`YYYY-MM-DD`).
+    pub fn draft(document: &str, date: &str, section: Option<String>, kind: SourceKind) -> Self {
+        Self {
+            body: BODY_DRAFT.to_owned(),
+            document: document.to_owned(),
+            edition: Some(date.to_owned()),
+            url: None,
+            section,
+            kind,
+        }
+    }
+
+    pub fn is_draft(&self) -> bool {
+        self.body == BODY_DRAFT
+    }
+
     /// `rfc5280`, or `X.509`: the document id, which is also the prefix of diagnostics file names.
     pub fn label(&self) -> String {
         self.document.clone()
@@ -103,10 +121,20 @@ impl ModuleSource {
         }
     }
 
-    /// How recent the document is within its body, where the body numbers documents in publication order (RFCs).
-    /// Import resolution prefers the larger value, and falls back to the highest OID.
+    /// How recent the document is within its body: the number of an RFC, the revision date of a draft as
+    /// `YYYYMMDD`. Import resolution prefers the larger value, and falls back to the highest OID.
     pub fn recency(&self) -> Option<u32> {
-        self.rfc_number()
+        if self.is_draft() {
+            let digits: String = self
+                .edition
+                .as_deref()?
+                .chars()
+                .filter(char::is_ascii_digit)
+                .collect();
+            digits.parse().ok()
+        } else {
+            self.rfc_number()
+        }
     }
 }
 
@@ -118,6 +146,18 @@ pub fn rfc_number(document: &str) -> Option<u32> {
     } else {
         None
     }
+}
+
+/// Whether two document ids name the same document: equal ignoring case, or two revisions of one draft.
+pub fn same_document(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b) || draft_name(a).is_some_and(|name| draft_name(b) == Some(name))
+}
+
+/// `draft-ietf-lamps-foo` for `draft-ietf-lamps-foo-03`.
+pub fn draft_name(document: &str) -> Option<&str> {
+    let (name, rev) = document.rsplit_once('-')?;
+    (name.starts_with("draft-") && rev.len() == 2 && rev.bytes().all(|b| b.is_ascii_digit()))
+        .then_some(name)
 }
 
 /// `RFC 5280` for the document id `rfc5280`; other ids are titles already.
@@ -155,6 +195,24 @@ impl ModuleRecord {
     /// `rfc5280#PKIX1Explicit88` or `X.509#InformationFramework`, the file name used in diagnostics.
     pub fn label(&self) -> String {
         format!("{}#{}", self.source.label(), self.name)
+    }
+
+    /// How import resolution by name ranks the module, higher first: a current RFC or a module of another standards
+    /// body, then an active draft, then an obsoleted RFC; within each, the more recent document.
+    pub fn rank(&self) -> (u8, Option<u32>) {
+        let tier = if self.source.is_draft() {
+            1
+        } else if self.obsoleted_by.is_empty() {
+            2
+        } else {
+            0
+        };
+        (tier, self.source.recency())
+    }
+
+    /// Whether import resolution by name may use the module: not a draft module with syntax errors.
+    pub fn resolvable_by_name(&self) -> bool {
+        !(self.source.is_draft() && self.parse_status == ParseStatus::Unparseable)
     }
 }
 

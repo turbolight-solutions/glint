@@ -617,3 +617,82 @@ fn a_manifest_entry_needs_its_body_to_be_declared() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("has no [[body]]"), "{stderr}");
 }
+
+#[test]
+fn active_drafts_join_the_corpus_but_are_no_label_evidence() {
+    let dir = std::env::temp_dir().join(format!("glint-e2e-drafts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    let drafts = dir.join("drafts");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    std::fs::create_dir_all(&drafts).unwrap();
+    std::fs::copy(
+        fixture("text/rfc5280-appendix-a.txt"),
+        rfcs.join("rfc5280.txt"),
+    )
+    .unwrap();
+    std::fs::copy(
+        fixture("xml/rfc8692.xml"),
+        drafts.join("draft-ietf-lamps-shake-01.xml"),
+    )
+    .unwrap();
+    std::fs::copy(
+        fixture("xml/rfc8692.xml"),
+        drafts.join("draft-expired-thing-04.xml"),
+    )
+    .unwrap();
+    std::fs::write(
+        drafts.join("all_id2.txt"),
+        "# index\n\
+         draft-ietf-lamps-shake-01\t-1\tActive\tIn Last Call\t\t\t2026-10-20\tlamps\n\
+         draft-expired-thing-04\t-1\tExpired\t\t\t\t2020-01-01\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--drafts-dir")
+        .arg(&drafts)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-05"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let corpus = read_corpus(&dir);
+    let draft = corpus
+        .documents()
+        .iter()
+        .find(|d| d.id == "draft-ietf-lamps-shake-01")
+        .expect("the active draft is indexed");
+    assert_eq!(draft.body, "draft");
+    assert_eq!(draft.date.as_deref(), Some("2026-10-20"));
+    assert_eq!(draft.status.as_deref(), Some("In Last Call"));
+    assert_eq!(draft.text_format.as_deref(), Some("xml"));
+    assert!(
+        corpus
+            .documents()
+            .iter()
+            .all(|d| d.id != "draft-expired-thing-04")
+    );
+    let module = corpus
+        .modules()
+        .iter()
+        .find(|m| m.source.document == "draft-ietf-lamps-shake-01")
+        .expect("the draft's module is in the corpus");
+    assert_eq!(module.source.edition.as_deref(), Some("2026-10-20"));
+    let pkix: glint_corpus::Oid = "1.3.6.1.5.5.7".parse().unwrap();
+    assert!(
+        corpus
+            .oid_labels()
+            .labels_of(&pkix)
+            .iter()
+            .all(|e| !e.documents.iter().any(|d| d.starts_with("draft-"))),
+        "drafts are no label evidence"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

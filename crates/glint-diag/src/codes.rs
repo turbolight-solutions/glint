@@ -197,6 +197,12 @@ const CODES: &[CodeInfo] = &[
         basis: "policy",
     },
     CodeInfo {
+        code: "I109",
+        severity: Severity::Info,
+        title: "Import resolved to a module of an Internet-Draft",
+        basis: "policy",
+    },
+    CodeInfo {
         code: "I105",
         severity: Severity::Info,
         title: "Using a curated version of a corpus module",

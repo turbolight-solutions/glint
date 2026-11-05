@@ -520,6 +520,16 @@ M DEFINITIONS ::= BEGIN
 END
 ```
 
+## I109
+
+An import resolved to a module of an active Internet-Draft. The corpus has the latest revision of every active draft, so a draft can import a module that is not published yet; the note is there because that module may still change. Import resolution by name prefers a current RFC (or a module of another standards body), then an active draft, the most recent first, then an obsoleted RFC; a draft module with syntax errors is never chosen by name.
+
+```asn1 untested
+M DEFINITIONS ::= BEGIN
+IMPORTS NewThing FROM ModuleOfADraft;
+END
+```
+
 ## W140
 
 An object identifier (or a module identifier) is already assigned in the corpus to a different name. A new draft must not reuse an identifier that an RFC registered.
@@ -533,7 +543,7 @@ If you are updating an existing module on purpose, keep its name.
 
 ## I141
 
-An object identifier uses an author placeholder (`TBD`, `TBD1`, `id-TBD`, or any word in `[oid] placeholders` of `glint.toml`). It is an information message so that you remember to replace the placeholder before the RFC is approved. Raise it with `I141 = "warning"` in `[severity]`.
+An object identifier uses an author placeholder (`TBD`, `TBD1`, `TBDMOD`, `id-TBD`, any word that starts with `TBD`, an upper-case word written as the number of an arc such as `id-mod-foo(MODNUM)`, or any word in `[oid] placeholders` of `glint.toml`). It is an information message so that you remember to replace the placeholder before the RFC is approved. Raise it with `I141 = "warning"` in `[severity]`.
 
 ```asn1 bad
 M DEFINITIONS ::= BEGIN

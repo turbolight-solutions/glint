@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use glint_corpus::{CorpusProvider, Oid, preferred};
+use glint_corpus::{CorpusProvider, ModuleRecord, Oid, preferred};
 use glint_syntax::ast::{self};
 use glint_syntax::{Parse, ParseOptions, SyntaxError, SyntaxKind, SyntaxNode, parse_source_with};
 
@@ -428,7 +428,18 @@ impl<'c> ModuleGraph<'c> {
                 };
             }
         }
-        let candidates: Vec<usize> = self.corpus.by_name(&clause.module_name).to_vec();
+        let candidates: Vec<usize> = self
+            .corpus
+            .by_name(&clause.module_name)
+            .iter()
+            .copied()
+            .filter(|&index| {
+                self.corpus
+                    .modules()
+                    .get(index)
+                    .is_some_and(ModuleRecord::resolvable_by_name)
+            })
+            .collect();
         let same_document = importer_document.and_then(|document| {
             candidates.iter().copied().find(|&index| {
                 self.corpus

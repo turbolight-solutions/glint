@@ -23,6 +23,7 @@ Implemented so far (M1, M2, M3, M4, M5):
 | `I103` | info | Import resolved by name to one of several corpus modules | policy | `tests/imports.rs` |
 | `E104` | error | Same module imported twice (by name or OID), or a module importing itself | X.680 13.16 e | `tests/imports.rs` |
 | `I105` | info | Using a curated (`errata-verified` or `correction`) version of a corpus module | policy | `glint-corpus-build/tests/end_to_end.rs` |
+| `I109` | info | Import resolved to a module of an Internet-Draft | policy | `tests/imports.rs` |
 | `W106` | warning | IMPORTS gives no OID for a module that has a definitive OID | X.680 13.12 | `tests/imports.rs` |
 | `E107` | error | Value reference in an `AssignedIdentifier` does not meet 13.9 | X.680 13.9 | `tests/imports.rs` |
 | `E110` | error | Undefined reference, or external reference to a module or symbol absent from IMPORTS. Covers type, class and value references (including OID components and tag numbers); names inside class definitions, object bodies and object sets are checked too | X.680 14.4–14.7 | `tests/symbols.rs` |

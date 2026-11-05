@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use crate::Oid;
+use crate::{Oid, same_document};
 
 /// One label written for an arc, and the documents that write it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,7 +72,7 @@ pub struct OidLabels {
 fn count_without(documents: &[String], own: Option<&str>) -> usize {
     documents
         .iter()
-        .filter(|d| own.is_none_or(|own| !d.eq_ignore_ascii_case(own)))
+        .filter(|d| own.is_none_or(|own| !same_document(d, own)))
         .count()
 }
 
@@ -158,7 +158,7 @@ impl OidLabels {
             .iter()
             .filter(|e| e.label == label)
             .flat_map(|e| e.documents.iter())
-            .filter(|d| own.is_none_or(|own| !d.eq_ignore_ascii_case(own)))
+            .filter(|d| own.is_none_or(|own| !same_document(d, own)))
             .cloned()
             .collect()
     }

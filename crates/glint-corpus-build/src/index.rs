@@ -1,4 +1,5 @@
-//! Reads `rfc-index.xml` for each RFC's status, publication month and the RFCs that obsolete it.
+//! Reads `rfc-index.xml` for each RFC's status, publication month and the RFCs that obsolete it, and `all_id2.txt` for
+//! the active Internet-Drafts.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -102,4 +103,80 @@ pub fn read_index(path: &Path) -> Result<HashMap<u32, RfcMeta>, String> {
         }
     }
     Ok(out)
+}
+
+/// An active Internet-Draft at its latest revision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DraftEntry {
+    /// `draft-ietf-lamps-foo-03`.
+    pub id: String,
+    /// The IESG state, such as `I-D Exists` or `In Last Call`.
+    pub iesg_state: Option<String>,
+    /// `YYYY-MM-DD` of the revision.
+    pub date: String,
+}
+
+/// The active drafts listed in `all_id2.txt` (tab-separated: name and revision, -1, state, IESG state, RFC number,
+/// replacement, revision date, ...).
+pub fn read_drafts(path: &Path) -> Result<Vec<DraftEntry>, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = String::from_utf8_lossy(&bytes);
+    let mut drafts: Vec<DraftEntry> =
+        text.lines()
+            .filter(|line| !line.starts_with('#'))
+            .filter_map(|line| {
+                let fields: Vec<&str> = line.split('\t').collect();
+                let (id, state, iesg, date) = (
+                    fields.first()?.trim(),
+                    fields.get(2)?.trim(),
+                    fields.get(3)?.trim(),
+                    fields.get(6)?.trim(),
+                );
+                (state == "Active" && glint_corpus::draft_name(id).is_some() && date.len() == 10)
+                    .then(|| DraftEntry {
+                        id: id.to_owned(),
+                        iesg_state: (!iesg.is_empty()).then(|| iesg.to_owned()),
+                        date: date.to_owned(),
+                    })
+            })
+            .collect();
+    drafts.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(drafts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_active_drafts_are_read() {
+        let dir = std::env::temp_dir().join(format!("glint-all-id-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("all_id2.txt");
+        std::fs::write(
+            &path,
+            "# header\n\
+             draft-ietf-lamps-foo-03\t-1\tActive\tIn Last Call\t\t\t2026-10-20\tlamps\n\
+             draft-old-thing-07\t-1\tExpired\t\t\t\t2019-01-01\n\
+             draft-ind-bar-00\t-1\tActive\t\t\t\t2026-11-01\n",
+        )
+        .unwrap();
+        let drafts = read_drafts(&path).unwrap();
+        assert_eq!(
+            drafts,
+            vec![
+                DraftEntry {
+                    id: "draft-ietf-lamps-foo-03".into(),
+                    iesg_state: Some("In Last Call".into()),
+                    date: "2026-10-20".into(),
+                },
+                DraftEntry {
+                    id: "draft-ind-bar-00".into(),
+                    iesg_state: None,
+                    date: "2026-11-01".into(),
+                },
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

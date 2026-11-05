@@ -314,3 +314,17 @@ fn an_import_identifier_of_another_module() {
     assert_eq!(codes(&findings), ["W144"]);
     assert!(findings[0].message.contains("1.3.6.1.5.5.7.0.18"));
 }
+
+#[test]
+fn upper_case_placeholders_are_noted_not_malformed() {
+    let findings = check(&module(
+        "base OBJECT IDENTIFIER ::= { 1 3 6 1 4 1 99 } a OBJECT IDENTIFIER ::= { base id-a(TBD1) } b OBJECT IDENTIFIER ::= { base TBD } c OBJECT IDENTIFIER ::= { base id-c(MODNUM) }",
+    ));
+    assert_eq!(codes(&findings), ["I141", "I141", "I141"]);
+    let header = check("M { 1 3 6 1 4 1 99 id-mod(0) id-mod-m(TBD) } DEFINITIONS ::= BEGIN END");
+    assert_eq!(codes(&header), ["I141"]);
+    assert_eq!(
+        run(&module("o OBJECT IDENTIFIER ::= { 1 3 Foo }")),
+        ["E131"]
+    );
+}

@@ -161,6 +161,11 @@ fn components(group: &SyntaxNode) -> Vec<Component> {
                 }
                 i = i.saturating_add(3);
             }
+            // `{ id-pkix TBD }`
+            SyntaxKind::UpperName if is_placeholder(token.text(), &[]) => {
+                out.push(Component::Name(token.text().to_owned(), range));
+                i = i.saturating_add(1);
+            }
             _ => {
                 out.push(Component::Bad(range));
                 i = i.saturating_add(1);
@@ -205,14 +210,23 @@ fn number_form(toks: &[SyntaxToken], start: usize) -> (Option<NumberForm>, usize
                         3,
                     )
                 }
-                _ => (None, 0),
+                // `name(TBD1)`, `name(TBDMOD)`: an upper-case word is no value reference; authors write
+                // placeholders so, and the evaluation treats it as one.
+                _ => (
+                    Some(NumberForm::Reference(
+                        None,
+                        first.text().to_owned(),
+                        first.text_range(),
+                    )),
+                    1,
+                ),
             }
         }
         _ => (None, 0),
     }
 }
 
-// design spec: `TBD`, `TBD1`, `id-TBD`
+// design spec: `TBD`, `TBD1`, `id-TBD`, and other words that start with `TBD` (`TBDMOD`, `TBD-CMS`)
 fn is_placeholder(name: &str, extra: &[String]) -> bool {
     if extra.iter().any(|p| p.eq_ignore_ascii_case(name)) {
         return true;
@@ -220,7 +234,12 @@ fn is_placeholder(name: &str, extra: &[String]) -> bool {
     let lower = name.to_ascii_lowercase();
     let stem = lower.strip_prefix("id-").unwrap_or(&lower);
     stem.strip_prefix("tbd")
-        .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()))
+        .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+}
+
+/// An upper-case word where a number belongs (`name(TBDMOD)`): never a value reference, so a placeholder.
+fn is_upper_case_word(qualifier: Option<&str>, name: &str) -> bool {
+    qualifier.is_none() && name.starts_with(|c: char| c.is_ascii_uppercase())
 }
 
 impl<'g, 'c> Evaluator<'g, 'c> {
@@ -279,7 +298,9 @@ impl<'g, 'c> Evaluator<'g, 'c> {
                             }
                         }
                         NumberForm::Reference(qualifier, reference, ref_range) => {
-                            if is_placeholder(&reference, placeholder_names) {
+                            if is_placeholder(&reference, placeholder_names)
+                                || is_upper_case_word(qualifier.as_deref(), &reference)
+                            {
                                 result.placeholders.push((reference, ref_range));
                                 known = false;
                                 continue;

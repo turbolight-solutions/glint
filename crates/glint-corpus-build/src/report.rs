@@ -35,6 +35,8 @@ pub struct ReportData<'a> {
     pub build: String,
     pub rfcs_scanned: usize,
     pub rfcs_with_modules: usize,
+    pub drafts_scanned: usize,
+    pub drafts_with_modules: usize,
     pub records: &'a [ModuleRecord],
     pub outcomes: &'a [ModuleOutcome],
     pub skipped_smi: &'a [(u32, String)],
@@ -96,6 +98,16 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         out,
         "| RFCs with at least one ASN.1 module | {} |",
         data.rfcs_with_modules
+    );
+    let _ = writeln!(
+        out,
+        "| Active Internet-Drafts scanned | {} |",
+        data.drafts_scanned
+    );
+    let _ = writeln!(
+        out,
+        "| Drafts with at least one ASN.1 module | {} |",
+        data.drafts_with_modules
     );
     let _ = writeln!(out, "| Modules in the corpus | {total} |");
     let _ = writeln!(

@@ -16,6 +16,7 @@ pub use data::{
 pub use labels::{AllowedOid, LabelEvidence, LabelProblem, OidLabels, OidNode};
 pub use oid::{Oid, OidParseError};
 pub use record::{
-    BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, Exports, ModuleRecord, ModuleSource,
-    OidAssignment, OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title, rfc_number,
+    BODY_DRAFT, BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, Exports, ModuleRecord,
+    ModuleSource, OidAssignment, OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title,
+    draft_name, rfc_number, same_document,
 };

@@ -1,4 +1,4 @@
-//! Import checks: W100, E101, W102, I103, E104, I105, W106, E107 (X.680 13.9-13.16).
+//! Import checks: W100, E101, W102, I103, E104, I105, W106, E107, I109 (X.680 13.9-13.16).
 
 use std::collections::HashSet;
 
@@ -137,6 +137,20 @@ pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
                     ),
                     ctx.loc(clause.module_range),
                 );
+                ctx.report(finding);
+            }
+            if rec.source.is_draft() {
+                let finding = Finding::new(
+                    "I109",
+                    format!(
+                        "`{}` resolved to the Internet-Draft {} ({}), which may still change",
+                        clause.module_name,
+                        rec.source.document,
+                        rec.source.edition.as_deref().unwrap_or("undated")
+                    ),
+                    ctx.loc(clause.module_range),
+                )
+                .with_help("pin it in glint.toml once the module is published, or import the RFC");
                 ctx.report(finding);
             }
             if let SourceKind::Overridden { tier, errata_ids } = &rec.source.kind

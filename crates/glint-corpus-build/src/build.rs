@@ -19,15 +19,15 @@ use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
 use crate::Settings;
-use crate::collect::{Candidate, extract_rfc};
-use crate::index::{RfcMeta, read_index};
+use crate::collect::{Candidate, extract_draft, extract_rfc};
+use crate::index::{RfcMeta, read_drafts, read_index};
 use crate::overrides::{
     Override, check_errata, check_extraction_tier, read_allowlist, read_overrides,
 };
 use crate::report::{AuditLine, FindingLine, ModuleOutcome, ReportData, render_report};
 use crate::sources::{Defined, Fetched, Manifest, Need, fetch, read_manifest, select};
 
-const RFC_NOTICE: &str = "Modules extracted from RFCs are code components under the IETF Trust's Revised BSD License (BCP 78, BCP 79).";
+const RFC_NOTICE: &str = "Modules extracted from RFCs and Internet-Drafts are code components under the IETF Trust's Revised BSD License (BCP 78, BCP 79).";
 
 pub fn run(settings: &Settings) -> Result<String, String> {
     let numbers = rfc_numbers(&settings.rfc_dir, &settings.only);
@@ -50,7 +50,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut skipped_smi: Vec<(u32, String)> = Vec::new();
     let mut extraction_notes: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     let mut rfcs_with_modules: HashSet<u32> = HashSet::new();
-    let mut rfc_texts: BTreeMap<u32, (String, &'static str)> = BTreeMap::new();
+    // The text of every document with a module, by document id, for documents.bin.
+    let mut texts_by_id: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
     for (rfc, extraction) in extracted {
         if !extraction.notes.is_empty() {
             extraction_notes.insert(rfc, extraction.notes.clone());
@@ -64,7 +65,36 @@ pub fn run(settings: &Settings) -> Result<String, String> {
             }
         }
         if rfcs_with_modules.contains(&rfc) {
-            rfc_texts.insert(rfc, (extraction.text, extraction.format));
+            texts_by_id.insert(format!("rfc{rfc}"), (extraction.text, extraction.format));
+        }
+    }
+
+    let drafts = match &settings.drafts_dir {
+        Some(dir) if settings.only.is_empty() => read_drafts(&dir.join("all_id2.txt"))?,
+        _ => Vec::new(),
+    };
+    let draft_dates: HashMap<String, (String, Option<String>)> = drafts
+        .iter()
+        .map(|d| (d.id.clone(), (d.date.clone(), d.iesg_state.clone())))
+        .collect();
+    let extracted_drafts: Vec<_> = match &settings.drafts_dir {
+        Some(dir) => drafts
+            .par_iter()
+            .filter_map(|draft| extract_draft(dir, draft).map(|e| (draft.id.clone(), e)))
+            .collect(),
+        None => Vec::new(),
+    };
+    let mut drafts_with_modules = 0_usize;
+    for (id, extraction) in extracted_drafts {
+        let modules: Vec<Candidate> = extraction
+            .candidates
+            .into_iter()
+            .filter(|c| !c.smi)
+            .collect();
+        if !modules.is_empty() {
+            drafts_with_modules = drafts_with_modules.saturating_add(1);
+            candidates.extend(modules);
+            texts_by_id.insert(id, (extraction.text, extraction.format));
         }
     }
 
@@ -162,6 +192,11 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     for (record, checked) in records.iter_mut().zip(outcomes) {
         record.parse_status = checked.outcome.status;
         oid_assignments.extend(checked.assignments);
+        // Drafts may still change: they are no evidence of how an arc is labelled.
+        if record.source.is_draft() {
+            outcome_list.push(checked.outcome);
+            continue;
+        }
         label_triples.extend(
             checked
                 .labels
@@ -189,10 +224,10 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         .flat_map(|record| audit_record(record, &audited))
         .collect();
 
-    let documents = document_index(&records, &meta, &rfc_texts);
-    let texts: Vec<(String, String, String)> = rfc_texts
+    let documents = document_index(&records, &meta, &draft_dates, &texts_by_id);
+    let texts: Vec<(String, String, String)> = texts_by_id
         .into_iter()
-        .map(|(rfc, (text, format))| (format!("rfc{rfc}"), format.to_owned(), text))
+        .map(|(id, (text, format))| (id, format.to_owned(), text))
         .collect();
     let mut corpus_data = CorpusData {
         info,
@@ -215,6 +250,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         build: build.clone(),
         rfcs_scanned: numbers.len(),
         rfcs_with_modules: rfcs_with_modules.len(),
+        drafts_scanned: drafts.len(),
+        drafts_with_modules,
         records: &corpus_data.modules,
         outcomes: &outcome_list,
         skipped_smi: &skipped_smi,
@@ -295,25 +332,29 @@ fn write_with_digest(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String>
 fn document_index(
     records: &[ModuleRecord],
     meta: &HashMap<u32, RfcMeta>,
-    texts: &BTreeMap<u32, (String, &'static str)>,
+    drafts: &HashMap<String, (String, Option<String>)>,
+    texts: &BTreeMap<String, (String, &'static str)>,
 ) -> Vec<DocumentRecord> {
     let mut seen: HashSet<&str> = HashSet::new();
     let mut documents = Vec::new();
     for record in records {
-        if !seen.insert(record.source.document.as_str()) {
+        let id = record.source.document.as_str();
+        if !seen.insert(id) {
             continue;
         }
-        let rfc = record.source.rfc_number();
-        let rfc_meta = rfc.and_then(|n| meta.get(&n));
+        let rfc_meta = record.source.rfc_number().and_then(|n| meta.get(&n));
+        let draft = drafts.get(id);
         documents.push(DocumentRecord {
-            id: record.source.document.clone(),
+            id: id.to_owned(),
             body: record.source.body.clone(),
-            status: rfc_meta.and_then(|m| m.status.clone()),
+            status: rfc_meta
+                .and_then(|m| m.status.clone())
+                .or_else(|| draft.and_then(|(_, state)| state.clone())),
             obsoleted_by: rfc_meta.map(|m| m.obsoleted_by.clone()).unwrap_or_default(),
-            date: rfc_meta.and_then(|m| m.date.clone()),
-            text_format: rfc
-                .and_then(|n| texts.get(&n))
-                .map(|(_, format)| (*format).to_owned()),
+            date: rfc_meta
+                .and_then(|m| m.date.clone())
+                .or_else(|| draft.map(|(date, _)| date.clone())),
+            text_format: texts.get(id).map(|(_, format)| (*format).to_owned()),
         });
     }
     documents

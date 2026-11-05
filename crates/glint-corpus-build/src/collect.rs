@@ -1,10 +1,12 @@
-//! Pulls the ASN.1 modules out of one RFC.
+//! Pulls the ASN.1 modules out of one RFC or Internet-Draft.
 
 use std::path::Path;
 
 use glint_corpus::{ModuleSource, SourceKind};
 use glint_extract::{BlockKind, Format, extract, module_slices};
 use regex::Regex;
+
+use crate::index::DraftEntry;
 
 /// Modules written in SMI use macros of their own and are checked by `smilint`, not by Glint.
 fn smi_pattern() -> Option<Regex> {
@@ -45,7 +47,33 @@ pub fn extract_rfc(dir: &Path, rfc: u32) -> Option<RfcExtraction> {
     } else {
         return None;
     };
-    let bytes = std::fs::read(&path).ok()?;
+    extract_file(&path, format, |section| {
+        ModuleSource::rfc(rfc, section, SourceKind::Extracted)
+    })
+}
+
+/// The modules of an active draft, from its RFCXML source when the mirror has one, else its text.
+pub fn extract_draft(dir: &Path, draft: &DraftEntry) -> Option<RfcExtraction> {
+    let xml = dir.join(format!("{}.xml", draft.id));
+    let txt = dir.join(format!("{}.txt", draft.id));
+    let (path, format) = if xml.exists() {
+        (xml, Format::Xml)
+    } else if txt.exists() {
+        (txt, Format::Text)
+    } else {
+        return None;
+    };
+    extract_file(&path, format, |section| {
+        ModuleSource::draft(&draft.id, &draft.date, section, SourceKind::Extracted)
+    })
+}
+
+fn extract_file(
+    path: &Path,
+    format: Format,
+    source: impl Fn(Option<String>) -> ModuleSource,
+) -> Option<RfcExtraction> {
+    let bytes = std::fs::read(path).ok()?;
     let text = String::from_utf8_lossy(&bytes).into_owned();
     let extraction = extract(&text, format);
     let smi = smi_pattern();
@@ -73,11 +101,7 @@ pub fn extract_rfc(dir: &Path, rfc: u32) -> Option<RfcExtraction> {
                 name,
                 text: body,
                 smi: smi_module,
-                source: ModuleSource::rfc(
-                    rfc,
-                    block.origin.section.as_ref().map(ToString::to_string),
-                    SourceKind::Extracted,
-                ),
+                source: source(block.origin.section.as_ref().map(ToString::to_string)),
             });
         }
     }

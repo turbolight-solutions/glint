@@ -23,6 +23,10 @@ struct Args {
     /// Directory with `rfcNNNN.txt`, `rfcNNNN.xml` and `rfc-index.xml` (see `corpus/fetch.sh`)
     #[arg(long, value_name = "DIR")]
     rfc_dir: PathBuf,
+    /// Directory with the active Internet-Drafts, `draft-*.xml`, `draft-*.txt` and `all_id2.txt` (see
+    /// `corpus/fetch.sh`)
+    #[arg(long, value_name = "DIR")]
+    drafts_dir: Option<PathBuf>,
     /// Directory of curated overrides: `rfcNNNN/<Module>.asn` and `rfcNNNN/meta.toml`
     #[arg(long, value_name = "DIR")]
     overrides: Option<PathBuf>,
@@ -75,6 +79,7 @@ fn main() -> ExitCode {
 
 pub struct Settings {
     pub rfc_dir: PathBuf,
+    pub drafts_dir: Option<PathBuf>,
     pub overrides: Option<PathBuf>,
     pub out: PathBuf,
     pub date: String,
@@ -89,6 +94,7 @@ impl Settings {
     fn new(args: Args, date: String) -> Self {
         Self {
             rfc_dir: args.rfc_dir,
+            drafts_dir: args.drafts_dir,
             overrides: args.overrides,
             out: args.out,
             date,

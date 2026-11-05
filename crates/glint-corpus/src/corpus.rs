@@ -118,24 +118,17 @@ impl Corpus {
 }
 
 fn is_newer(candidate: &ModuleRecord, current: &ModuleRecord) -> bool {
-    let rank = |m: &ModuleRecord| (m.obsoleted_by.is_empty(), m.source.recency());
-    rank(candidate) > rank(current)
+    candidate.rank() > current.rank()
 }
 
-/// Picks one of `candidates` by the import resolution policy: not obsoleted first, then the most recent document, then the
-/// highest OID (editions of a module share a name and differ in the last arc, so the later one has the larger OID).
+/// Picks one of `candidates` by the import resolution policy ([`ModuleRecord::rank`]), then the highest OID (editions of
+/// a module share a name and differ in the last arc, so the later one has the larger OID).
 pub fn preferred(corpus: &dyn CorpusProvider, candidates: &[usize]) -> Option<usize> {
     candidates
         .iter()
         .copied()
         .filter_map(|index| corpus.modules().get(index).map(|module| (index, module)))
-        .max_by_key(|(_, module)| {
-            (
-                module.obsoleted_by.is_empty(),
-                module.source.recency(),
-                module.oid.clone(),
-            )
-        })
+        .max_by_key(|(_, module)| (module.rank(), module.oid.clone()))
         .map(|(index, _)| index)
 }
 

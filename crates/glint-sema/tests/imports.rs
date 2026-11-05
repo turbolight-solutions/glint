@@ -299,3 +299,97 @@ fn curated_modules_are_announced_once() {
     assert_eq!(codes(&findings), ["I105"]);
     assert!(findings[0].message.contains("errata 1234"));
 }
+
+/// Modules named `V`: one from an obsoleted RFC, one from a current RFC, one each from two drafts, with the given
+/// parse status for the newer draft.
+fn ranked_corpus(
+    with_current_rfc: bool,
+    newer_draft: glint_corpus::ParseStatus,
+) -> glint_corpus::Corpus {
+    use glint_corpus::{Corpus, CorpusData, ModuleSource, SourceKind};
+    let module = |oid: &str, symbol: &str| {
+        format!(
+            "V {{ {} }} DEFINITIONS ::= BEGIN {symbol} ::= INTEGER END",
+            oid.replace('.', " ")
+        )
+    };
+    let mut modules = corpus(&[
+        Rec {
+            name: "V",
+            oid: Some("1.2.3.1"),
+            rfc: 1000,
+            text: &module("1.2.3.1", "Old"),
+        },
+        Rec {
+            name: "V",
+            oid: Some("1.2.3.2"),
+            rfc: 2000,
+            text: &module("1.2.3.2", "Rfc"),
+        },
+        Rec {
+            name: "V",
+            oid: Some("1.2.3.3"),
+            rfc: 1,
+            text: &module("1.2.3.3", "Early"),
+        },
+        Rec {
+            name: "V",
+            oid: Some("1.2.3.4"),
+            rfc: 1,
+            text: &module("1.2.3.4", "Late"),
+        },
+    ])
+    .into_data()
+    .modules;
+    modules[0].obsoleted_by = vec![2000];
+    modules[2].source =
+        ModuleSource::draft("draft-a-v-02", "2026-01-10", None, SourceKind::Extracted);
+    modules[3].source =
+        ModuleSource::draft("draft-b-v-05", "2026-10-01", None, SourceKind::Extracted);
+    modules[3].parse_status = newer_draft;
+    if !with_current_rfc {
+        modules.remove(1);
+    }
+    Corpus::from_data(CorpusData {
+        modules,
+        ..CorpusData::default()
+    })
+}
+
+// policy: import resolution order and I109
+#[test]
+fn a_current_rfc_comes_before_drafts_and_drafts_before_obsoleted_rfcs() {
+    use glint_corpus::ParseStatus;
+    let text = |symbol: &str| {
+        format!(
+            "M DEFINITIONS ::= BEGIN IMPORTS {symbol} FROM V; T ::= SEQUENCE {{ v {symbol} }} END"
+        )
+    };
+    let current = ranked_corpus(true, ParseStatus::Clean);
+    let findings = without_notes(check_with(&text("Rfc"), &current, &Options::default()));
+    assert!(
+        !has(&findings, "E101") && !has(&findings, "I109"),
+        "{:?}",
+        codes(&findings)
+    );
+
+    let drafts = ranked_corpus(false, ParseStatus::Clean);
+    let findings = check_with(&text("Late"), &drafts, &Options::default());
+    assert!(!has(&findings, "E101"), "{:?}", codes(&findings));
+    let note = findings.iter().find(|f| f.code == "I109").unwrap();
+    assert!(note.message.contains("draft-b-v-05"), "{}", note.message);
+}
+
+#[test]
+fn a_draft_module_with_syntax_errors_is_not_chosen_by_name() {
+    use glint_corpus::ParseStatus;
+    let drafts = ranked_corpus(false, ParseStatus::Unparseable);
+    let text = "M DEFINITIONS ::= BEGIN IMPORTS Early FROM V; T ::= SEQUENCE { v Early } END";
+    let findings = check_with(text, &drafts, &Options::default());
+    assert!(!has(&findings, "E101"), "{:?}", codes(&findings));
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.code == "I109" && f.message.contains("draft-a-v-02"))
+    );
+}

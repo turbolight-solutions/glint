@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use glint_corpus::{LabelProblem, Oid, document_title};
+use glint_corpus::{LabelProblem, Oid, document_title, same_document};
 use glint_diag::Severity;
 use glint_syntax::SyntaxNode;
 
@@ -94,7 +94,14 @@ fn check_assignments(ctx: &mut Ctx<'_, '_, '_>) -> Vec<OidEval> {
         let Some(oid) = oid else {
             continue;
         };
-        let holders = ctx.graph.corpus().assignments_of(&oid);
+        let own = ctx.graph.options().own_document.as_deref();
+        let holders: Vec<_> = ctx
+            .graph
+            .corpus()
+            .assignments_of(&oid)
+            .iter()
+            .filter(|h| own.is_none_or(|own| !same_document(&h.document, own)))
+            .collect();
         if holders.is_empty() || holders.iter().any(|h| h.name == symbol.name) {
             continue;
         }
@@ -256,8 +263,10 @@ fn check_import_identifiers(ctx: &mut Ctx<'_, '_, '_>) {
             .iter()
             .filter_map(|&index| corpus.modules().get(index))
             .filter(|m| {
-                own.as_deref()
-                    .is_none_or(|own| !m.source.document.eq_ignore_ascii_case(own))
+                !m.source.is_draft()
+                    && own
+                        .as_deref()
+                        .is_none_or(|own| !same_document(&m.source.document, own))
             })
             .collect();
         if named.iter().any(|m| m.oid.as_ref() == Some(&oid)) {
