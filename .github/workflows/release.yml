@@ -3,9 +3,11 @@ name: release
 # A release is code only: the CLI binaries and the site (index.html, the scripts and glint.wasm). The data is built
 # and published every day by data.yml.
 
+# Make the release on GitHub (with its tag); publishing it runs this workflow, which attaches the files to it.
+
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 env:
@@ -23,7 +25,6 @@ jobs:
         include:
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, archive: tar.gz }
           - { target: aarch64-apple-darwin, os: macos-14, archive: tar.gz }
-          - { target: x86_64-apple-darwin, os: macos-15-intel, archive: tar.gz }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, archive: zip }
     runs-on: ${{ matrix.os }}
     steps:
@@ -108,13 +109,10 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: Create the release
+      - name: Attach the files to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" \
-            --title "${{ github.ref_name }}" --generate-notes \
-            artifacts/glint-*
+        run: gh release upload "${{ github.ref_name }}" --repo "${{ github.repository }}" --clobber artifacts/glint-*
 
   deploy:
     name: deploy the site

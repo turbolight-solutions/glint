@@ -41,11 +41,11 @@ The data used by `glint check` and `glint corpus ...` is, in order: `--corpus`, 
 
 ## Releases and the data workflow
 
-`.github/workflows/release.yml` runs on a `v*` tag and publishes code only:
+Releases are made on GitHub (Releases → Draft a new release, with a new `v*` tag). Publishing one runs `.github/workflows/release.yml`, which publishes code only:
 
-1. builds `glint` for Linux x86-64, macOS arm64 and x86-64, and Windows x86-64, packages each as `glint-<target>.tar.gz` (`.zip` on Windows) with `LICENSE` and `NOTICE`, and runs `--version`, `explain`, and `corpus list` (which must say how to get data);
+1. builds `glint` for Linux x86-64, macOS arm64, and Windows x86-64, packages each as `glint-<target>.tar.gz` (`.zip` on Windows) with `LICENSE` and `NOTICE`, and runs `--version`, `explain`, and `corpus list` (which must say how to get data);
 2. builds the site (`web/build-wasm.sh`, then Vite), writes `.gz` and `.br` files beside it (`deploy/precompress.sh`) and packages it as `glint-site-<tag>.zip`, the code zip;
-3. creates the GitHub release with the archives, the code zip and their `.sha256` files;
+3. attaches the archives, the code zip and their `.sha256` files;
 4. deploys the code zip to the host (`deploy/deploy.sh code`) when the `glint-site` environment has a deploy target.
 
 `.github/workflows/data.yml` runs every day: it mirrors the RFCs, the active drafts, the errata and IANA's SMI Numbers registry (`corpus/fetch.sh`), runs `corpus-build`, precompresses the build, uploads `glint-data-<build>.zip` (`data/v<schema>/<build>/` and `latest.json`) and `report.md` as artifacts, and publishes the build to the host (`deploy/deploy.sh data`), the pointer last.
