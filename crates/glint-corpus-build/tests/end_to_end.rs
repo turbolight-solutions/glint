@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use glint_check::{CheckOptions, check_document};
-use glint_corpus::{Corpus, CorpusProvider, read_bundle};
+use glint_corpus::{
+    CORPUS_FILE, Corpus, CorpusData, CorpusProvider, DOCUMENTS_FILE, Documents, Pointer, build_dir,
+    latest_path,
+};
 use glint_extract::Format;
 
 fn fixture(name: &str) -> PathBuf {
@@ -61,8 +64,7 @@ fn build(tag: &str, with_override: Option<(&str, &str)>) -> Built {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let mut file = std::fs::File::open(dir.join("out/corpus-2026-11-03.bundle")).unwrap();
-    let corpus = Corpus::from_bundle(read_bundle(&mut file).unwrap());
+    let corpus = Corpus::from_data(load_data(&dir.join("out")));
     let report = std::fs::read_to_string(dir.join("out/report.md")).unwrap();
     Built {
         dir,
@@ -83,7 +85,46 @@ END
 ";
 
 #[test]
-fn bundle_has_the_modules_and_the_report_records_a_baseline() {
+fn the_build_writes_digests_and_the_document_texts_under_one_build_id() {
+    let built = build("layout", None);
+    let out = built.dir.join("out");
+    let pointer = Pointer::from_json(&std::fs::read(out.join(latest_path())).unwrap()).unwrap();
+    assert!(
+        pointer.build.starts_with("2026-11-03."),
+        "{}",
+        pointer.build
+    );
+    let dir = out.join(build_dir(&pointer.build));
+    for file in [CORPUS_FILE, DOCUMENTS_FILE] {
+        let digest = std::fs::read_to_string(dir.join(format!("{file}.sha256"))).unwrap();
+        assert!(digest.ends_with(&format!("  {file}\n")), "{digest}");
+    }
+    let documents = Documents::read(std::fs::read(dir.join(DOCUMENTS_FILE)).unwrap()).unwrap();
+    documents.require_build(&pointer.build).unwrap();
+    let (text, format) = documents.get("rfc8692").unwrap();
+    assert_eq!(format, "xml");
+    assert!(text.contains("PKIXAlgsForSHAKE-2019"));
+    assert_eq!(documents.get("rfc5280").unwrap().1, "text");
+    let indexed: Vec<_> = built
+        .corpus
+        .documents()
+        .iter()
+        .map(|d| (d.id.as_str(), d.text_format.as_deref()))
+        .collect();
+    assert!(indexed.contains(&("rfc8692", Some("xml"))), "{indexed:?}");
+
+    let again = build("layout-again", None);
+    assert_eq!(
+        again.corpus.info().build,
+        built.corpus.info().build,
+        "the same content gets the same build id"
+    );
+    let _ = std::fs::remove_dir_all(built.dir);
+    let _ = std::fs::remove_dir_all(again.dir);
+}
+
+#[test]
+fn corpus_has_the_modules_and_the_report_records_a_baseline() {
     let built = build("baseline", None);
     let names: Vec<_> = built
         .corpus
@@ -100,7 +141,7 @@ fn bundle_has_the_modules_and_the_report_records_a_baseline() {
     }
     assert!(built.report.contains("Parse rate"), "{}", built.report);
     assert!(
-        built.report.contains("| Modules in the bundle | 3 |"),
+        built.report.contains("| Modules in the corpus | 3 |"),
         "{}",
         built.report
     );
@@ -248,8 +289,16 @@ fn build_twins(tag: &str, overrides: &[(&str, &str)]) -> (PathBuf, std::process:
 }
 
 fn read_corpus(dir: &Path) -> Corpus {
-    let mut file = std::fs::File::open(dir.join("out/corpus-2026-11-04.bundle")).unwrap();
-    Corpus::from_bundle(read_bundle(&mut file).unwrap())
+    Corpus::from_data(load_data(&dir.join("out")))
+}
+
+/// The data of the build that `latest.json` names.
+fn load_data(out: &Path) -> CorpusData {
+    let pointer = Pointer::from_json(&std::fs::read(out.join(latest_path())).unwrap()).unwrap();
+    let json = std::fs::read(out.join(build_dir(&pointer.build)).join(CORPUS_FILE)).unwrap();
+    let data = CorpusData::from_json(&json).unwrap();
+    assert_eq!(data.info.build, pointer.build);
+    data
 }
 
 #[test]
@@ -484,7 +533,7 @@ fn standalone_modules_join_the_corpus_beside_the_rfc_modules() {
 }
 
 #[test]
-fn a_body_with_no_modules_in_the_bundle_adds_no_notice() {
+fn a_body_with_no_modules_in_the_corpus_adds_no_notice() {
     // Nothing imports `Unused` or `Pinned` once they are on demand, so no ETSI module is bundled.
     let manifest = MANIFEST
         .replace("include = \"always\"", "")

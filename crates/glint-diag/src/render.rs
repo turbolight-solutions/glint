@@ -150,13 +150,37 @@ fn write_human(
 #[derive(Serialize)]
 struct JsonReport<'a> {
     schema_version: u32,
+    glint_version: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data_build: Option<&'a str>,
     diagnostics: &'a [Diagnostic],
 }
 
-/// Renders diagnostics as JSON with a `schema_version` field.
-pub fn render_json(diagnostics: &[Diagnostic]) -> String {
+/// The code and data that produced a result; every rendering names both.
+#[derive(Debug, Clone, Copy)]
+pub struct Versions<'a> {
+    /// The version of Glint.
+    pub glint: &'a str,
+    /// The build id of the corpus data, when the result used it.
+    pub data: Option<&'a str>,
+}
+
+impl Versions<'_> {
+    /// `glint 0.1.0, data 2026-11-05.0123abcd`.
+    pub fn line(&self) -> String {
+        match self.data {
+            Some(data) => format!("glint {}, data {data}", self.glint),
+            None => format!("glint {}", self.glint),
+        }
+    }
+}
+
+/// Renders diagnostics as JSON with `schema_version`, `glint_version` and `data_build` fields.
+pub fn render_json(diagnostics: &[Diagnostic], versions: Versions<'_>) -> String {
     let report = JsonReport {
         schema_version: JSON_SCHEMA_VERSION,
+        glint_version: versions.glint,
+        data_build: versions.data,
         diagnostics,
     };
     serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".to_owned())
@@ -189,7 +213,16 @@ mod tests {
     #[test]
     fn json_output_carries_a_schema_version() {
         let (_, diagnostics) = sample();
-        let value: serde_json::Value = serde_json::from_str(&render_json(&diagnostics)).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&render_json(
+            &diagnostics,
+            Versions {
+                glint: "1.2.3",
+                data: Some("2026-11-05.0123abcd"),
+            },
+        ))
+        .unwrap();
+        assert_eq!(value["glint_version"], "1.2.3");
+        assert_eq!(value["data_build"], "2026-11-05.0123abcd");
         assert_eq!(value["schema_version"], 1);
         assert_eq!(value["diagnostics"][0]["code"], "E001");
         assert_eq!(value["diagnostics"][0]["severity"], "error");

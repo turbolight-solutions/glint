@@ -362,7 +362,7 @@ fn to_response(report: Report, name: String, content: Option<String>) -> CheckRe
         .collect();
     CheckResponse {
         schema_version: SCHEMA_VERSION,
-        corpus_version: report.corpus_version,
+        corpus_version: report.data_build,
         document: DocumentInfo {
             name,
             format: format_name(report.format),
@@ -541,7 +541,7 @@ async fn corpus_info(State(state): State<AppState>) -> Json<CorpusResponse> {
     }
     let info = corpus.info();
     Json(CorpusResponse {
-        version: info.version.clone(),
+        version: info.build.clone(),
         notices: info.notices.clone(),
         modules: corpus.modules().len(),
         by_status,

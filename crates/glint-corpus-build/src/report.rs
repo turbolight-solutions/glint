@@ -23,7 +23,7 @@ pub struct ModuleOutcome {
 }
 
 pub struct ReportData<'a> {
-    pub date: String,
+    pub build: String,
     pub rfcs_scanned: usize,
     pub rfcs_with_modules: usize,
     pub records: &'a [ModuleRecord],
@@ -76,7 +76,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     let unparseable = count(ParseStatus::Unparseable);
     let parsed = total.saturating_sub(unparseable);
 
-    let _ = writeln!(out, "# Corpus report {}\n", data.date);
+    let _ = writeln!(out, "# Corpus report {}\n", data.build);
     let _ = writeln!(out, "## Baseline\n");
     let _ = writeln!(out, "| Metric | Value |\n| --- | --- |");
     let _ = writeln!(out, "| RFCs scanned | {} |", data.rfcs_scanned);
@@ -85,7 +85,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         "| RFCs with at least one ASN.1 module | {} |",
         data.rfcs_with_modules
     );
-    let _ = writeln!(out, "| Modules in the bundle | {total} |");
+    let _ = writeln!(out, "| Modules in the corpus | {total} |");
     let _ = writeln!(
         out,
         "| Parse rate (modules that parse without syntax errors) | {parsed} / {total} ({}) |",

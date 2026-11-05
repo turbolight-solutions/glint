@@ -168,18 +168,46 @@ pub struct OidAssignment {
     pub document: String,
 }
 
-/// Identifies a corpus build.
+/// Identifies a build of the data.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CorpusInfo {
-    /// `YYYY-MM-DD` of the build.
-    pub version: String,
+    /// `<UTC date>.<hash of the content>`, set once by `corpus-build`; everything downstream reads it from here.
+    pub build: String,
     pub notices: Vec<String>,
 }
 
-/// The serialized corpus.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct Bundle {
+/// A document that publishes modules of the corpus.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentRecord {
+    /// `rfc5280`, `X.509`, `draft-ietf-lamps-foo-03`.
+    pub id: String,
+    pub body: String,
+    pub status: Option<String>,
+    pub obsoleted_by: Vec<u32>,
+    /// `YYYY-MM-DD` (drafts) or `YYYY-MM` (RFCs) of publication, where known.
+    pub date: Option<String>,
+    /// `xml` or `text` when `documents.bin` has the text of the document.
+    pub text_format: Option<String>,
+}
+
+/// `corpus.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CorpusData {
+    pub schema: u32,
     pub info: CorpusInfo,
+    pub documents: Vec<DocumentRecord>,
     pub modules: Vec<ModuleRecord>,
     pub oid_assignments: Vec<OidAssignment>,
+}
+
+impl Default for CorpusData {
+    fn default() -> Self {
+        Self {
+            schema: crate::SCHEMA,
+            info: CorpusInfo::default(),
+            documents: Vec::new(),
+            modules: Vec::new(),
+            oid_assignments: Vec::new(),
+        }
+    }
 }

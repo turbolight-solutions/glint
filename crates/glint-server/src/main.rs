@@ -3,28 +3,17 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use glint_corpus::{Corpus, read_bundle};
+use glint_corpus::{Corpus, CorpusData};
 use glint_server::{AppState, HttpFetcher, Settings, router};
 
-#[cfg(embedded_corpus)]
-static EMBEDDED: Option<&[u8]> = Some(include_bytes!(env!("GLINT_EMBEDDED_CORPUS_PATH")));
-#[cfg(not(embedded_corpus))]
-static EMBEDDED: Option<&[u8]> = None;
-
 fn load_corpus(explicit: Option<&Path>) -> Result<Corpus, String> {
-    if let Some(path) = explicit {
-        let mut file = std::fs::File::open(path)
-            .map_err(|e| format!("cannot open corpus {}: {e}", path.display()))?;
-        let bundle = read_bundle(&mut file).map_err(|e| format!("{}: {e}", path.display()))?;
-        return Ok(Corpus::from_bundle(bundle));
-    }
-    match EMBEDDED {
-        Some(mut bytes) => {
-            let bundle = read_bundle(&mut bytes).map_err(|e| format!("embedded corpus: {e}"))?;
-            Ok(Corpus::from_bundle(bundle))
-        }
-        None => Ok(Corpus::default()),
-    }
+    let Some(path) = explicit else {
+        return Ok(Corpus::default());
+    };
+    let json =
+        std::fs::read(path).map_err(|e| format!("cannot open corpus {}: {e}", path.display()))?;
+    let data = CorpusData::from_json(&json).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Corpus::from_data(data))
 }
 
 async fn serve() -> Result<(), String> {
@@ -48,7 +37,7 @@ async fn serve() -> Result<(), String> {
 
 fn corpus_version(corpus: &Corpus) -> String {
     use glint_corpus::CorpusProvider;
-    corpus.info().version.clone()
+    corpus.info().build.clone()
 }
 
 async fn shutdown() {

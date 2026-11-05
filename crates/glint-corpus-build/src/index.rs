@@ -1,4 +1,4 @@
-//! Reads `rfc-index.xml` for each RFC's status and the RFCs that obsolete it.
+//! Reads `rfc-index.xml` for each RFC's status, publication month and the RFCs that obsolete it.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -10,14 +10,33 @@ use quick_xml::events::Event;
 pub struct RfcMeta {
     pub status: Option<String>,
     pub obsoleted_by: Vec<u32>,
+    /// `YYYY-MM`.
+    pub date: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Field {
     DocId,
     Status,
+    Month,
+    Year,
     Other,
 }
+
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
 
 fn rfc_number(doc_id: &str) -> Option<u32> {
     doc_id.strip_prefix("RFC")?.trim().parse().ok()
@@ -30,6 +49,8 @@ pub fn read_index(path: &Path) -> Result<HashMap<u32, RfcMeta>, String> {
     let mut current: Option<(Option<u32>, RfcMeta)> = None;
     let mut in_obsoleted_by = false;
     let mut field = Field::Other;
+    let mut in_date = false;
+    let mut month: Option<usize> = None;
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
@@ -37,6 +58,9 @@ pub fn read_index(path: &Path) -> Result<HashMap<u32, RfcMeta>, String> {
                 "obsoleted-by" => in_obsoleted_by = true,
                 "doc-id" => field = Field::DocId,
                 "current-status" => field = Field::Status,
+                "date" => in_date = true,
+                "month" if in_date => field = Field::Month,
+                "year" if in_date => field = Field::Year,
                 _ => field = Field::Other,
             },
             Ok(Event::Text(t)) => {
@@ -50,12 +74,21 @@ pub fn read_index(path: &Path) -> Result<HashMap<u32, RfcMeta>, String> {
                         }
                         Field::DocId => *number = rfc_number(&value),
                         Field::Status => meta.status = Some(value.to_lowercase()),
+                        Field::Month => {
+                            month = MONTHS.iter().position(|m| *m == value);
+                        }
+                        Field::Year => {
+                            if let Some(index) = month.take() {
+                                meta.date = Some(format!("{value}-{:02}", index.saturating_add(1)));
+                            }
+                        }
                         Field::Other => {}
                     }
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
                 "obsoleted-by" => in_obsoleted_by = false,
+                "date" => in_date = false,
                 "rfc-entry" => {
                     if let Some((Some(n), meta)) = current.take() {
                         out.insert(n, meta);

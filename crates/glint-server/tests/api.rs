@@ -12,8 +12,8 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use glint_corpus::{
-    Bundle, Corpus, CorpusInfo, Exports, ModuleRecord, ModuleSource, OidAssignment, ParseStatus,
-    SourceKind, SyntaxEra,
+    Corpus, CorpusData, CorpusInfo, Exports, ModuleRecord, ModuleSource, OidAssignment,
+    ParseStatus, SourceKind, SyntaxEra,
 };
 use glint_server::{AppState, BoxFuture, FetchError, Fetcher, HttpFetcher, Settings, router};
 use http_body_util::BodyExt;
@@ -50,9 +50,9 @@ fn record(name: &str, rfc: u32, oid: Option<&str>, text: &str) -> ModuleRecord {
 }
 
 fn corpus() -> Corpus {
-    Corpus::from_bundle(Bundle {
+    Corpus::from_data(CorpusData {
         info: CorpusInfo {
-            version: "2026-01-01".to_owned(),
+            build: "2026-01-01.0123abcd".to_owned(),
             notices: vec!["test corpus".to_owned()],
         },
         modules: vec![
@@ -73,6 +73,7 @@ fn corpus() -> Corpus {
                 document: "rfc1000".to_owned(),
             },
         ],
+        ..CorpusData::default()
     })
 }
 
@@ -152,7 +153,7 @@ async fn check_reports_diagnostics_blocks_and_modules() {
     let (status, body) = send(app(), post("/api/v1/check", &check_body(BROKEN))).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["schema_version"], 1);
-    assert_eq!(body["corpus_version"], "2026-01-01");
+    assert_eq!(body["corpus_version"], "2026-01-01.0123abcd");
     assert_eq!(body["document"]["name"], "x.asn");
     assert_eq!(body["document"]["format"], "bare");
     assert!(body["document"].get("content").is_none());
@@ -531,13 +532,14 @@ const TWIN_97: &str = "Twin { 1 3 6 1 4 1 99 9 } DEFINITIONS ::= BEGIN\n\
     END\n";
 
 fn twin_app() -> Router {
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         info: CorpusInfo::default(),
         modules: vec![
             record("Twin", 1002, Some("1.3.6.1.4.1.99.8"), TWIN_88),
             record("Twin", 1002, Some("1.3.6.1.4.1.99.9"), TWIN_97),
         ],
         oid_assignments: Vec::new(),
+        ..CorpusData::default()
     });
     let state = AppState::new(corpus, Arc::new(FakeFetcher::default()), settings());
     router(state)
@@ -611,7 +613,7 @@ async fn an_oid_lists_its_assignments_and_children() {
 async fn the_corpus_endpoint_counts_modules_by_status() {
     let (status, body) = send(app(), get("/api/v1/corpus")).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["version"], "2026-01-01");
+    assert_eq!(body["version"], "2026-01-01.0123abcd");
     assert_eq!(body["modules"], 2);
     assert_eq!(body["by_status"], json!({ "clean": 2 }));
     assert_eq!(body["oid_assignments"], 2);

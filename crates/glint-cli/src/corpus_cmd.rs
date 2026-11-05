@@ -1,19 +1,25 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Args as ClapArgs, Subcommand};
-use glint_corpus::{Corpus, CorpusProvider, ModuleRecord, Oid, ParseStatus};
+use glint_corpus::{
+    CORPUS_FILE, Corpus, CorpusData, CorpusProvider, ModuleRecord, Oid, ParseStatus, Pointer,
+    build_dir, latest_path, valid_build_id,
+};
+use glint_diag::Versions;
 
-use crate::common::{EXIT_ERRORS, EXIT_FAILURE, EXIT_OK, cached_bundle_path, load_corpus};
-use crate::net::{fetch_bundle, fetch_text};
+use crate::common::{
+    EXIT_ERRORS, EXIT_FAILURE, EXIT_OK, cache_dir, cached_corpus_path, load_corpus,
+};
+use crate::net::fetch_data;
 
-const DEFAULT_BUNDLE_URL: &str =
-    "https://github.com/glint-asn1/glint/releases/latest/download/corpus.bundle";
+/// The Glint site, which publishes the data under `data/v<schema>/`.
+const DEFAULT_SITE: &str = "https://glint.turbolightsolutions.com";
 
 #[derive(ClapArgs)]
 pub struct Args {
-    /// Corpus bundle to use instead of the embedded one
+    /// Corpus data (`corpus.json`) to use instead of the downloaded one
     #[arg(long, global = true)]
     corpus: Option<PathBuf>,
     #[command(subcommand)]
@@ -38,12 +44,15 @@ enum Sub {
         /// Dotted object identifier
         oid: String,
     },
-    /// Download the latest published bundle to the user cache; it replaces the embedded one
+    /// Download the corpus data to the user cache
     Update {
-        /// Where to download from (the bundle's `.sha256` file is expected next to it)
-        #[arg(long, default_value = DEFAULT_BUNDLE_URL)]
+        /// The site to download from; the data is read from `<URL>/data/v<schema>/`
+        #[arg(long, default_value = DEFAULT_SITE)]
         url: String,
-        /// Install a bundle file instead of downloading one
+        /// Download this build (`YYYY-MM-DD.<hash>`) instead of the latest
+        #[arg(long, value_name = "ID", conflicts_with = "from")]
+        build: Option<String>,
+        /// Install a `corpus.json` file instead of downloading one
         #[arg(long, conflicts_with = "url")]
         from: Option<PathBuf>,
     },
@@ -59,8 +68,8 @@ fn status_name(status: ParseStatus) -> &'static str {
 }
 
 pub fn run(args: &Args) -> ExitCode {
-    if let Sub::Update { url, from } = &args.command {
-        return match update(url, from.as_deref()) {
+    if let Sub::Update { url, build, from } = &args.command {
+        return match update(url, build.as_deref(), from.as_deref()) {
             Ok(message) => {
                 println!("{message}");
                 ExitCode::from(EXIT_OK)
@@ -78,10 +87,6 @@ pub fn run(args: &Args) -> ExitCode {
             return ExitCode::from(EXIT_FAILURE);
         }
     };
-    if corpus.modules().is_empty() {
-        eprintln!("glint: no corpus is available; pass --corpus <bundle> or set GLINT_CORPUS");
-        return ExitCode::from(EXIT_FAILURE);
-    }
     let mut out = std::io::stdout().lock();
     let code = match &args.command {
         Sub::List { filter } => list(&corpus, filter.as_deref(), &mut out),
@@ -89,6 +94,11 @@ pub fn run(args: &Args) -> ExitCode {
         Sub::Oid { oid } => oid_info(&corpus, oid, &mut out),
         Sub::Update { .. } => EXIT_OK,
     };
+    let versions = Versions {
+        glint: env!("CARGO_PKG_VERSION"),
+        data: Some(&corpus.info().build),
+    };
+    eprintln!("{}", versions.line());
     ExitCode::from(code)
 }
 
@@ -231,28 +241,65 @@ fn oid_info(corpus: &Corpus, text: &str, out: &mut impl Write) -> u8 {
     EXIT_OK
 }
 
-fn update(url: &str, from: Option<&std::path::Path>) -> Result<String, String> {
-    let destination = cached_bundle_path()
+fn update(site: &str, build: Option<&str>, from: Option<&Path>) -> Result<String, String> {
+    let destination = cached_corpus_path()
         .ok_or_else(|| "cannot tell where the user cache is; set GLINT_CACHE_DIR".to_owned())?;
-    let (bytes, expected) = match from {
-        Some(path) => (
-            std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?,
-            None,
-        ),
+    if let Some(path) = from {
+        let bytes =
+            std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        return install(&bytes, None, None, &destination);
+    }
+    let site = site.trim_end_matches('/');
+    let build = match build {
+        Some(build) if valid_build_id(build) => build.to_owned(),
+        Some(build) => {
+            return Err(format!(
+                "`{build}` is not a build id; it looks like `2026-11-05.0123abcd`"
+            ));
+        }
         None => {
-            let bytes = fetch_bundle(url)?;
-            let expected = fetch_text(&format!("{url}.sha256"))?;
-            (bytes, expected)
+            let url = format!("{site}/{}", latest_path());
+            let bytes = fetch_data(&url)?.ok_or_else(|| {
+                format!("{url}: not found; the site publishes no data for this version of Glint")
+            })?;
+            Pointer::from_json(&bytes)
+                .map_err(|e| format!("{url}: {e}"))?
+                .build
         }
     };
-    install_bundle(&bytes, expected.as_deref(), &destination)
+    if installed_build(&destination).as_deref() == Some(build.as_str()) {
+        return Ok(format!(
+            "the corpus data is up to date (build {build}) at {}",
+            destination.display()
+        ));
+    }
+    let url = format!("{site}/{}/{CORPUS_FILE}", build_dir(&build));
+    let bytes = fetch_data(&url)?.ok_or_else(|| format!("{url}: not found"))?;
+    let digest = fetch_data(&format!("{url}.sha256"))?
+        .ok_or_else(|| format!("{url}.sha256: not found; the download cannot be verified"))?;
+    install(
+        &bytes,
+        Some(&String::from_utf8_lossy(&digest)),
+        Some(&build),
+        &destination,
+    )
 }
 
-/// Checks the digest (when one is given) and that the bytes are a readable bundle, then replaces `destination`.
-fn install_bundle(
+/// The build of the data at `path`, if it is readable data of this schema.
+fn installed_build(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    CorpusData::from_json(&bytes)
+        .ok()
+        .map(|data| data.info.build)
+}
+
+/// Checks the digest (when one is given), that the bytes are data of this schema and of the expected build, then
+/// replaces `destination`.
+fn install(
     bytes: &[u8],
     expected_sha256: Option<&str>,
-    destination: &std::path::Path,
+    expected_build: Option<&str>,
+    destination: &Path,
 ) -> Result<String, String> {
     use sha2::{Digest, Sha256};
     if let Some(expected) = expected_sha256 {
@@ -267,22 +314,33 @@ fn install_bundle(
             ));
         }
     }
-    let mut reader = bytes;
-    let bundle = glint_corpus::read_bundle(&mut reader)
-        .map_err(|e| format!("the download is not a usable corpus bundle: {e}"))?;
+    let data = CorpusData::from_json(bytes)
+        .map_err(|e| format!("the download is not usable corpus data: {e}"))?;
+    if let Some(build) = expected_build
+        && data.info.build != build
+    {
+        return Err(format!(
+            "the download is build {}, not the build {build} that was asked for",
+            data.info.build
+        ));
+    }
     let parent = destination
         .parent()
         .ok_or_else(|| "the cache path has no directory".to_owned())?;
     std::fs::create_dir_all(parent)
         .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    let temporary = destination.with_extension("bundle.part");
+    let temporary = destination.with_extension("json.part");
     std::fs::write(&temporary, bytes)
         .and_then(|()| std::fs::rename(&temporary, destination))
         .map_err(|e| format!("cannot write {}: {e}", destination.display()))?;
+    // The cache file of Glint versions that embedded a corpus.
+    if let Some(old) = cache_dir().map(|dir| dir.join("corpus.bundle")) {
+        let _ = std::fs::remove_file(old);
+    }
     Ok(format!(
-        "installed corpus {} ({} modules) at {}",
-        bundle.info.version,
-        bundle.modules.len(),
+        "installed corpus data build {} ({} modules) at {}",
+        data.info.build,
+        data.modules.len(),
         destination.display()
     ))
 }
@@ -291,39 +349,51 @@ fn install_bundle(
 mod tests {
     use super::*;
 
-    fn bundle_bytes() -> Vec<u8> {
-        let mut bytes = Vec::new();
-        glint_corpus::write_bundle(&glint_corpus::Bundle::default(), &mut bytes).unwrap();
-        bytes
+    fn data_bytes(build: &str) -> Vec<u8> {
+        let mut data = CorpusData::default();
+        data.info.build = build.to_owned();
+        data.to_json()
     }
 
     #[test]
-    fn a_matching_digest_installs_the_bundle() {
+    fn a_matching_digest_installs_the_data() {
         use sha2::{Digest, Sha256};
-        let bytes = bundle_bytes();
+        let bytes = data_bytes("2026-11-05.0123abcd");
         let digest: String = Sha256::digest(&bytes)
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
         let dir = std::env::temp_dir().join(format!("glint-install-ok-{}", std::process::id()));
-        let destination = dir.join("corpus.bundle");
-        let message = install_bundle(
+        let destination = dir.join("corpus.json");
+        let message = install(
             &bytes,
-            Some(&format!("{digest}  corpus.bundle\n")),
+            Some(&format!("{digest}  corpus.json\n")),
+            Some("2026-11-05.0123abcd"),
             &destination,
         )
         .unwrap();
         assert!(message.contains("0 modules"), "{message}");
         assert_eq!(std::fs::read(&destination).unwrap(), bytes);
+        assert_eq!(
+            installed_build(&destination).as_deref(),
+            Some("2026-11-05.0123abcd")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn a_wrong_digest_or_a_non_bundle_is_refused_and_installs_nothing() {
+    fn a_wrong_digest_build_or_format_is_refused_and_installs_nothing() {
         let dir = std::env::temp_dir().join(format!("glint-install-bad-{}", std::process::id()));
-        let destination = dir.join("corpus.bundle");
-        assert!(install_bundle(&bundle_bytes(), Some("00ff"), &destination).is_err());
-        assert!(install_bundle(b"not a bundle", None, &destination).is_err());
+        let destination = dir.join("corpus.json");
+        let bytes = data_bytes("2026-11-05.0123abcd");
+        assert!(install(&bytes, Some("00ff"), None, &destination).is_err());
+        assert!(install(&bytes, None, Some("2026-11-06.0123abcd"), &destination).is_err());
+        assert!(install(b"not data", None, None, &destination).is_err());
+        let other_schema =
+            String::from_utf8(bytes)
+                .unwrap()
+                .replacen("\"schema\":1", "\"schema\":99", 1);
+        assert!(install(other_schema.as_bytes(), None, None, &destination).is_err());
         assert!(!destination.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -4,7 +4,8 @@ use std::process::ExitCode;
 
 use clap::{Args as ClapArgs, ValueEnum};
 use glint_check::{CheckOptions, Config, DocumentRef, Report, check_document};
-use glint_diag::{SarifInput, Severity, render_human, render_json, render_sarif};
+use glint_corpus::CorpusProvider;
+use glint_diag::{SarifInput, Severity, Versions, render_human, render_json, render_sarif};
 use glint_extract::{Format, detect_format};
 
 use crate::common::{
@@ -28,7 +29,7 @@ pub struct Args {
     /// Exit with status 1 when there are warnings too
     #[arg(long)]
     deny_warnings: bool,
-    /// Corpus bundle to use instead of the embedded one
+    /// Corpus data (`corpus.json`) to use instead of the downloaded one
     #[arg(long)]
     corpus: Option<PathBuf>,
     /// Resolve imports of `Name` to the module published in `rfcNNNN`, or to the module with that OID
@@ -58,13 +59,6 @@ struct Input {
 }
 
 pub fn run(args: &Args) -> ExitCode {
-    let corpus = match load_corpus(args.corpus.as_deref()) {
-        Ok(corpus) => corpus,
-        Err(message) => {
-            eprintln!("glint: {message}");
-            return ExitCode::from(EXIT_FAILURE);
-        }
-    };
     let mut pins = Vec::new();
     for pin in &args.pins {
         match pin.split_once('=') {
@@ -81,12 +75,29 @@ pub fn run(args: &Args) -> ExitCode {
             }
         }
     }
+    for name in &args.draft {
+        if let Err(error) = DocumentRef::parse(name) {
+            eprintln!("glint: `{name}`: {error}");
+            return ExitCode::from(EXIT_FAILURE);
+        }
+    }
+    let corpus = match load_corpus(args.corpus.as_deref()) {
+        Ok(corpus) => corpus,
+        Err(message) => {
+            eprintln!("glint: {message}");
+            return ExitCode::from(EXIT_FAILURE);
+        }
+    };
     let inputs = match gather_inputs(args) {
         Ok(inputs) => inputs,
         Err(message) => {
             eprintln!("glint: {message}");
             return ExitCode::from(EXIT_FAILURE);
         }
+    };
+    let versions = Versions {
+        glint: env!("CARGO_PKG_VERSION"),
+        data: Some(&corpus.info().build),
     };
     let mut exit = EXIT_OK;
     let mut reports: Vec<Report> = Vec::new();
@@ -114,7 +125,11 @@ pub fn run(args: &Args) -> ExitCode {
                 write!(std::io::stderr(), "{rendered}")
             }
             OutputFormat::Json => {
-                writeln!(std::io::stdout(), "{}", render_json(&report.diagnostics))
+                writeln!(
+                    std::io::stdout(),
+                    "{}",
+                    render_json(&report.diagnostics, versions)
+                )
             }
             OutputFormat::Sarif => Ok(()),
         };
@@ -142,10 +157,13 @@ pub fn run(args: &Args) -> ExitCode {
                 files: &report.files,
             })
             .collect();
-        let rendered = render_sarif(&sarif_inputs, env!("CARGO_PKG_VERSION"));
+        let rendered = render_sarif(&sarif_inputs, versions);
         if writeln!(std::io::stdout(), "{rendered}").is_err() {
             return ExitCode::from(EXIT_FAILURE);
         }
+    }
+    if matches!(args.format, OutputFormat::Human) {
+        eprintln!("{}", versions.line());
     }
     ExitCode::from(exit)
 }

@@ -8,7 +8,8 @@
 )]
 
 use glint_corpus::{
-    Bundle, Corpus, Exports, ModuleRecord, ModuleSource, Oid, ParseStatus, SourceKind, SyntaxEra,
+    Corpus, CorpusData, Exports, ModuleRecord, ModuleSource, Oid, ParseStatus, SourceKind,
+    SyntaxEra,
 };
 use glint_sema::{DraftSource, Finding, Options, analyze};
 use glint_syntax::{ParseOptions, parse_source_with};
@@ -36,9 +37,9 @@ pub fn corpus(records: &[Rec<'_>]) -> Corpus {
             sha256: String::new(),
         })
         .collect();
-    Corpus::from_bundle(Bundle {
+    Corpus::from_data(CorpusData {
         modules,
-        ..Bundle::default()
+        ..CorpusData::default()
     })
 }
 

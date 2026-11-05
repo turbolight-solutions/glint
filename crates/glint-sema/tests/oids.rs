@@ -6,7 +6,7 @@
 )]
 mod common;
 use common::*;
-use glint_corpus::{Bundle, Corpus, OidAssignment};
+use glint_corpus::{Corpus, CorpusData, OidAssignment};
 use glint_sema::Options;
 
 fn run(text: &str) -> Vec<&'static str> {
@@ -108,14 +108,14 @@ fn placeholder_arcs_are_noted() {
 }
 
 fn corpus_with_assignment(oid: &str, name: &str) -> Corpus {
-    Corpus::from_bundle(Bundle {
+    Corpus::from_data(CorpusData {
         oid_assignments: vec![OidAssignment {
             oid: oid.parse().unwrap(),
             name: name.to_owned(),
             module: "PKIX1Explicit88".to_owned(),
             document: "rfc5280".to_owned(),
         }],
-        ..Bundle::default()
+        ..CorpusData::default()
     })
 }
 

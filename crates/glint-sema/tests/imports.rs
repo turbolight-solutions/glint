@@ -284,16 +284,16 @@ fn a_symbol_imported_once_by_the_target_can_be_reimported() {
 // I105
 #[test]
 fn curated_modules_are_announced_once() {
-    use glint_corpus::{Bundle, Corpus, OverrideTier, SourceKind};
-    let mut corpus_bundle = Bundle {
-        modules: base_corpus().into_bundle().modules,
-        ..Bundle::default()
+    use glint_corpus::{Corpus, CorpusData, OverrideTier, SourceKind};
+    let mut corpus_data = CorpusData {
+        modules: base_corpus().into_data().modules,
+        ..CorpusData::default()
     };
-    corpus_bundle.modules[0].source.kind = SourceKind::Overridden {
+    corpus_data.modules[0].source.kind = SourceKind::Overridden {
         tier: OverrideTier::ErrataVerified,
         errata_ids: vec!["1234".to_owned()],
     };
-    let corpus = Corpus::from_bundle(corpus_bundle);
+    let corpus = Corpus::from_data(corpus_data);
     let text = "M DEFINITIONS ::= BEGIN IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 }; T ::= SEQUENCE { n Name } END";
     let findings = check_with(text, &corpus, &Options::default());
     assert_eq!(codes(&findings), ["I105"]);

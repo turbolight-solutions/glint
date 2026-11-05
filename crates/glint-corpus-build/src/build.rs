@@ -5,8 +5,9 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use glint_corpus::{
-    BODY_RFC, Bundle, Corpus, CorpusInfo, Exports, ModuleRecord, ModuleSource, Oid, OidAssignment,
-    ParseStatus, SourceKind, write_bundle,
+    BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo, DOCUMENTS_FILE, DocumentRecord,
+    Documents, Exports, ModuleRecord, ModuleSource, Oid, OidAssignment, ParseStatus, Pointer,
+    SourceKind, build_dir, latest_path,
 };
 use glint_diag::Severity;
 use glint_sema::{
@@ -43,6 +44,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut skipped_smi: Vec<(u32, String)> = Vec::new();
     let mut extraction_notes: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     let mut rfcs_with_modules: HashSet<u32> = HashSet::new();
+    let mut rfc_texts: BTreeMap<u32, (String, &'static str)> = BTreeMap::new();
     for (rfc, extraction) in extracted {
         if !extraction.notes.is_empty() {
             extraction_notes.insert(rfc, extraction.notes.clone());
@@ -54,6 +56,9 @@ pub fn run(settings: &Settings) -> Result<String, String> {
                 rfcs_with_modules.insert(rfc);
                 candidates.push(candidate);
             }
+        }
+        if rfcs_with_modules.contains(&rfc) {
+            rfc_texts.insert(rfc, (extraction.text, extraction.format));
         }
     }
 
@@ -131,13 +136,13 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     records.sort_by(|a, b| identity(a).cmp(&identity(b)));
 
     let info = CorpusInfo {
-        version: settings.date.clone(),
+        build: String::new(),
         notices: notices(&manifest, &records),
     };
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         info: info.clone(),
         modules: records.clone(),
-        oid_assignments: Vec::new(),
+        ..CorpusData::default()
     });
 
     let outcomes: Vec<(ModuleOutcome, Vec<OidAssignment>)> = records
@@ -155,18 +160,38 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     oid_assignments.sort_by(|a, b| (&a.oid, &a.module, &a.name).cmp(&(&b.oid, &b.module, &b.name)));
     oid_assignments.dedup();
 
+    let documents = document_index(&records, &meta, &rfc_texts);
+    let texts: Vec<(String, String, String)> = rfc_texts
+        .into_iter()
+        .map(|(rfc, (text, format))| (format!("rfc{rfc}"), format.to_owned(), text))
+        .collect();
+    let mut corpus_data = CorpusData {
+        info,
+        documents,
+        modules: records,
+        oid_assignments,
+        ..CorpusData::default()
+    };
+    // The build id names the content: the same data built twice on one day gets the same id.
+    let mut hasher = Sha256::new();
+    hasher.update(corpus_data.to_json());
+    hasher.update(Documents::write("", &texts));
+    let hash: String = hex(&hasher.finalize()).chars().take(8).collect();
+    let build = format!("{}.{hash}", settings.date);
+    corpus_data.info.build = build.clone();
+
     let data = ReportData {
-        date: settings.date.clone(),
+        build: build.clone(),
         rfcs_scanned: numbers.len(),
         rfcs_with_modules: rfcs_with_modules.len(),
-        records: &records,
+        records: &corpus_data.modules,
         outcomes: &outcome_list,
         skipped_smi: &skipped_smi,
         unreadable,
         extraction_notes: &extraction_notes,
         source_problems: &source_problems,
         overrides: &applied,
-        oid_assignments: oid_assignments.len(),
+        oid_assignments: corpus_data.oid_assignments.len(),
     };
     let report = render_report(&data);
     if let Some(path) = &settings.dump_findings {
@@ -187,42 +212,77 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         std::fs::write(path, dump).map_err(|e| format!("{}: {e}", path.display()))?;
     }
 
-    let bundle = Bundle {
-        info,
-        modules: records,
-        oid_assignments,
+    let dir = settings.out.join(build_dir(&build));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    write_with_digest(&dir, CORPUS_FILE, &corpus_data.to_json())?;
+    write_with_digest(&dir, DOCUMENTS_FILE, &Documents::write(&build, &texts))?;
+    let pointer = Pointer {
+        schema: corpus_data.schema,
+        build: build.clone(),
     };
-    std::fs::create_dir_all(&settings.out)
-        .map_err(|e| format!("{}: {e}", settings.out.display()))?;
-    let bundle_path = settings
-        .out
-        .join(format!("corpus-{}.bundle", settings.date));
-    let mut file = std::fs::File::create(&bundle_path)
-        .map_err(|e| format!("{}: {e}", bundle_path.display()))?;
-    write_bundle(&bundle, &mut file).map_err(|e| e.to_string())?;
+    let latest = settings.out.join(latest_path());
+    std::fs::write(&latest, pointer.to_json()).map_err(|e| format!("{}: {e}", latest.display()))?;
     std::fs::write(settings.out.join("report.md"), &report)
         .map_err(|e| format!("report.md: {e}"))?;
 
-    let documents: HashSet<(&str, &str)> = bundle
-        .modules
+    let rfc_documents = corpus_data
+        .documents
         .iter()
-        .map(|m| (m.source.body.as_str(), m.source.document.as_str()))
-        .collect();
-    let rfc_documents = documents
-        .iter()
-        .filter(|(body, _)| *body == BODY_RFC)
+        .filter(|d| d.body == BODY_RFC)
         .count();
     let mut summary = String::new();
     let _ = write!(
         summary,
-        "{}: {} modules from {} RFCs and {} other documents, {} OID assignments",
-        bundle_path.display(),
-        bundle.modules.len(),
+        "{}: build {build}, {} modules from {} RFCs and {} other documents, {} OID assignments, {} document texts",
+        dir.display(),
+        corpus_data.modules.len(),
         rfc_documents,
-        documents.len().saturating_sub(rfc_documents),
-        bundle.oid_assignments.len()
+        corpus_data.documents.len().saturating_sub(rfc_documents),
+        corpus_data.oid_assignments.len(),
+        texts.len()
     );
     Ok(summary)
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Writes `name` in `dir` and `name.sha256` beside it, in the format of `sha256sum`.
+fn write_with_digest(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String> {
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    let digest = format!("{}  {name}\n", hex(&Sha256::digest(bytes)));
+    let digest_path = dir.join(format!("{name}.sha256"));
+    std::fs::write(&digest_path, digest).map_err(|e| format!("{}: {e}", digest_path.display()))
+}
+
+/// One entry per document that publishes a module of the corpus, in the order of the modules.
+fn document_index(
+    records: &[ModuleRecord],
+    meta: &HashMap<u32, RfcMeta>,
+    texts: &BTreeMap<u32, (String, &'static str)>,
+) -> Vec<DocumentRecord> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut documents = Vec::new();
+    for record in records {
+        if !seen.insert(record.source.document.as_str()) {
+            continue;
+        }
+        let rfc = record.source.rfc_number();
+        let rfc_meta = rfc.and_then(|n| meta.get(&n));
+        documents.push(DocumentRecord {
+            id: record.source.document.clone(),
+            body: record.source.body.clone(),
+            status: rfc_meta.and_then(|m| m.status.clone()),
+            obsoleted_by: rfc_meta.map(|m| m.obsoleted_by.clone()).unwrap_or_default(),
+            date: rfc_meta.and_then(|m| m.date.clone()),
+            text_format: rfc
+                .and_then(|n| texts.get(&n))
+                .map(|(_, format)| (*format).to_owned()),
+        });
+    }
+    documents
 }
 
 fn rfc_numbers(dir: &Path, only: &[u32]) -> Vec<u32> {
@@ -267,11 +327,7 @@ fn make_record(candidate: &Candidate, meta: Option<&RfcMeta>) -> Option<Made> {
     };
     let mut hasher = Sha256::new();
     hasher.update(text.as_bytes());
-    let sha256: String = hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
+    let sha256 = hex(&hasher.finalize());
     let syntax_clean = parse
         .errors()
         .iter()

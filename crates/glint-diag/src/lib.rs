@@ -13,7 +13,7 @@ use serde::Serialize;
 pub use codes::{CodeInfo, all_codes, code_info};
 pub use explain::{Example, examples, explain, explained_codes};
 pub use line_index::LineIndex;
-pub use render::{Files, render_human, render_json};
+pub use render::{Files, Versions, render_human, render_json};
 pub use sarif::{SarifInput, render_sarif};
 
 /// Identifies a file in a [`Files`] set: the draft, or a corpus module.

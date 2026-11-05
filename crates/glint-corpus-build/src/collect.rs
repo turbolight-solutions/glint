@@ -26,6 +26,10 @@ pub struct Candidate {
 pub struct RfcExtraction {
     pub candidates: Vec<Candidate>,
     pub notes: Vec<String>,
+    /// The document as read, for `documents.bin`.
+    pub text: String,
+    /// `xml` or `text`.
+    pub format: &'static str,
 }
 
 /// RFCs from 8650 on have an RFCXML v3 source; earlier ones are read as text.
@@ -45,7 +49,10 @@ pub fn extract_rfc(dir: &Path, rfc: u32) -> Option<RfcExtraction> {
     let text = String::from_utf8_lossy(&bytes).into_owned();
     let extraction = extract(&text, format);
     let smi = smi_pattern();
-    let mut result = RfcExtraction::default();
+    let mut result = RfcExtraction {
+        format: if format == Format::Xml { "xml" } else { "text" },
+        ..RfcExtraction::default()
+    };
     for note in &extraction.notes {
         result
             .notes
@@ -74,5 +81,6 @@ pub fn extract_rfc(dir: &Path, rfc: u32) -> Option<RfcExtraction> {
             });
         }
     }
+    result.text = text;
     Some(result)
 }

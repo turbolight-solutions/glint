@@ -9,7 +9,7 @@
 
 use glint_check::{CheckOptions, Config, Report, check_document};
 use glint_corpus::{
-    Bundle, Corpus, EmptyCorpus, Exports, ModuleRecord, ModuleSource, ParseStatus, SourceKind,
+    Corpus, CorpusData, EmptyCorpus, Exports, ModuleRecord, ModuleSource, ParseStatus, SourceKind,
     SyntaxEra,
 };
 use glint_extract::Format;
@@ -556,13 +556,13 @@ fn record(name: &str, rfc: u32, body: &str) -> ModuleRecord {
 
 #[test]
 fn a_snippet_is_checked_against_a_corpus_module_the_draft_imports() {
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         modules: vec![record(
             "Base",
             1000,
             "Item ::= SEQUENCE { a INTEGER, b BOOLEAN }",
         )],
-        ..Bundle::default()
+        ..CorpusData::default()
     });
     let module = "M DEFINITIONS ::= BEGIN IMPORTS Item FROM Base; T ::= Item END";
     let make =
@@ -598,9 +598,9 @@ fn a_snippet_is_checked_against_a_corpus_module_the_draft_imports() {
 
 #[test]
 fn a_snippet_is_checked_against_any_corpus_module_when_nothing_closer_defines_it() {
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         modules: vec![record("Far", 2000, "Quoted ::= INTEGER (0..10)")],
-        ..Bundle::default()
+        ..CorpusData::default()
     });
     let text = draft("", "T ::= INTEGER", "Quoted ::= INTEGER (0..11)");
     let report = check_document(
@@ -690,9 +690,9 @@ fn syntax_errors_in_unmarked_text_fragments_are_warnings() {
 fn corpus_modules_with_errors_are_not_used_for_the_whole_corpus_search() {
     let mut broken = record("Far", 2000, "Quoted ::= INTEGER (0..10)");
     broken.parse_status = ParseStatus::Errors;
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         modules: vec![broken],
-        ..Bundle::default()
+        ..CorpusData::default()
     });
     let text = draft("", "T ::= INTEGER", "Quoted ::= INTEGER (0..11)");
     let report = check_document(
@@ -707,9 +707,9 @@ fn corpus_modules_with_errors_are_not_used_for_the_whole_corpus_search() {
 
 #[test]
 fn a_same_named_but_unrelated_corpus_definition_is_not_a_match() {
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         modules: vec![record("Far", 2000, "Quoted ::= SEQUENCE { a INTEGER }")],
-        ..Bundle::default()
+        ..CorpusData::default()
     });
     let text = draft("", "T ::= INTEGER", "Quoted ::= INTEGER");
     let report = check_document(

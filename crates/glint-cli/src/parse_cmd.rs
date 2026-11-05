@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Args as ClapArgs, ValueEnum};
-use glint_diag::{Diagnostic, Files, Label, LineIndex, Severity, render_human, render_json};
+use glint_diag::{
+    Diagnostic, Files, Label, LineIndex, Severity, Versions, render_human, render_json,
+};
 use glint_syntax::{ParseOptions, SyntaxError, parse_source_with};
 
 const EXIT_OK: u8 = 0;
@@ -91,7 +93,17 @@ pub fn run(args: &Args) -> ExitCode {
                 render_human(&diagnostics, &files, args.color.enabled())
             )
         }
-        Format::Json => writeln!(stdout, "{}", render_json(&diagnostics)),
+        Format::Json => writeln!(
+            stdout,
+            "{}",
+            render_json(
+                &diagnostics,
+                Versions {
+                    glint: env!("CARGO_PKG_VERSION"),
+                    data: None,
+                },
+            )
+        ),
     };
     if written.is_err() {
         return ExitCode::from(EXIT_FAILURE);

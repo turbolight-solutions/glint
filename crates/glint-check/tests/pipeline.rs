@@ -7,7 +7,7 @@
 
 use glint_check::{CheckOptions, Config, check_document};
 use glint_corpus::{
-    Bundle, Corpus, EmptyCorpus, Exports, ModuleRecord, ModuleSource, ParseStatus, SourceKind,
+    Corpus, CorpusData, EmptyCorpus, Exports, ModuleRecord, ModuleSource, ParseStatus, SourceKind,
     SyntaxEra,
 };
 use glint_diag::Severity;
@@ -93,9 +93,9 @@ fn missing_symbols_in_a_corpus_module_are_reported() {
         parse_status: ParseStatus::Clean,
         sha256: String::new(),
     };
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         modules: vec![record],
-        ..Bundle::default()
+        ..CorpusData::default()
     });
     let text = "M DEFINITIONS ::= BEGIN IMPORTS Gone FROM Base; T ::= Gone END";
     let report = check_document(
@@ -122,9 +122,9 @@ fn pins_from_the_command_line_apply() {
         parse_status: ParseStatus::Clean,
         sha256: String::new(),
     };
-    let corpus = Corpus::from_bundle(Bundle {
+    let corpus = Corpus::from_data(CorpusData {
         modules: vec![make(1, "Old ::= INTEGER"), make(2, "New ::= INTEGER")],
-        ..Bundle::default()
+        ..CorpusData::default()
     });
     let text = "M DEFINITIONS ::= BEGIN IMPORTS Old FROM Base; T ::= Old END";
     let options = CheckOptions {

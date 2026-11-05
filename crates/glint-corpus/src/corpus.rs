@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{Bundle, CorpusInfo, ModuleRecord, Oid, OidAssignment};
+use crate::{CorpusData, CorpusInfo, DocumentRecord, ModuleRecord, Oid, OidAssignment};
 
 /// Read access to the corpus. The check pipeline sees only this trait, so it stays free of I/O.
 pub trait CorpusProvider {
@@ -56,16 +56,17 @@ pub struct Corpus {
     by_name: HashMap<String, Vec<usize>>,
     by_oid: HashMap<Oid, usize>,
     assignments: BTreeMap<Oid, Vec<OidAssignment>>,
+    documents: Vec<DocumentRecord>,
 }
 
 impl Corpus {
-    pub fn from_bundle(bundle: Bundle) -> Self {
+    pub fn from_data(data: CorpusData) -> Self {
         let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
         let mut by_oid: HashMap<Oid, usize> = HashMap::new();
-        for (index, module) in bundle.modules.iter().enumerate() {
+        for (index, module) in data.modules.iter().enumerate() {
             by_name.entry(module.name.clone()).or_default().push(index);
             if let Some(oid) = &module.oid {
-                let current = by_oid.get(oid).and_then(|&i| bundle.modules.get(i));
+                let current = by_oid.get(oid).and_then(|&i| data.modules.get(i));
                 let keep_current = current.is_some_and(|c| !is_newer(module, c));
                 if !keep_current {
                     by_oid.insert(oid.clone(), index);
@@ -73,24 +74,32 @@ impl Corpus {
             }
         }
         let mut assignments: BTreeMap<Oid, Vec<OidAssignment>> = BTreeMap::new();
-        for assignment in bundle.oid_assignments {
+        for assignment in data.oid_assignments {
             assignments
                 .entry(assignment.oid.clone())
                 .or_default()
                 .push(assignment);
         }
         Self {
-            info: bundle.info,
-            modules: bundle.modules,
+            info: data.info,
+            modules: data.modules,
             by_name,
             by_oid,
             assignments,
+            documents: data.documents,
         }
     }
 
-    pub fn into_bundle(self) -> Bundle {
-        Bundle {
+    /// The document index.
+    pub fn documents(&self) -> &[DocumentRecord] {
+        &self.documents
+    }
+
+    pub fn into_data(self) -> CorpusData {
+        CorpusData {
+            schema: crate::SCHEMA,
             info: self.info,
+            documents: self.documents,
             modules: self.modules,
             oid_assignments: self.assignments.into_values().flatten().collect(),
         }
@@ -187,10 +196,9 @@ mod tests {
     }
 
     fn corpus(modules: Vec<ModuleRecord>) -> Corpus {
-        Corpus::from_bundle(Bundle {
-            info: CorpusInfo::default(),
+        Corpus::from_data(CorpusData {
             modules,
-            oid_assignments: Vec::new(),
+            ..CorpusData::default()
         })
     }
 

@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 
 use serde_sarif::sarif::{
-    ArtifactLocation, Location, Message, MultiformatMessageString, PhysicalLocation, Region,
-    ReportingConfiguration, ReportingDescriptor, Result as SarifResult, ResultLevel, Run, Sarif,
-    Tool, ToolComponent,
+    ArtifactLocation, Location, Message, MultiformatMessageString, PhysicalLocation, PropertyBag,
+    Region, ReportingConfiguration, ReportingDescriptor, Result as SarifResult, ResultLevel, Run,
+    Sarif, Tool, ToolComponent,
 };
 
-use crate::{Diagnostic, FileId, Files, Label, Severity, code_info, explain};
+use crate::{Diagnostic, FileId, Files, Label, Severity, Versions, code_info, explain};
 
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const INFORMATION_URI: &str = "https://github.com/glint-asn1/glint";
@@ -183,7 +183,9 @@ fn rule(code: &str, severity: Severity) -> ReportingDescriptor {
 }
 
 /// Renders the diagnostics of one or more documents as one SARIF 2.1.0 run.
-pub fn render_sarif(inputs: &[SarifInput<'_>], tool_version: &str) -> String {
+/// The data build goes in the run's properties as `glintDataBuild`.
+pub fn render_sarif(inputs: &[SarifInput<'_>], versions: Versions<'_>) -> String {
+    let tool_version = versions.glint;
     let mut rule_codes: BTreeMap<&'static str, (usize, Severity)> = BTreeMap::new();
     for diagnostic in inputs.iter().flat_map(|input| input.diagnostics) {
         rule_codes
@@ -219,6 +221,14 @@ pub fn render_sarif(inputs: &[SarifInput<'_>], tool_version: &str) -> String {
         .build();
     run.column_kind = Some(serde_json::Value::String("unicodeCodePoints".to_owned()));
     run.results = Some(results);
+    if let Some(data) = versions.data {
+        let mut properties = PropertyBag::builder().build();
+        properties.additional_properties.insert(
+            "glintDataBuild".to_owned(),
+            serde_json::Value::String(data.to_owned()),
+        );
+        run.properties = Some(properties);
+    }
     let mut sarif = Sarif::builder()
         .version(serde_json::Value::String("2.1.0".to_owned()))
         .runs(vec![run])
@@ -244,7 +254,14 @@ mod tests {
             diagnostics: &diagnostics,
             files: &files,
         };
-        serde_json::from_str(&render_sarif(&[input], "1.2.3")).unwrap()
+        serde_json::from_str(&render_sarif(
+            &[input],
+            Versions {
+                glint: "1.2.3",
+                data: Some("2026-11-05.0123abcd"),
+            },
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -254,6 +271,10 @@ mod tests {
         let driver = &sarif["runs"][0]["tool"]["driver"];
         assert_eq!(driver["name"], "glint");
         assert_eq!(driver["version"], "1.2.3");
+        assert_eq!(
+            sarif["runs"][0]["properties"]["glintDataBuild"],
+            "2026-11-05.0123abcd"
+        );
         let ids: Vec<_> = driver["rules"]
             .as_array()
             .unwrap()
@@ -302,7 +323,14 @@ mod tests {
             diagnostics: &[],
             files: &files,
         };
-        let sarif: serde_json::Value = serde_json::from_str(&render_sarif(&[input], "0")).unwrap();
+        let sarif: serde_json::Value = serde_json::from_str(&render_sarif(
+            &[input],
+            Versions {
+                glint: "0",
+                data: None,
+            },
+        ))
+        .unwrap();
         assert_eq!(sarif["runs"][0]["results"], serde_json::json!([]));
     }
 }

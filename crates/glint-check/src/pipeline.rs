@@ -63,7 +63,8 @@ pub struct Report {
     pub blocks: Vec<BlockSummary>,
     pub diagnostics: Vec<Diagnostic>,
     pub modules: Vec<ModuleSummary>,
-    pub corpus_version: String,
+    /// The build id of the data the check used.
+    pub data_build: String,
 }
 
 fn convert_severity(severity: glint_syntax::Severity) -> Severity {
@@ -274,7 +275,7 @@ pub fn check_document(
         blocks,
         diagnostics,
         modules,
-        corpus_version: corpus.info().version.clone(),
+        data_build: corpus.info().build.clone(),
     }
 }
 
