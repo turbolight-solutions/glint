@@ -27,7 +27,7 @@ struct Cli {
 enum Command {
     /// Check the ASN.1 modules in a document
     Check(check_cmd::Args),
-    /// Browse the RFC module corpus
+    /// Browse the module corpus (RFCs, active Internet-Drafts and standalone modules) and update its data
     Corpus(corpus_cmd::Args),
     /// Describe a diagnostic code, with examples
     Explain(explain_cmd::Args),

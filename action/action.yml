@@ -9,6 +9,9 @@ inputs:
   version:
     description: Release of Glint to use, such as v0.1.0, or `latest`.
     default: latest
+  data-build:
+    description: Build of the corpus data to check against, such as 2026-11-05.0123abcd. By default the latest one the Glint site publishes for this version of Glint.
+    default: ""
   config:
     description: Path to glint.toml. By default the nearest one above each document is used.
     default: ""
@@ -26,6 +29,9 @@ inputs:
     default: ""
 
 outputs:
+  data-build:
+    description: Build of the corpus data the check used.
+    value: ${{ steps.data.outputs.build }}
   sarif:
     description: Path of the SARIF file.
     value: ${{ steps.check.outputs.sarif }}
@@ -64,10 +70,24 @@ runs:
         if [ "$ext" = zip ]; then unzip -q -o "$dir/glint.$ext" -d "$dir"; else tar -xzf "$dir/glint.$ext" -C "$dir"; fi
         echo "$dir" >> "$GITHUB_PATH"
 
+    - name: Download the corpus data
+      id: data
+      shell: bash
+      env:
+        DATA_BUILD: ${{ inputs.data-build }}
+        GLINT_CACHE_DIR: ${{ runner.temp }}/glint-cache
+      run: |
+        set -euo pipefail
+        if [ -n "$DATA_BUILD" ]; then glint corpus update --build "$DATA_BUILD"; else glint corpus update; fi
+        build="$(glint corpus list 2>&1 >/dev/null | sed -n 's/^glint .*, data \(.*\)$/\1/p' | tail -n 1)"
+        echo "Corpus data build: $build"
+        echo "build=$build" >> "$GITHUB_OUTPUT"
+
     - name: Check
       id: check
       shell: bash
       env:
+        GLINT_CACHE_DIR: ${{ runner.temp }}/glint-cache
         FILES: ${{ inputs.files }}
         CONFIG: ${{ inputs.config }}
         DENY_WARNINGS: ${{ inputs.deny-warnings }}

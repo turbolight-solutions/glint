@@ -28,15 +28,15 @@ pub struct Args {
 
 #[derive(Subcommand)]
 enum Sub {
-    /// List modules with their RFC, OID and parse status
+    /// List modules with their document, OID and parse status
     List {
-        /// Only modules whose name, OID or RFC contains this text
+        /// Only modules whose name, OID or document contains this text
         #[arg(long)]
         filter: Option<String>,
     },
     /// Print a module's text and metadata
     Show {
-        /// A module name, a module OID or `rfcNNNN`
+        /// A module name, a module OID, or a document (`rfcNNNN`, `draft-ietf-lamps-foo-03`)
         key: String,
     },
     /// Show who assigns an OID, and its parent arcs
@@ -121,9 +121,10 @@ fn list(corpus: &Corpus, filter: Option<&str>, out: &mut impl Write) -> u8 {
     EXIT_OK
 }
 
-fn find(corpus: &Corpus, key: &str) -> Vec<usize> {
+/// The modules `key` names, and whether it named a document (whose modules are all wanted).
+fn find(corpus: &Corpus, key: &str) -> (Vec<usize>, bool) {
     if let Ok(oid) = key.parse::<Oid>() {
-        return corpus.by_oid(&oid).into_iter().collect();
+        return (corpus.by_oid(&oid).into_iter().collect(), false);
     }
     let by_document: Vec<usize> = corpus
         .modules()
@@ -133,9 +134,9 @@ fn find(corpus: &Corpus, key: &str) -> Vec<usize> {
         .map(|(i, _)| i)
         .collect();
     if by_document.is_empty() {
-        corpus.by_name(key).to_vec()
+        (corpus.by_name(key).to_vec(), false)
     } else {
-        by_document
+        (by_document, true)
     }
 }
 
@@ -147,6 +148,12 @@ fn describe(module: &ModuleRecord) -> String {
     );
     if let Some(section) = &module.source.section {
         text.push_str(&format!(" {section}"));
+    }
+    if module.source.is_draft() {
+        text.push_str(&format!(
+            " (Internet-Draft, {})",
+            module.source.edition.as_deref().unwrap_or("undated")
+        ));
     }
     if let Some(oid) = &module.oid {
         text.push_str(&format!("\n-- oid:     {oid}"));
@@ -171,12 +178,12 @@ fn describe(module: &ModuleRecord) -> String {
 }
 
 fn show(corpus: &Corpus, key: &str, out: &mut impl Write) -> u8 {
-    let found = find(corpus, key);
+    let (found, document) = find(corpus, key);
     if found.is_empty() {
         eprintln!("glint: nothing in the corpus matches `{key}`");
         return EXIT_ERRORS;
     }
-    if found.len() > 1 && !key.starts_with("rfc") {
+    if found.len() > 1 && !document {
         eprintln!(
             "glint: `{key}` matches {} modules; choose one with its OID or `rfcNNNN`:",
             found.len()
