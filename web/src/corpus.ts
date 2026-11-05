@@ -24,7 +24,7 @@ const PAGE_SIZE = 50;
 function formatSortOrNone(sort: Sort | null): string {
   return sort ? formatSort(sort) : "";
 }
-/** The most the server returns in one answer. The whole corpus is a few hundred modules, so one or two requests load it. */
+/** The most one answer holds. The whole corpus is a few hundred modules, so one or two requests load it. */
 const FETCH_SIZE = 500;
 
 const COLUMNS: { key: SortKey; label: string }[] = [
@@ -39,10 +39,9 @@ export interface CorpusBrowser {
   show(query: string, sort?: Sort | null): void;
 }
 
-/** Every module matching `query`, in the server's order of relevance. */
-async function fetchAll(query: string, signal: AbortSignal): Promise<ModuleListItem[] | null> {
+/** Every module matching `query`, in order of relevance. */
+async function fetchAll(query: string, signal: AbortSignal): Promise<ModuleListItem[]> {
   const first = await api.modules(query, 0, FETCH_SIZE, signal);
-  if (!Array.isArray(first?.modules)) return null;
   const modules = [...first.modules];
   while (modules.length < first.total) {
     const page = await api.modules(query, modules.length, FETCH_SIZE, signal);
@@ -79,10 +78,6 @@ export function createCorpusBrowser(root: HTMLElement): CorpusBrowser {
       const modules = await fetchAll(query, run.signal);
       if (run.signal.aborted) return;
       loading = false;
-      if (!modules) {
-        replace(results, message("The server answered in an older format than this page expects. Restart glint-server so it matches the web files.", "text-danger"));
-        return;
-      }
       matches = modules;
       sorted = sortModules(matches, sort);
       renderResults();
@@ -188,7 +183,10 @@ export function createCorpusBrowser(root: HTMLElement): CorpusBrowser {
 
   function renderSummary(corpus: CorpusResponse): void {
     const parts = Object.entries(corpus.by_status).map(([status, count]) => `${count} ${status}`);
-    replace(summary, `Corpus ${corpus.version}: ${corpus.modules} modules (${parts.join(", ")}), ${corpus.oid_assignments} OID assignments.`);
+    replace(
+      summary,
+      `Data ${corpus.build}: ${corpus.modules} modules from ${corpus.documents} documents (${parts.join(", ")}), ${corpus.oid_assignments} OID assignments, ${corpus.oid_nodes} labelled arcs.`,
+    );
   }
 
   const onInput = debounce(() => {
@@ -294,6 +292,26 @@ export function createOidPage(root: HTMLElement): OidPage {
           result.parent ? h("a", { href: oidHash(result.parent) }, "parent") : null,
           result.module ? h("a", { href: moduleHash(result.module.source, result.module.name, result.module.oid) }, `module ${result.module.name}`) : null,
         ),
+        result.allowlisted ? h("div", { class: "alert alert-secondary small py-2" }, `On the allowlist of wrong but deployed OIDs: ${result.allowlisted}`) : null,
+        result.labels.length > 0
+          ? h(
+              "div",
+              { class: "mb-3" },
+              h("h2", { class: "h6" }, "Labelled as"),
+              h(
+                "ul",
+                { class: "small mb-0" },
+                ...result.labels.map((l) =>
+                  h(
+                    "li",
+                    {},
+                    h("span", { class: "font-monospace" }, `${l.label}(${result.oid.split(".").pop() ?? ""})`),
+                    ` in ${l.documents.slice(0, 5).map((d) => documentTitle(d)).join(", ")}${l.documents.length > 5 ? ` and ${l.documents.length - 5} more` : ""}`,
+                  ),
+                ),
+              ),
+            )
+          : null,
         result.assignments.length > 0 ? h("div", {}, h("h2", { class: "h6" }, "Assigned as"), table(result.assignments)) : message("No assignment of this exact OID in the corpus."),
         result.children.length > 0
           ? h(

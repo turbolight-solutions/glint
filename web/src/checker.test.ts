@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { EditorView } from "@codemirror/view";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { CheckResponse, ModuleInfo } from "./api";
+import { ApiError, type CheckResponse, type ModuleInfo, setBackend } from "./api";
 import { createChecker } from "./checker";
+import { useBackend } from "./test-backend";
 
 const RESPONSE: CheckResponse = {
   schema_version: 1,
-  corpus_version: "test",
+  glint_version: "0.1.0",
+  data_build: "2026-11-05.0123abcd",
   document: { name: "x.asn", format: "bare" },
   files: [
     { id: 0, name: "x.asn", kind: "document" },
@@ -52,11 +54,9 @@ function checkButton(root: HTMLElement): HTMLButtonElement | undefined {
   return [...root.querySelectorAll("button")].find((b) => b.textContent === "Check");
 }
 
-/** Answers every request with `body`. */
-function stubFetchJson(body: unknown, status = 200) {
-  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(body), { status }));
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+/** Answers every call with `body`. */
+function answerWith(body: unknown) {
+  return useBackend(() => body);
 }
 
 /** The CodeMirror view of the document being checked. */
@@ -71,26 +71,32 @@ beforeAll(() => {
   Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  setBackend(null);
+  vi.unstubAllGlobals();
+});
 
 describe("checker view", () => {
   it("renders diagnostics, modules and import links after a check", async () => {
-    const fetchMock = stubFetchJson(RESPONSE);
+    const call = answerWith(RESPONSE);
     const root = mount();
     createChecker(root);
     checkButton(root)?.click();
     await vi.waitFor(() => expect(root.textContent).toContain("differs from its definition"));
     expect(root.textContent).toContain("1 error");
+    expect(root.textContent).toContain("Glint 0.1.0, data 2026-11-05.0123abcd");
     expect(root.querySelector('a[href="#rfc1000?module=Base"]')).not.toBeNull();
-    expect(fetchMock.mock.calls[0]?.[0]).toContain("/api/v1/check");
+    expect(call.mock.calls[0]?.[0]).toBe("check");
   });
 
-  it("shows a server error instead of throwing", async () => {
-    stubFetchJson({ error: { code: "check_timeout", message: "slow" } }, 504);
+  it("shows an error instead of throwing", async () => {
+    useBackend(() => {
+      throw new ApiError("not_found", "draft-x-y is not in the corpus");
+    });
     const root = mount();
     createChecker(root);
     checkButton(root)?.click();
-    await vi.waitFor(() => expect(root.textContent).toContain("took too long"));
+    await vi.waitFor(() => expect(root.textContent).toContain("draft-x-y is not in the corpus"));
   });
 
   it("fetches a draft named in the route and fills the editor", async () => {
@@ -98,19 +104,19 @@ describe("checker view", () => {
       ...RESPONSE,
       document: { name: "draft-a-b-01", format: "bare" as const, content: "Thing ::= INTEGER" },
     };
-    const fetchMock = stubFetchJson(withContent);
+    const call = answerWith(withContent);
     const root = mount();
     const checker = createChecker(root);
     checker.show({ view: "checker", draft: "draft-a-b-01" });
     await vi.waitFor(() => expect(root.textContent).toContain("Thing ::= INTEGER"));
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/check/draft");
-    expect(JSON.parse(String(init.body))).toMatchObject({ draft: "draft-a-b-01" });
+    const [method, args] = call.mock.calls[0] as unknown as [string, unknown[]];
+    expect(method).toBe("checkDocument");
+    expect(args[0]).toMatchObject({ draft: "draft-a-b-01" });
   });
 
-  it("links an import and a related location to the module of the OID the server named", async () => {
+  it("links an import and a related location to the module of the OID the check named", async () => {
     const oid = "1.2.3.2";
-    stubFetchJson({
+    answerWith({
       ...RESPONSE,
       files: [
         RESPONSE.files[0],
@@ -139,16 +145,13 @@ describe("checker view", () => {
 
 describe("checker tabs", () => {
   function stubFetch(): void {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init?: RequestInit) => {
-        const body = JSON.parse(String(init?.body ?? "{}"));
-        const name = String(body.draft ?? `rfc${body.rfc}`);
-        const document = { name, format: "bare" as const, content: `-- body of ${name}\nThing ::= INTEGER` };
-        const diagnostics = name === "draft-a-b-01" ? RESPONSE.diagnostics : [];
-        return new Response(JSON.stringify({ ...RESPONSE, document, diagnostics }), { status: 200 });
-      }),
-    );
+    useBackend((_method, args) => {
+      const body = args[0] as { draft?: string; rfc?: number };
+      const name = String(body.draft ?? `rfc${body.rfc}`);
+      const document = { name, format: "bare" as const, content: `-- body of ${name}\nThing ::= INTEGER` };
+      const diagnostics = name === "draft-a-b-01" ? RESPONSE.diagnostics : [];
+      return { ...RESPONSE, document, diagnostics };
+    });
   }
 
   const titles = (root: HTMLElement) => [...root.querySelectorAll(".doc-tab-title")].map((t) => t.textContent);
@@ -323,14 +326,14 @@ describe("module panels and module links", () => {
   const head = (root: HTMLElement) => mainView(root).state.selection.main.head;
 
   it("puts the cursor at the start of the module a link names", async () => {
-    stubFetchJson(TWO.response);
+    answerWith(TWO.response);
     const root = mount();
     createChecker(root).show({ view: "checker", rfc: 1000, module: "Second" });
     await vi.waitFor(() => expect(head(root)).toBe(secondStart));
   });
 
   it("moves the cursor when the same document is opened again for another module", async () => {
-    stubFetchJson(TWO.response);
+    answerWith(TWO.response);
     const root = mount();
     const checker = createChecker(root);
     checker.show({ view: "checker", rfc: 1000, module: "Second" });
@@ -348,14 +351,11 @@ describe("module panels and module links", () => {
       diagnostics: [],
       modules: [{ name: "Itu1", oid: null, section: null, start, end: text.length, imports: [] }],
     };
-    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
-      url.startsWith("/api/v1/modules/") ? new Response(JSON.stringify({ name: "Itu1", text }), { status: 200 }) : new Response(JSON.stringify(response), { status: 200 }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    const call = useBackend((method) => (method === "module" ? { name: "Itu1", text } : response));
     const root = mount();
     createChecker(root).show({ view: "checker", document: "X.509", module: "Itu1" });
     await vi.waitFor(() => expect(head(root)).toBe(start));
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/modules/X.509/Itu1");
+    expect(call.mock.calls[0]?.slice(0, 2)).toEqual(["module", ["X.509", "Itu1", null]]);
     expect(root.textContent).toContain("A ::= INTEGER");
   });
 
@@ -366,14 +366,14 @@ describe("module panels and module links", () => {
       ["the earlier", OLD_OID, oldStart],
       ["the later", NEW_OID, newStart],
     ])("puts the cursor at %s one when the link gives its OID", async (_which, oid, expected) => {
-      stubFetchJson(TWINS.response);
+      answerWith(TWINS.response);
       const root = mount();
       createChecker(root).show({ view: "checker", rfc: 4998, module: "ERS", moduleOid: oid });
       await vi.waitFor(() => expect(head(root)).toBe(expected));
     });
 
     it("falls back to the first of that name when the link has no OID or one that matches none", async () => {
-      stubFetchJson(TWINS.response);
+      answerWith(TWINS.response);
       const root = mount();
       const checker = createChecker(root);
       checker.show({ view: "checker", rfc: 4998, module: "ERS" });
@@ -385,7 +385,7 @@ describe("module panels and module links", () => {
     });
 
     it("lists both modules, each with its own panel", async () => {
-      stubFetchJson(TWINS.response);
+      answerWith(TWINS.response);
       const root = mount();
       createChecker(root).show({ view: "checker", rfc: 4998 });
       await vi.waitFor(() => expect(panels(root)).toHaveLength(2));
@@ -394,7 +394,7 @@ describe("module panels and module links", () => {
   });
 
   it("lists a collapsed panel per module and builds its read-only view on opening", async () => {
-    stubFetchJson(TWO.response);
+    answerWith(TWO.response);
     const root = mount();
     createChecker(root).show({ view: "checker", rfc: 1000 });
     await vi.waitFor(() => expect(panels(root)).toHaveLength(2));
@@ -411,7 +411,7 @@ describe("module panels and module links", () => {
   });
 
   it("keeps a panel open when the document is checked again", async () => {
-    stubFetchJson(TWO.response);
+    answerWith(TWO.response);
     const root = mount();
     createChecker(root).show({ view: "checker", rfc: 1000 });
     await vi.waitFor(() => expect(panels(root)).toHaveLength(2));

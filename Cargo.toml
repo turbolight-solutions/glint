@@ -10,6 +10,7 @@ members = [
     "crates/glint-corpus-build",
     "crates/glint-cli",
     "crates/glint-server",
+    "crates/glint-wasm",
 ]
 
 [workspace.package]
@@ -53,6 +54,8 @@ tower_governor = "0.8.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 toml = "1.1.8"
+# Must equal the version of wasm-bindgen-cli that builds the web bundle (see web/build-wasm.sh).
+wasm-bindgen = "=0.2.130"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -66,3 +69,10 @@ todo = "deny"
 unimplemented = "deny"
 indexing_slicing = "deny"
 arithmetic_side_effects = "deny"
+
+# The web bundle: small rather than fast to build.
+[profile.wasm]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1

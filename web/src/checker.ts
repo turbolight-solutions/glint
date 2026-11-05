@@ -145,17 +145,8 @@ export function createChecker(root: HTMLElement): CheckerView {
   }
 
   function describe(error: unknown): string {
-    if (error instanceof ApiError) {
-      switch (error.code) {
-        case "payload_too_large":
-          return "The document is larger than the server accepts.";
-        case "check_timeout":
-          return "The check took too long and was stopped.";
-        case "not_found":
-          return "That draft or RFC was not found.";
-        default:
-          return error.status === 429 ? "Too many requests; wait a moment and try again." : error.message;
-      }
+    if (error instanceof ApiError && error.code === "documents_loading") {
+      return "The document texts are still loading; try again in a moment.";
     }
     return error instanceof Error ? error.message : String(error);
   }
@@ -358,7 +349,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     const label = targetOf(route);
     tab.target = label;
     tab.fetching = true;
-    setStatus(tab, `Fetching ${label}…`);
+    setStatus(tab, `Opening ${label}…`);
     setError(tab, null);
     target.value = label;
     renderTabs();
@@ -369,7 +360,7 @@ export function createChecker(root: HTMLElement): CheckerView {
         return;
       }
       const request = route.rfc !== undefined ? { rfc: route.rfc } : { draft: route.draft ?? "" };
-      const response = await api.checkDraft(request, options(), signal);
+      const response = await api.checkDocument(request, options(), signal);
       if (mine !== tab.sequence) return;
       const content = response.document.content ?? "";
       tab.fetching = false;
@@ -464,7 +455,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     setError(tab, null);
     setStatus(
       tab,
-      `${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"} · corpus ${response.corpus_version}`,
+      `${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"} · Glint ${response.glint_version}, data ${response.data_build}`,
     );
     if (isActive(tab)) {
       renderResult(tab);
@@ -897,6 +888,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     onChange: () => {
       if (!programmatic) active.scheduleAuto();
     },
+    complete: (text, position, signal) => api.complete(text, active.name, selectedFormat(active), position, signal),
   });
   root.hidden = true;
   active = createTab(editor.view.state);

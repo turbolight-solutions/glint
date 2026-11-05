@@ -80,7 +80,9 @@ export type FormatName = "xml" | "markdown" | "text" | "bare";
 
 export interface CheckResponse {
   schema_version: number;
-  corpus_version: string;
+  /** The version of Glint that checked, and the build of the data it checked against. */
+  glint_version: string;
+  data_build: string;
   document: { name: string; format: FormatName; content?: string };
   files: FileInfo[];
   blocks: BlockInfo[];
@@ -119,10 +121,19 @@ export interface OidAssignment {
   document: string;
 }
 
+export interface LabelEvidence {
+  label: string;
+  documents: string[];
+}
+
 export interface OidResponse {
   oid: string;
   parent: string | null;
   module: ModuleRef | null;
+  /** The `name(number)` labels documents write for this arc. */
+  labels: LabelEvidence[];
+  /** Why the OID is on the allowlist of wrong but deployed OIDs, when it is. */
+  allowlisted: string | null;
   assignments: OidAssignment[];
   children: OidAssignment[];
   truncated: boolean;
@@ -136,11 +147,28 @@ export interface ModulePage {
 }
 
 export interface CorpusResponse {
-  version: string;
+  glint_version: string;
+  schema: number;
+  build: string;
   notices: string[];
   modules: number;
+  documents: number;
   by_status: Record<string, number>;
   oid_assignments: number;
+  oid_nodes: number;
+}
+
+export interface CompletionItem {
+  label: string;
+  type: string;
+  detail: string | null;
+  apply?: string;
+}
+
+/** Completions for the word that starts at `from` (a UTF-16 position). */
+export interface CompletionResponse {
+  from: number;
+  items: CompletionItem[];
 }
 
 export interface CheckOptions {
@@ -151,7 +179,6 @@ export interface CheckOptions {
 
 export class ApiError extends Error {
   constructor(
-    readonly status: number,
     readonly code: string,
     message: string,
   ) {
@@ -159,36 +186,101 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`/api/v1${path}`, init);
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new ApiError(0, "network", "Cannot reach the server.");
-  }
-  if (!response.ok) {
-    let code = "error";
-    let message = `${response.status} ${response.statusText}`;
-    try {
-      const body = (await response.json()) as { error?: { code?: string; message?: string } };
-      code = body.error?.code ?? code;
-      message = body.error?.message ?? message;
-    } catch {
-      // the body was not JSON; keep the status line
-    }
-    throw new ApiError(response.status, code, message);
-  }
-  return (await response.json()) as T;
+/** What Glint is asked; the worker answers each with the JSON of the matching method of `glint-wasm`. */
+export type Method = "check" | "checkDocument" | "corpus" | "modules" | "module" | "oid" | "complete";
+
+/** Where requests go: the Glint worker on the page, or a stand-in in tests. */
+export interface Backend {
+  call(method: Method, args: unknown[], signal?: AbortSignal): Promise<unknown>;
 }
 
-function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  return request<T>(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
+/** How far the data has got: the corpus, then the texts of the documents that can be checked by name. */
+export type DataState =
+  | { corpus: "loading" }
+  | { corpus: "failed"; error: string }
+  | { corpus: "ready"; info: CorpusResponse; documents: "loading" | "ready" | "failed" };
+
+let backend: Backend | null = null;
+let dataState: DataState = { corpus: "loading" };
+const dataListeners = new Set<(state: DataState) => void>();
+
+function setDataState(state: DataState): void {
+  dataState = state;
+  for (const listener of dataListeners) listener(state);
+}
+
+/** Calls `listener` with the state of the data now and whenever it changes; returns a function that stops it. */
+export function onData(listener: (state: DataState) => void): () => void {
+  dataListeners.add(listener);
+  listener(dataState);
+  return () => dataListeners.delete(listener);
+}
+
+/** Replaces the backend (tests); `null` goes back to the worker. */
+export function setBackend(replacement: Backend | null): void {
+  backend = replacement;
+}
+
+interface WorkerAnswer {
+  id: number;
+  ok: boolean;
+  value?: string;
+  error?: { code: string; message: string };
+}
+
+interface WorkerEvent {
+  event: "corpus" | "documents";
+  ok: boolean;
+  info?: CorpusResponse;
+  error?: string;
+}
+
+function workerBackend(): Backend {
+  const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+  const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
+  let nextId = 1;
+  worker.addEventListener("message", (message: MessageEvent<WorkerAnswer | WorkerEvent>) => {
+    const data = message.data;
+    if ("event" in data) {
+      if (data.event === "corpus") {
+        setDataState(data.ok && data.info ? { corpus: "ready", info: data.info, documents: "loading" } : { corpus: "failed", error: data.error ?? "unknown error" });
+      } else if (dataState.corpus === "ready") {
+        setDataState({ ...dataState, documents: data.ok ? "ready" : "failed" });
+      }
+      return;
+    }
+    const waiting = pending.get(data.id);
+    if (!waiting) return;
+    pending.delete(data.id);
+    if (data.ok) waiting.resolve(JSON.parse(data.value ?? "null"));
+    else waiting.reject(new ApiError(data.error?.code ?? "error", data.error?.message ?? "unknown error"));
   });
+  worker.addEventListener("error", (event) => {
+    const error = new ApiError("worker", `Glint could not start: ${event.message || "the worker failed"}`);
+    for (const waiting of pending.values()) waiting.reject(error);
+    pending.clear();
+    setDataState({ corpus: "failed", error: error.message });
+  });
+  worker.postMessage({ type: "start", base: new URL(".", window.location.href).href });
+  return {
+    call(method, args, signal) {
+      const id = nextId++;
+      return new Promise((resolve, reject) => {
+        // The worker finishes what it started; an aborted call only stops waiting for it.
+        signal?.addEventListener("abort", () => {
+          if (pending.delete(id)) reject(new DOMException("aborted", "AbortError"));
+        });
+        pending.set(id, { resolve, reject });
+        worker.postMessage({ type: "call", id, method, args });
+      });
+    },
+  };
+}
+
+function call<T>(method: Method, args: unknown[], signal?: AbortSignal): Promise<T> {
+  backend ??= workerBackend();
+  if (signal?.aborted) return Promise.reject(new DOMException("aborted", "AbortError"));
+  return backend.call(method, args, signal) as Promise<T>;
 }
 
 export const api = {
@@ -199,17 +291,18 @@ export const api = {
     options: CheckOptions,
     signal?: AbortSignal,
   ) {
-    const document: Record<string, unknown> = { name, content };
-    if (format) document.format = format;
-    return post<CheckResponse>("/check", { document, options }, signal);
+    const request: Record<string, unknown> = { name, content, options };
+    if (format) request.format = format;
+    return call<CheckResponse>("check", [request], signal);
   },
-  checkDraft(target: { draft: string; rev?: string } | { rfc: number }, options: CheckOptions, signal?: AbortSignal) {
-    return post<CheckResponse>("/check/draft", { ...target, options }, signal);
+  /** Checks a draft or RFC by name, from the texts in the data. */
+  checkDocument(target: { draft: string; rev?: string } | { rfc: number }, options: CheckOptions, signal?: AbortSignal) {
+    return call<CheckResponse>("checkDocument", [{ ...target, options }], signal);
   },
-  corpus: () => request<CorpusResponse>("/corpus"),
-  modules: (q: string, offset: number, limit: number, signal?: AbortSignal) =>
-    request<ModulePage>(`/modules?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`, { signal }),
-  module: (source: string, name: string, oid?: string) =>
-    request<ModuleDetail>(`/modules/${encodeURIComponent(source)}/${encodeURIComponent(name)}${oid ? `?oid=${encodeURIComponent(oid)}` : ""}`),
-  oid: (dotted: string) => request<OidResponse>(`/oids/${encodeURIComponent(dotted)}`),
+  corpus: () => call<CorpusResponse>("corpus", []),
+  modules: (q: string, offset: number, limit: number, signal?: AbortSignal) => call<ModulePage>("modules", [q, offset, limit], signal),
+  module: (source: string, name: string, oid?: string) => call<ModuleDetail>("module", [source, name, oid ?? null]),
+  oid: (dotted: string) => call<OidResponse>("oid", [dotted]),
+  complete: (text: string, name: string | null, format: FormatName | null, position: number, signal?: AbortSignal) =>
+    call<CompletionResponse>("complete", [text, name, format, position], signal),
 };

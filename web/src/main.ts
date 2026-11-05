@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { onData } from "./api";
 import { createChecker } from "./checker";
 import { createCorpusBrowser, createOidPage } from "./corpus";
 import { safeStorage } from "./dom";
@@ -60,14 +60,25 @@ function main(): void {
 
   window.addEventListener("hashchange", route);
   route();
-  api.corpus().then(
-    (info) => {
-      element("corpus-version").textContent = `Corpus ${info.version} · ${info.modules} modules`;
-    },
-    () => {
-      element("corpus-version").textContent = "Server not reachable";
-    },
-  );
+  const version = element("corpus-version");
+  onData((state) => {
+    switch (state.corpus) {
+      case "loading":
+        version.textContent = "Loading the corpus…";
+        break;
+      case "failed":
+        version.textContent = "Corpus data unavailable; pasted text is checked without it";
+        version.title = state.error;
+        break;
+      case "ready": {
+        const { info } = state;
+        const texts = state.documents === "failed" ? " · document texts unavailable" : "";
+        version.textContent = `Glint ${info.glint_version} · data ${info.build} · ${info.modules} modules${texts}`;
+        version.title = "";
+        break;
+      }
+    }
+  });
 }
 
 main();

@@ -42,3 +42,4 @@ rustc-ice-*.txt
 # Web frontend
 /web/node_modules/
 /web/dist/
+/web/src/wasm/

@@ -1,3 +1,4 @@
+import { type CompletionContext, type CompletionResult, autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { HighlightStyle, bracketMatching, syntaxHighlighting } from "@codemirror/language";
 import { type Action, type Diagnostic as LintDiagnostic, lintGutter, lintKeymap, setDiagnostics } from "@codemirror/lint";
@@ -84,6 +85,35 @@ export interface EditorOptions {
   /** Number of the first line, for a view that shows an excerpt of a larger document. */
   firstLine?: number;
   onChange?: () => void;
+  /** Completions at a UTF-16 position of the text. */
+  complete?: (text: string, position: number, signal: AbortSignal) => Promise<Completions>;
+}
+
+/** What `complete` answers: the start of the word, and what may replace it. */
+export interface Completions {
+  from: number;
+  items: { label: string; type: string; detail: string | null; apply?: string }[];
+}
+
+function completionSource(complete: NonNullable<EditorOptions["complete"]>) {
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const word = context.matchBefore(/[A-Za-z0-9-]*/);
+    const afterBrace = context.matchBefore(/[{(,]\s*$|FROM\s+$/);
+    if (!context.explicit && (!word || word.from === word.to) && !afterBrace) return null;
+    const controller = new AbortController();
+    context.addEventListener("abort", () => controller.abort());
+    try {
+      const result = await complete(context.state.doc.toString(), context.pos, controller.signal);
+      if (result.items.length === 0) return null;
+      return {
+        from: result.from,
+        options: result.items.map((item) => ({ label: item.label, type: item.type, detail: item.detail ?? undefined, apply: item.apply })),
+        validFor: /^[A-Za-z0-9-]*$/,
+      };
+    } catch {
+      return null;
+    }
+  };
 }
 
 export function createEditor(parent: HTMLElement, options: EditorOptions = {}): EditorHandle {
@@ -99,10 +129,13 @@ export function createEditor(parent: HTMLElement, options: EditorOptions = {}): 
     lintGutter(),
     syntaxHighlighting(highlight),
     language.of(languageExtension(options.highlighting ?? true)),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...lintKeymap]),
+    keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...lintKeymap]),
     theme,
     EditorView.contentAttributes.of({ "aria-label": options.readOnly ? "Module text" : "Document to check" }),
   ];
+  if (options.complete) {
+    extensions.push(autocompletion({ override: [completionSource(options.complete)] }));
+  }
   if (options.readOnly) {
     extensions.push(EditorState.readOnly.of(true), EditorView.editable.of(false));
   }

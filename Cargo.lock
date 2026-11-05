@@ -886,6 +886,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "glint-wasm"
+version = "0.1.0"
+dependencies = [
+ "glint-check",
+ "glint-corpus",
+ "glint-diag",
+ "glint-extract",
+ "glint-sema",
+ "glint-syntax",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "governor"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

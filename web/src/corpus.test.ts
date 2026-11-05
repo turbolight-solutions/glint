@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ModuleListItem, ModulePage } from "./api";
+import { type Method, type ModuleListItem, type ModulePage, setBackend } from "./api";
 import { createCorpusBrowser, createOidPage } from "./corpus";
+import { useBackend } from "./test-backend";
 
 const TOTAL = 120;
 
@@ -9,16 +10,16 @@ function item(index: number): ModuleListItem {
   return { name: `Module${index}`, oid: null, body: "rfc", document: "rfc1000", edition: null, url: null, section: null, status: "clean", obsoleted_by: [] };
 }
 
-function respond(url: string): Response {
-  if (url.startsWith("/api/v1/corpus")) {
-    return new Response(JSON.stringify({ version: "t", modules: TOTAL, oid_assignments: 0, by_status: {}, notices: [] }), { status: 200 });
-  }
-  const params = new URL(url, "http://localhost").searchParams;
-  const offset = Number(params.get("offset"));
-  const limit = Number(params.get("limit"));
+const CORPUS = { glint_version: "0.1.0", schema: 1, build: "t", modules: TOTAL, documents: 1, oid_assignments: 0, oid_nodes: 0, by_status: {}, notices: [] };
+
+/** `modules(query, offset, limit)` paged over TOTAL modules; `corpus()` the summary. */
+function respond(method: Method, args: unknown[]): unknown {
+  if (method === "corpus") return CORPUS;
+  const offset = Number(args[1]);
+  const limit = Number(args[2]);
   const count = Math.max(0, Math.min(limit, TOTAL - offset));
   const page: ModulePage = { total: TOTAL, offset, limit, modules: Array.from({ length: count }, (_, i) => item(offset + i)) };
-  return new Response(JSON.stringify(page), { status: 200 });
+  return page;
 }
 
 function button(root: HTMLElement, label: string): HTMLButtonElement {
@@ -31,12 +32,14 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  setBackend(null);
+  vi.unstubAllGlobals();
+});
 
 describe("corpus browser paging", () => {
   it("steps through the list with Next and Previous", async () => {
-    const fetchMock = vi.fn(async (url: string) => respond(url));
-    vi.stubGlobal("fetch", fetchMock);
+    useBackend(respond);
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
     vi.stubGlobal("scrollTo", vi.fn());
@@ -66,14 +69,7 @@ describe("corpus browser paging", () => {
 
   it("links an RFC module to the editor and a module of another body to its own document", async () => {
     const itu = { ...item(1), name: "Itu1", body: "itu-t", document: "X.509", edition: "10/2012", url: null };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) =>
-        url.startsWith("/api/v1/corpus")
-          ? respond(url)
-          : new Response(JSON.stringify({ total: 2, offset: 0, limit: 50, modules: [item(0), itu] }), { status: 200 }),
-      ),
-    );
+    useBackend((method, args) => (method === "corpus" ? respond(method, args) : { total: 2, offset: 0, limit: 50, modules: [item(0), itu] }));
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
     createCorpusBrowser(root).show("");
@@ -85,13 +81,8 @@ describe("corpus browser paging", () => {
   it("links each of two same-named modules in one RFC to its own OID", async () => {
     const twin = (oid: string): ModuleListItem => ({ ...item(0), name: "ERS", document: "rfc4998", oid });
     const itu = { ...item(1), name: "Itu1", body: "itu-t", document: "X.509", edition: "10/2012", url: null, oid: "2.5.1.1.7" };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) =>
-        url.startsWith("/api/v1/corpus")
-          ? respond(url)
-          : new Response(JSON.stringify({ total: 3, offset: 0, limit: 50, modules: [twin("1.3.6.1.5.5.11.0.1.1"), twin("1.3.6.1.5.5.11.0.2.1"), itu] }), { status: 200 }),
-      ),
+    useBackend((method, args) =>
+      method === "corpus" ? respond(method, args) : { total: 3, offset: 0, limit: 50, modules: [twin("1.3.6.1.5.5.11.0.1.1"), twin("1.3.6.1.5.5.11.0.2.1"), itu] },
     );
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
@@ -101,29 +92,18 @@ describe("corpus browser paging", () => {
     expect(root.querySelector('a[href="#rfc4998?module=ERS&oid=1.3.6.1.5.5.11.0.2.1"]')).not.toBeNull();
     expect(root.querySelector('a[href="#X.509?module=Itu1&oid=2.5.1.1.7"]')).not.toBeNull();
   });
-
-  it("explains a server that still answers with a bare array", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.startsWith("/api/v1/corpus") ? respond(url) : new Response("[]", { status: 200 }))));
-    document.body.innerHTML = '<section id="root"></section>';
-    const root = document.getElementById("root") as HTMLElement;
-    createCorpusBrowser(root).show("");
-    await settle();
-    expect(root.textContent).toContain("Restart glint-server");
-  });
 });
 
 describe("corpus browser sorting", () => {
   it("sorts the whole list by severity across pages and pages through the sorted list", async () => {
     // Module119 is the only module with errors, and it would be on the third page in the server's order.
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/v1/corpus")) return respond(url);
+    const call = useBackend((method, args) => {
+      if (method === "corpus") return respond(method, args);
       const modules = Array.from({ length: TOTAL }, (_, i) => ({ ...item(i), status: i === TOTAL - 1 ? ("errors" as const) : ("clean" as const) }));
-      const params = new URL(url, "http://localhost").searchParams;
-      const offset = Number(params.get("offset"));
-      const limit = Number(params.get("limit"));
-      return new Response(JSON.stringify({ total: TOTAL, offset, limit, modules: modules.slice(offset, offset + limit) }), { status: 200 });
+      const offset = Number(args[1]);
+      const limit = Number(args[2]);
+      return { total: TOTAL, offset, limit, modules: modules.slice(offset, offset + limit) };
     });
-    vi.stubGlobal("fetch", fetchMock);
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
     window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
@@ -161,21 +141,19 @@ describe("corpus browser sorting", () => {
     browser.show("", null);
     expect(root.querySelector("th[aria-sort]")).toBeNull();
 
-    // The list was fetched once, in one request, and sorting and paging never went back to the server.
-    const moduleRequests = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/v1/modules"));
+    // The list was fetched once, in one request, and sorting and paging never asked again.
+    const moduleRequests = call.mock.calls.filter(([method]) => method === "modules");
     expect(moduleRequests).toHaveLength(1);
-    expect(String(moduleRequests[0]?.[0])).toContain("limit=500");
+    expect(moduleRequests[0]?.[1]?.[2]).toBe(500);
   });
 
-  it("keeps fetching until it has every module when the server answers with less than asked", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.startsWith("/api/v1/corpus")) return respond(url);
-      const params = new URL(url, "http://localhost").searchParams;
-      const offset = Number(params.get("offset"));
+  it("keeps asking until it has every module when an answer holds less than asked", async () => {
+    useBackend((method, args) => {
+      if (method === "corpus") return respond(method, args);
+      const offset = Number(args[1]);
       const count = Math.min(70, TOTAL - offset);
-      return new Response(JSON.stringify({ total: TOTAL, offset, limit: 70, modules: Array.from({ length: count }, (_, i) => item(offset + i)) }), { status: 200 });
+      return { total: TOTAL, offset, limit: 70, modules: Array.from({ length: count }, (_, i) => item(offset + i)) };
     });
-    vi.stubGlobal("fetch", fetchMock);
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
     createCorpusBrowser(root).show("");
@@ -185,14 +163,17 @@ describe("corpus browser sorting", () => {
 });
 
 describe("OID lookup page", () => {
-  function setup(): { root: HTMLElement; input: HTMLInputElement; fetchMock: ReturnType<typeof vi.fn> } {
-    const fetchMock = vi.fn(
-      async (url: string) =>
-        new Response(JSON.stringify({ oid: decodeURIComponent(url.split("/").pop() ?? ""), parent: null, module: null, assignments: [], children: [], truncated: false }), {
-          status: 200,
-        }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  function setup(): { root: HTMLElement; input: HTMLInputElement; fetchMock: ReturnType<typeof useBackend> } {
+    const fetchMock = useBackend((_method, args) => ({
+      oid: String(args[0]),
+      parent: null,
+      module: null,
+      labels: [{ label: "pkix", documents: ["rfc5280"] }],
+      allowlisted: null,
+      assignments: [],
+      children: [],
+      truncated: false,
+    }));
     document.body.innerHTML = '<section id="root"></section>';
     const root = document.getElementById("root") as HTMLElement;
     window.location.hash = "";
@@ -237,5 +218,6 @@ describe("OID lookup page", () => {
     submit(root);
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(root.textContent).toContain("pkix(7) in RFC 5280");
   });
 });
