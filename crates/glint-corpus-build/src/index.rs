@@ -73,7 +73,10 @@ pub fn read_index(path: &Path) -> Result<HashMap<u32, RfcMeta>, String> {
                                 meta.obsoleted_by.push(n);
                             }
                         }
-                        Field::DocId => *number = rfc_number(&value),
+                        // The entry's own `doc-id` comes first; later ones are under `obsoletes`, `updates`,
+                        // `see-also` and the like.
+                        Field::DocId if number.is_none() => *number = rfc_number(&value),
+                        Field::DocId => {}
                         Field::Status => meta.status = Some(value.to_lowercase()),
                         Field::Month => {
                             month = MONTHS.iter().position(|m| *m == value);
@@ -147,6 +150,31 @@ pub fn read_drafts(path: &Path) -> Result<Vec<DraftEntry>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn related_documents_do_not_take_over_an_entry() {
+        let dir = std::env::temp_dir().join(format!("glint-rfc-index-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rfc-index.xml");
+        std::fs::write(
+            &path,
+            "<rfc-index>\
+             <rfc-entry><doc-id>RFC6482</doc-id><date><month>February</month><year>2012</year></date>\
+               <obsoleted-by><doc-id>RFC9582</doc-id></obsoleted-by>\
+               <current-status>PROPOSED STANDARD</current-status></rfc-entry>\
+             <rfc-entry><doc-id>RFC9582</doc-id><date><month>May</month><year>2024</year></date>\
+               <obsoletes><doc-id>RFC6482</doc-id></obsoletes>\
+               <current-status>PROPOSED STANDARD</current-status></rfc-entry>\
+             </rfc-index>",
+        )
+        .unwrap();
+        let index = read_index(&path).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = &index[&6482];
+        assert_eq!(old.obsoleted_by, [9582]);
+        assert_eq!(old.date.as_deref(), Some("2012-02"));
+        assert_eq!(index[&9582].date.as_deref(), Some("2024-05"));
+    }
 
     #[test]
     fn only_active_drafts_are_read() {
