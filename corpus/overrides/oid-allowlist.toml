@@ -1,0 +1,10 @@
+# Object identifiers that are wrong by the rules but deployed. The label checks (W142, W143, W144) leave every value
+# at or below one of these alone, and corpus-build takes no label evidence from them. Each entry needs a reason.
+
+[[oid]]
+oid = "2.2.840.10040.2"
+reason = "holdInstruction (RFC 5280 4.2.1.13 of RFC 3280, X9.57): registered under joint-iso-itu-t(2) member-body(2), an arc that only iso(1) has, and deployed in CRLs that way"
+
+[[oid]]
+oid = "2.5.1.5.55"
+reason = "clearance as RFC 3281 assigned it (in the X.501 module arcs) instead of 2.5.4.55; RFC 5755 keeps it for compatibility with deployed attribute certificates"

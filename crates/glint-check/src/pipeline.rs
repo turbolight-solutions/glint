@@ -218,6 +218,8 @@ pub fn check_document(
     let mut sema_options = Options {
         pins: options.config.pins.clone().into_iter().collect(),
         placeholders: options.config.oid.placeholders.clone(),
+        oid_synonyms: options.config.oid.synonym_labels,
+        own_document: document_id(name),
         ..Options::default()
     };
     for (module, pin) in &options.pins {
@@ -370,6 +372,23 @@ fn summarize(
         .collect()
 }
 
+/// The document id (`rfc5280`, `draft-ietf-lamps-foo-03`) that a file name names, if it names one: `rfc5280.txt`,
+/// `path/to/draft-ietf-lamps-foo-03.xml`.
+pub fn document_id(name: &str) -> Option<String> {
+    let file = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    let stem = file
+        .rsplit_once('.')
+        .filter(|(_, ext)| matches!(*ext, "txt" | "xml" | "md"))
+        .map_or(file, |(stem, _)| stem)
+        .to_ascii_lowercase();
+    let is_rfc = glint_corpus::rfc_number(&stem).is_some();
+    let is_draft = stem.starts_with("draft-")
+        && stem
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    (is_rfc || is_draft).then_some(stem)
+}
+
 /// Every name written in the document outside its modules (the prose and the snippets).
 fn mentioned_names(text: &str, blocks: &[Block]) -> std::collections::HashSet<String> {
     let mut masked = text.to_owned();
@@ -384,4 +403,21 @@ fn mentioned_names(text: &str, blocks: &[Block]) -> std::collections::HashSet<St
         .filter(|word| !word.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::document_id;
+
+    #[test]
+    fn file_names_name_documents() {
+        assert_eq!(document_id("rfc5280.txt").as_deref(), Some("rfc5280"));
+        assert_eq!(document_id("RFC5280").as_deref(), Some("rfc5280"));
+        assert_eq!(
+            document_id("a/b/draft-ietf-lamps-foo-03.xml").as_deref(),
+            Some("draft-ietf-lamps-foo-03")
+        );
+        assert_eq!(document_id("mine.asn"), None);
+        assert_eq!(document_id("document"), None);
+    }
 }

@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use glint_corpus::{ModuleRecord, OverrideTier, ParseStatus, SourceKind, SyntaxEra};
+use glint_corpus::{AllowedOid, ModuleRecord, OverrideTier, ParseStatus, SourceKind, SyntaxEra};
 use glint_diag::Severity;
 
 use crate::overrides::Override;
@@ -14,6 +14,15 @@ pub struct FindingLine {
     pub severity: Severity,
     pub line: u32,
     pub message: String,
+}
+
+/// A label table finding about a corpus module.
+#[derive(Debug, Clone)]
+pub struct AuditLine {
+    pub document: String,
+    pub module: String,
+    pub finding: FindingLine,
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +43,9 @@ pub struct ReportData<'a> {
     pub source_problems: &'a [String],
     pub overrides: &'a [Override],
     pub oid_assignments: usize,
+    pub oid_nodes: usize,
+    pub allowlist: &'a [AllowedOid],
+    pub label_audit: &'a [AuditLine],
 }
 
 fn status_name(status: ParseStatus) -> &'static str {
@@ -110,6 +122,12 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         "| OID assignments indexed | {} |",
         data.oid_assignments
     );
+    let _ = writeln!(out, "| OIDs with labels | {} |", data.oid_nodes);
+    let _ = writeln!(
+        out,
+        "| Label table findings (W142, W143, W144) | {} |",
+        data.label_audit.len()
+    );
     let _ = writeln!(out);
 
     let mut by_code: BTreeMap<&str, usize> = BTreeMap::new();
@@ -156,6 +174,39 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         }
         let _ = writeln!(out);
     }
+
+    let _ = writeln!(out, "## OID label audit\n");
+    let _ = writeln!(
+        out,
+        "Each module checked against the label table without its own document's evidence. A finding here is a \
+         candidate erratum, or an OID for the allowlist (`corpus/overrides/oid-allowlist.toml`).\n"
+    );
+    if data.label_audit.is_empty() {
+        let _ = writeln!(out, "None.\n");
+    } else {
+        for line in data.label_audit {
+            let notes = if line.notes.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", line.notes.join("; "))
+            };
+            let _ = writeln!(
+                out,
+                "- {} `{}` line {}: `{}` {}{notes}",
+                line.document,
+                line.module,
+                line.finding.line,
+                line.finding.code,
+                line.finding.message
+            );
+        }
+        let _ = writeln!(out);
+    }
+    let _ = writeln!(out, "Allowlisted OIDs:\n");
+    for allowed in data.allowlist {
+        let _ = writeln!(out, "- {}: {}", allowed.oid, allowed.reason);
+    }
+    let _ = writeln!(out);
 
     let _ = writeln!(out, "## Modules needing attention\n");
     let _ = writeln!(

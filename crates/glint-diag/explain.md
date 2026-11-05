@@ -542,6 +542,48 @@ M DEFINITIONS ::= BEGIN
 END
 ```
 
+## W142
+
+A label in an object identifier has a different number than the published documents give it under the same parent. Glint keeps a table of the `name(number)` labels that RFCs and the standalone ITU-T and ETSI modules write for each arc, with verified errata applied; the document being checked is never counted as evidence about itself. The note names the documents that use the other number. RFC 2797 and RFC 5272 wrote `dod(4)` where every other RFC writes `dod(6)`:
+
+```asn1 untested
+M DEFINITIONS ::= BEGIN
+  id-pkix OBJECT IDENTIFIER ::= { iso(1) identified-organization(3) dod(4) internet(1)
+      security(5) mechanisms(5) pkix(7) }
+END
+```
+
+Wrong but deployed OIDs, such as `holdInstruction` (2.2.840.10040.2), are on an allowlist in the corpus data and are not reported.
+
+## W143
+
+A label with this number appears in the published documents only under a different parent, and the parent written here is one the corpus knows. This usually means an arc is missing or extra before the label. RFC 6268 left out `smime(16)`:
+
+```asn1 untested
+M DEFINITIONS ::= BEGIN
+  id-aa-multipleSignatures OBJECT IDENTIFIER ::= { iso(1) member-body(2) us(840)
+      rsadsi(113549) pkcs(1) pkcs9(9) id-aa(2) 51 }
+END
+```
+
+A label that the corpus uses under several parents (`id-mod(0)`, say) is not reported.
+
+## W144
+
+`IMPORTS` names a module with an identifier that belongs to a different module in the corpus, while the corpus has the named module under another identifier. The identifier is definitive, so the import resolves to the other module; usually the identifier was copied from the wrong place. (When no module has the identifier and the import resolves by name, `W102` reports the difference instead; that is how erratum 9255 of RFC 5912 shows up.)
+
+```asn1 untested
+M DEFINITIONS ::= BEGIN
+IMPORTS Certificate FROM PKIX1Explicit88
+    { iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5)
+      pkix(7) id-mod(0) id-pkix1-implicit(19) };
+END
+```
+
+## I145
+
+A label differs from the name the published documents give the same arc. Different names for one arc are legal and common, so the message is off by default; turn it on with `synonym_labels = true` in `[oid]` of `glint.toml`.
+
 ## E150
 
 A field reference is wrong: the class has no such field, the chain goes through a field that is not an object or object set field, `Class.&objectField` is used where an object is required, or an information-from-objects selection is one that X.681 Table 1 forbids (X.681 9.14, 14.5, 15.4–15.5, 15.11).

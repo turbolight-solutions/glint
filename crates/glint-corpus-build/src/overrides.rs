@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use glint_corpus::{Oid, OverrideTier, document_title, rfc_number};
+use glint_corpus::{AllowedOid, Oid, OverrideTier, document_title, rfc_number};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -105,6 +105,45 @@ pub fn read_overrides(dir: &Path) -> Result<Vec<Override>, String> {
         }
     }
     Ok(out)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AllowlistEntry {
+    oid: String,
+    reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Allowlist {
+    #[serde(default)]
+    oid: Vec<AllowlistEntry>,
+}
+
+/// The file of wrong but deployed OIDs, in the overrides directory.
+pub const ALLOWLIST_FILE: &str = "oid-allowlist.toml";
+
+/// Reads `oid-allowlist.toml` of the overrides directory; no file is an empty list.
+pub fn read_allowlist(dir: &Path) -> Result<Vec<AllowedOid>, String> {
+    let path = dir.join(ALLOWLIST_FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(Vec::new());
+    };
+    let list: Allowlist = toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    list.oid
+        .into_iter()
+        .map(|entry| {
+            let oid = entry
+                .oid
+                .parse::<Oid>()
+                .map_err(|e| format!("{}: {e}", path.display()))?;
+            Ok(AllowedOid {
+                oid,
+                reason: entry.reason,
+            })
+        })
+        .collect()
 }
 
 /// `<Module>.asn`, or `<Module>-<oid>.asn` when the entry names the OID of the module it replaces.

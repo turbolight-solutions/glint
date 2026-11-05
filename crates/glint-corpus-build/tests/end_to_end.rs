@@ -145,6 +145,15 @@ fn corpus_has_the_modules_and_the_report_records_a_baseline() {
         "{}",
         built.report
     );
+    assert!(built.report.contains("## OID label audit"));
+    let pkix: glint_corpus::Oid = "1.3.6.1.5.5.7".parse().unwrap();
+    let labels = built.corpus.oid_labels().labels_of(&pkix);
+    assert!(
+        labels
+            .iter()
+            .any(|e| e.label == "pkix" && e.documents.contains(&"rfc5280".to_owned())),
+        "{labels:?}"
+    );
     let _ = std::fs::remove_dir_all(built.dir);
 }
 

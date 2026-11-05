@@ -7,7 +7,7 @@ mod source;
 
 pub use config::{Config, ConfigError, SeveritySetting};
 pub use pipeline::{
-    BlockSummary, CheckOptions, ImportSummary, ModuleSummary, Report, check_document,
+    BlockSummary, CheckOptions, ImportSummary, ModuleSummary, Report, check_document, document_id,
 };
 pub use source::{
     DocumentRef, RefError, draft_urls, latest_revision_url, revision_from_datatracker, rfc_urls,

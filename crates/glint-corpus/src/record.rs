@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Oid;
+use crate::{AllowedOid, Oid, OidNode};
 
 /// Which grammar family a module belongs to (design spec, "Module record").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,6 +198,10 @@ pub struct CorpusData {
     pub documents: Vec<DocumentRecord>,
     pub modules: Vec<ModuleRecord>,
     pub oid_assignments: Vec<OidAssignment>,
+    /// The label table (value names are in `oid_assignments`, module identifiers in `modules`).
+    pub oid_nodes: Vec<OidNode>,
+    /// Wrong but deployed OIDs, whose subtrees the label checks leave alone.
+    pub oid_allowlist: Vec<AllowedOid>,
 }
 
 impl Default for CorpusData {
@@ -208,6 +212,8 @@ impl Default for CorpusData {
             documents: Vec::new(),
             modules: Vec::new(),
             oid_assignments: Vec::new(),
+            oid_nodes: Vec::new(),
+            oid_allowlist: Vec::new(),
         }
     }
 }

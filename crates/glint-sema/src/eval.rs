@@ -42,6 +42,18 @@ pub struct OidEval {
     pub placeholders: Vec<(String, TextRange)>,
     /// Value references the OID depends on, in order: `(module qualifier, name, range)`.
     pub references: Vec<(Option<String>, String, TextRange)>,
+    /// The labels written in the value (`name(number)` and X.660 names), each with the OID of its arc, while the
+    /// arcs before it are known.
+    pub labels: Vec<OidLabel>,
+}
+
+/// A label written in an object identifier value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OidLabel {
+    pub name: String,
+    pub range: TextRange,
+    /// The OID of the arc the label names.
+    pub oid: Oid,
 }
 
 #[derive(Debug, Clone)]
@@ -251,11 +263,21 @@ impl<'g, 'c> Evaluator<'g, 'c> {
                     known = false;
                 }
                 Component::NameAndNumber(name, range, form) => {
-                    if is_placeholder(&name, placeholder_names) {
-                        result.placeholders.push((name, range));
+                    let placeholder = is_placeholder(&name, placeholder_names);
+                    if placeholder {
+                        result.placeholders.push((name.clone(), range));
                     }
                     match form {
-                        NumberForm::Literal(n) => arcs.push(n),
+                        NumberForm::Literal(n) => {
+                            arcs.push(n);
+                            if known && !placeholder {
+                                result.labels.push(OidLabel {
+                                    name,
+                                    range,
+                                    oid: Oid::new(arcs.clone()),
+                                });
+                            }
+                        }
                         NumberForm::Reference(qualifier, reference, ref_range) => {
                             if is_placeholder(&reference, placeholder_names) {
                                 result.placeholders.push((reference, ref_range));
@@ -270,6 +292,13 @@ impl<'g, 'c> Evaluator<'g, 'c> {
                             match self.integer_of_name(module, qualifier.as_deref(), &reference) {
                                 Some(value) if value >= 0 => {
                                     arcs.push(u128::try_from(value).unwrap_or_default());
+                                    if known && !placeholder {
+                                        result.labels.push(OidLabel {
+                                            name,
+                                            range,
+                                            oid: Oid::new(arcs.clone()),
+                                        });
+                                    }
                                 }
                                 Some(_) => {
                                     result.problems.push(OidProblem {
@@ -303,6 +332,13 @@ impl<'g, 'c> Evaluator<'g, 'c> {
                     }
                     if let Some(arc) = registered_arc(&arcs, &name) {
                         arcs.push(arc);
+                        if known {
+                            result.labels.push(OidLabel {
+                                name,
+                                range,
+                                oid: Oid::new(arcs.clone()),
+                            });
+                        }
                         continue;
                     }
                     result.references.push((None, name.clone(), range));
@@ -433,6 +469,34 @@ impl<'g, 'c> Evaluator<'g, 'c> {
             }
             _ => None,
         }
+    }
+
+    /// Every object identifier value written in `module`: its identifier, the identifiers in its IMPORTS and its
+    /// `OBJECT IDENTIFIER` value assignments.
+    pub fn oid_values(&self, module: ModuleId) -> Vec<OidEval> {
+        let Some(loaded) = self.graph.module(module) else {
+            return Vec::new();
+        };
+        let mut groups: Vec<SyntaxNode> = loaded.model.oid_group.iter().cloned().collect();
+        for clause in &loaded.model.imports {
+            if let Some((crate::model::AssignedId::Oid { group }, _)) = &clause.assigned {
+                groups.push(group.clone());
+            }
+        }
+        for (index, symbol) in loaded.model.symbols.iter().enumerate() {
+            if self.symbol_is_oid_valued(module, index)
+                && let Some(group) = symbol
+                    .value_node
+                    .as_ref()
+                    .and_then(|value| child(value, SyntaxKind::BraceGroup))
+            {
+                groups.push(group);
+            }
+        }
+        groups
+            .iter()
+            .map(|group| self.eval_oid_group(module, group))
+            .collect()
     }
 
     /// Every `OBJECT IDENTIFIER` value assignment of `module` that evaluates, as `(name, oid)`.

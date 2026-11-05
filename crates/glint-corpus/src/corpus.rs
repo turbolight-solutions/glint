@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{CorpusData, CorpusInfo, DocumentRecord, ModuleRecord, Oid, OidAssignment};
+use crate::{CorpusData, CorpusInfo, DocumentRecord, ModuleRecord, Oid, OidAssignment, OidLabels};
 
 /// Read access to the corpus. The check pipeline sees only this trait, so it stays free of I/O.
 pub trait CorpusProvider {
@@ -14,12 +14,15 @@ pub trait CorpusProvider {
     fn assignments_of(&self, oid: &Oid) -> &[OidAssignment];
     /// Every corpus assignment at or below `oid`, in OID order.
     fn assignments_under(&self, oid: &Oid) -> Vec<&OidAssignment>;
+    /// The OID label table.
+    fn oid_labels(&self) -> &OidLabels;
 }
 
 /// A corpus with nothing in it.
 #[derive(Debug, Default)]
 pub struct EmptyCorpus {
     info: CorpusInfo,
+    labels: OidLabels,
 }
 
 impl CorpusProvider for EmptyCorpus {
@@ -46,6 +49,10 @@ impl CorpusProvider for EmptyCorpus {
     fn assignments_under(&self, _oid: &Oid) -> Vec<&OidAssignment> {
         Vec::new()
     }
+
+    fn oid_labels(&self) -> &OidLabels {
+        &self.labels
+    }
 }
 
 /// An in-memory corpus with lookup indexes.
@@ -57,6 +64,7 @@ pub struct Corpus {
     by_oid: HashMap<Oid, usize>,
     assignments: BTreeMap<Oid, Vec<OidAssignment>>,
     documents: Vec<DocumentRecord>,
+    labels: OidLabels,
 }
 
 impl Corpus {
@@ -87,6 +95,7 @@ impl Corpus {
             by_oid,
             assignments,
             documents: data.documents,
+            labels: OidLabels::new(data.oid_nodes, data.oid_allowlist),
         }
     }
 
@@ -102,6 +111,8 @@ impl Corpus {
             documents: self.documents,
             modules: self.modules,
             oid_assignments: self.assignments.into_values().flatten().collect(),
+            oid_nodes: self.labels.nodes(),
+            oid_allowlist: self.labels.allowlist().to_vec(),
         }
     }
 }
@@ -172,6 +183,10 @@ impl CorpusProvider for Corpus {
             .take_while(|(key, _)| oid.is_prefix_of(key))
             .flat_map(|(_, list)| list.iter())
             .collect()
+    }
+
+    fn oid_labels(&self) -> &OidLabels {
+        &self.labels
     }
 }
 

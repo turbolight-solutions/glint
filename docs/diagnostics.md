@@ -45,6 +45,10 @@ Implemented so far (M1, M2, M3, M4, M5):
 | `E135` | error | Exception specification `!` in a constraint without an extension marker | X.680 49.6 | `tests/values.rs` |
 | `W140` | warning | OID (or module identifier) already assigned in the corpus to a different name | policy | `tests/oids.rs`, `glint-corpus-build/tests/end_to_end.rs` |
 | `I141` | info | OID uses an author placeholder (`TBD`, `TBDn`, `id-TBD`, or `[oid] placeholders`) | policy | `tests/oids.rs` |
+| `W142` | warning | OID label has another number under the same parent in the corpus label table | policy | `tests/oids.rs`, `glint-corpus` `labels.rs` |
+| `W143` | warning | OID label with this number is only under another parent in the corpus label table | policy | `tests/oids.rs`, `glint-corpus` `labels.rs` |
+| `W144` | warning | Module identifier in `IMPORTS` belongs to another corpus module than the one named | policy | `tests/oids.rs` |
+| `I145` | info | OID label differs from the corpus's name for the arc (off unless `[oid] synonym_labels = true`) | policy | `tests/oids.rs` |
 | `E150` | error | Bad field reference: a field that the class does not have, a chain through a field that is not an object or object set field, `Class.&objectField`, or an information-from-objects combination that Table 1 forbids (a type or variable-type field read from an object set, a variable-type value set from an object, a non-type read where a type is needed) | X.681 9.14, 14.5, 15.4–15.5, 15.11 | `tests/x681.rs` |
 | `E151` | error | Component relation path does not resolve: unknown identifier, a path through a component that is not a `SET`, `SEQUENCE` or `CHOICE`, more dots than enclosing constructions, or `@` outside any `SET` or `SEQUENCE` | X.682 10.8–10.10 | `tests/x682.rs` |
 | `E152` | error | Object does not match its class: wrong default-syntax field, mandatory field missing, field set twice, a token that the class's `WITH SYNTAX` does not allow, a setting that is not a type, value, value set, object or object set as the field requires, or an optional-group literal with no setting after it | X.681 10.11, 10.12 d, 11.4–11.7 | `tests/x681.rs` |

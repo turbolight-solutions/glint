@@ -5,9 +5,9 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use glint_corpus::{
-    BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo, DOCUMENTS_FILE, DocumentRecord,
-    Documents, Exports, ModuleRecord, ModuleSource, Oid, OidAssignment, ParseStatus, Pointer,
-    SourceKind, build_dir, latest_path,
+    AllowedOid, BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo, DOCUMENTS_FILE,
+    DocumentRecord, Documents, Exports, ModuleRecord, ModuleSource, Oid, OidAssignment, OidLabels,
+    ParseStatus, Pointer, SourceKind, build_dir, latest_path,
 };
 use glint_diag::Severity;
 use glint_sema::{
@@ -21,8 +21,10 @@ use sha2::{Digest, Sha256};
 use crate::Settings;
 use crate::collect::{Candidate, extract_rfc};
 use crate::index::{RfcMeta, read_index};
-use crate::overrides::{Override, check_errata, check_extraction_tier, read_overrides};
-use crate::report::{FindingLine, ModuleOutcome, ReportData, render_report};
+use crate::overrides::{
+    Override, check_errata, check_extraction_tier, read_allowlist, read_overrides,
+};
+use crate::report::{AuditLine, FindingLine, ModuleOutcome, ReportData, render_report};
 use crate::sources::{Defined, Fetched, Manifest, Need, fetch, read_manifest, select};
 
 const RFC_NOTICE: &str = "Modules extracted from RFCs are code components under the IETF Trust's Revised BSD License (BCP 78, BCP 79).";
@@ -32,6 +34,10 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let meta = read_index(&settings.rfc_dir.join("rfc-index.xml")).unwrap_or_default();
     let overrides = match &settings.overrides {
         Some(dir) => read_overrides(dir)?,
+        None => Vec::new(),
+    };
+    let allowlist = match &settings.overrides {
+        Some(dir) => read_allowlist(dir)?,
         None => Vec::new(),
     };
 
@@ -145,20 +151,43 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         ..CorpusData::default()
     });
 
-    let outcomes: Vec<(ModuleOutcome, Vec<OidAssignment>)> = records
+    let outcomes: Vec<Checked> = records
         .par_iter()
-        .map(|record| check_record(record, &corpus))
+        .map(|record| check_record(record, &corpus, &allowlist))
         .collect();
 
     let mut oid_assignments: Vec<OidAssignment> = Vec::new();
+    let mut label_triples: Vec<(Oid, String, String)> = Vec::new();
     let mut outcome_list = Vec::new();
-    for (record, (outcome, assignments)) in records.iter_mut().zip(outcomes) {
-        record.parse_status = outcome.status;
-        oid_assignments.extend(assignments);
-        outcome_list.push(outcome);
+    for (record, checked) in records.iter_mut().zip(outcomes) {
+        record.parse_status = checked.outcome.status;
+        oid_assignments.extend(checked.assignments);
+        label_triples.extend(
+            checked
+                .labels
+                .into_iter()
+                .map(|(oid, label)| (oid, label, record.source.document.clone())),
+        );
+        outcome_list.push(checked.outcome);
     }
     oid_assignments.sort_by(|a, b| (&a.oid, &a.module, &a.name).cmp(&(&b.oid, &b.module, &b.name)));
     oid_assignments.dedup();
+    let labels = OidLabels::collect(label_triples, allowlist);
+
+    // Every module against the label table, leaving out its own document's evidence: what a user checking the
+    // document would be told.
+    let audited = Corpus::from_data(CorpusData {
+        info: info.clone(),
+        modules: records.clone(),
+        oid_assignments: oid_assignments.clone(),
+        oid_nodes: labels.nodes(),
+        oid_allowlist: labels.allowlist().to_vec(),
+        ..CorpusData::default()
+    });
+    let audit: Vec<AuditLine> = records
+        .par_iter()
+        .flat_map(|record| audit_record(record, &audited))
+        .collect();
 
     let documents = document_index(&records, &meta, &rfc_texts);
     let texts: Vec<(String, String, String)> = rfc_texts
@@ -170,6 +199,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         documents,
         modules: records,
         oid_assignments,
+        oid_nodes: labels.nodes(),
+        oid_allowlist: labels.allowlist().to_vec(),
         ..CorpusData::default()
     };
     // The build id names the content: the same data built twice on one day gets the same id.
@@ -192,6 +223,9 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         source_problems: &source_problems,
         overrides: &applied,
         oid_assignments: corpus_data.oid_assignments.len(),
+        oid_nodes: corpus_data.oid_nodes.len(),
+        allowlist: &corpus_data.oid_allowlist,
+        label_audit: &audit,
     };
     let report = render_report(&data);
     if let Some(path) = &settings.dump_findings {
@@ -581,9 +615,18 @@ fn line_of(text: &str, offset: usize) -> u32 {
     u32::try_from(newlines.saturating_add(1)).unwrap_or(u32::MAX)
 }
 
-fn check_record(record: &ModuleRecord, corpus: &Corpus) -> (ModuleOutcome, Vec<OidAssignment>) {
+/// What checking one corpus module gives.
+struct Checked {
+    outcome: ModuleOutcome,
+    assignments: Vec<OidAssignment>,
+    /// The labels the module writes, with the OIDs of their arcs: its evidence for the label table.
+    labels: Vec<(Oid, String)>,
+}
+
+fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]) -> Checked {
     let options = Options {
         oid_collisions: false,
+        oid_labels: false,
         policy_checks: false,
         resolution_notes: false,
         home_document: Some(record.source.document.clone()),
@@ -655,12 +698,71 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus) -> (ModuleOutcome, Vec<O
                 .collect()
         })
         .unwrap_or_default();
+    let labels = analysis
+        .drafts
+        .first()
+        .map(|&module| {
+            evaluator
+                .oid_values(module)
+                .into_iter()
+                .filter(|value| {
+                    // A wrong but deployed OID is no evidence, and its labels would be checked against nothing.
+                    let oid = value
+                        .oid
+                        .as_ref()
+                        .or_else(|| value.labels.last().map(|l| &l.oid));
+                    !oid.is_some_and(|oid| allowlist.iter().any(|a| a.oid.is_prefix_of(oid)))
+                })
+                .flat_map(|value| value.labels)
+                .map(|label| (label.oid, label.name))
+                .collect()
+        })
+        .unwrap_or_default();
     syntax.extend(findings);
-    (
-        ModuleOutcome {
+    Checked {
+        outcome: ModuleOutcome {
             status,
             findings: syntax,
         },
         assignments,
-    )
+        labels,
+    }
+}
+
+/// The label table findings (W142, W143, W144) for one corpus module, its own document's evidence left out.
+fn audit_record(record: &ModuleRecord, corpus: &Corpus) -> Vec<AuditLine> {
+    let options = Options {
+        oid_collisions: false,
+        policy_checks: false,
+        resolution_notes: false,
+        home_document: Some(record.source.document.clone()),
+        own_document: Some(record.source.document.clone()),
+        ..Options::default()
+    };
+    let parse = parse_source_with(&record.text, ParseOptions::corpus());
+    let analysis = analyze(
+        vec![DraftSource {
+            text: record.text.clone(),
+            parse,
+        }],
+        corpus,
+        &options,
+    );
+    analysis
+        .findings
+        .iter()
+        .filter(|f| f.primary.source == SourceId(0))
+        .filter(|f| matches!(f.code, "W142" | "W143" | "W144"))
+        .map(|finding| AuditLine {
+            document: record.source.document.clone(),
+            module: record.name.clone(),
+            finding: FindingLine {
+                code: finding.code.to_owned(),
+                severity: finding.severity,
+                line: line_of(&record.text, usize::from(finding.primary.range.start())),
+                message: finding.message.clone(),
+            },
+            notes: finding.notes.clone(),
+        })
+        .collect()
 }

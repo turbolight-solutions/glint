@@ -143,6 +143,12 @@ const CODES: &[CodeInfo] = &[
         basis: "policy",
     },
     CodeInfo {
+        code: "I145",
+        severity: Severity::Info,
+        title: "OID label differs from the corpus's name for the same arc (off by default)",
+        basis: "policy",
+    },
+    CodeInfo {
         code: "W100",
         severity: Severity::Warning,
         title: "Imported module not found in draft, RFC corpus or ITU set; its symbols are treated as opaque",
@@ -170,6 +176,24 @@ const CODES: &[CodeInfo] = &[
         code: "W140",
         severity: Severity::Warning,
         title: "OID assigned in the draft is already assigned in the corpus to a different name",
+        basis: "policy",
+    },
+    CodeInfo {
+        code: "W142",
+        severity: Severity::Warning,
+        title: "OID label has a different number under the same parent in the corpus",
+        basis: "policy",
+    },
+    CodeInfo {
+        code: "W143",
+        severity: Severity::Warning,
+        title: "OID label with this number is under a different parent in the corpus",
+        basis: "policy",
+    },
+    CodeInfo {
+        code: "W144",
+        severity: Severity::Warning,
+        title: "Module identifier in IMPORTS belongs to another corpus module than the one named",
         basis: "policy",
     },
     CodeInfo {

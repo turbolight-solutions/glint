@@ -66,5 +66,6 @@ fn most_codes_have_a_tested_bad_example() {
                 .any(|e| e.tags.contains(&"bad"))
         })
         .collect();
-    assert!(untested.len() <= 12, "{untested:?}");
+    // The label table codes (W142, W143, W144, I145) need a corpus, which these examples are not checked against.
+    assert!(untested.len() <= 16, "{untested:?}");
 }

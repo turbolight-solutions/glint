@@ -207,6 +207,32 @@ fn oid_info(corpus: &Corpus, text: &str, out: &mut impl Write) -> u8 {
     let _ = writeln!(out, "{oid}");
     let mut walk = Some(oid.clone());
     while let Some(current) = walk {
+        for evidence in corpus.oid_labels().labels_of(&current) {
+            let documents: Vec<String> = evidence
+                .documents
+                .iter()
+                .take(3)
+                .map(|d| glint_corpus::document_title(d))
+                .collect();
+            let more = evidence.documents.len().saturating_sub(3);
+            let more = if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            };
+            let _ = writeln!(
+                out,
+                "  {current}  label {}({})  ({}{more})",
+                evidence.label,
+                current.last().unwrap_or_default(),
+                documents.join(", ")
+            );
+        }
+        if let Some(allowed) = corpus.oid_labels().allowed(&current)
+            && allowed.oid == current
+        {
+            let _ = writeln!(out, "  {current}  allowlisted: {}", allowed.reason);
+        }
         for a in corpus.assignments_of(&current) {
             let owner = glint_corpus::document_title(&a.document);
             let _ = writeln!(

@@ -17,7 +17,7 @@ mod view;
 
 use std::collections::HashMap;
 
-pub use eval::{Evaluator, OidEval, OidProblem, OidProblemKind};
+pub use eval::{Evaluator, OidEval, OidLabel, OidProblem, OidProblemKind};
 pub use finding::{Finding, Loc, SourceId};
 pub use graph::{
     Found, LoadedModule, Lookup, Matched, ModuleGraph, ModuleId, Origin, Peeled, QualifiedError,
@@ -51,6 +51,13 @@ pub struct Options {
     pub home_document: Option<String>,
     /// Report Glint's own style rules for new text (`W170`, `W171`, `E172`, `W173`); off for published modules.
     pub policy_checks: bool,
+    /// Compare the labels and module identifiers of the draft's OIDs with the corpus label table (W142, W143,
+    /// W144).
+    pub oid_labels: bool,
+    /// Also report labels that differ from the corpus's name for the same arc (I145).
+    pub oid_synonyms: bool,
+    /// The document being checked, which is never evidence about itself in the label table.
+    pub own_document: Option<String>,
 }
 
 impl Default for Options {
@@ -62,6 +69,9 @@ impl Default for Options {
             resolution_notes: true,
             home_document: None,
             policy_checks: true,
+            oid_labels: true,
+            oid_synonyms: false,
+            own_document: None,
         }
     }
 }

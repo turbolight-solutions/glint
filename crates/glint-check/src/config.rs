@@ -33,6 +33,8 @@ impl Default for SnippetsConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct OidConfig {
     pub placeholders: Vec<String>,
+    /// Report labels that differ from the corpus's name for the same arc (I145).
+    pub synonym_labels: bool,
 }
 
 /// What a code is remapped to.
