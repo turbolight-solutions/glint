@@ -241,3 +241,72 @@ fn completion_offers_the_arcs_below_an_oid() {
     assert!(items.contains(&"INTEGER".to_owned()));
     assert!(items.contains(&"T".to_owned()));
 }
+
+#[test]
+fn completion_offers_the_names_of_a_module_still_being_written() {
+    let service = service();
+    for text in [
+        "M DEFINITIONS ::= BEGIN IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 }; U ::= INTEGER\n T ::= |",
+        "M DEFINITIONS ::= BEGIN IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 }; U ::= INTEGER\n T ::= SEQUENCE {\n a |\n",
+    ] {
+        let (_, items) = labels_at(&service, text);
+        for name in ["U", "T", "Name", "INTEGER"] {
+            assert!(
+                items.contains(&name.to_owned()),
+                "{name} in {text:?}: {items:?}"
+            );
+        }
+    }
+    let (_, items) = labels_at(&service, "M DEFINITIONS ::= BEGIN U ::= INTEGER END\n|");
+    assert!(
+        !items.contains(&"U".to_owned()),
+        "after the END of a module: {items:?}"
+    );
+}
+
+#[test]
+fn completion_in_a_snippet_offers_the_names_of_the_documents_modules() {
+    let service = service();
+    let text = "Internet-Draft                                                 Oct 2026
+
+1.  Introduction
+
+   The extension is:
+
+   Pair ::= SEQUENCE {
+        first   Th|,
+        second  Name }
+
+Appendix A.  ASN.1 Module
+
+   Mine DEFINITIONS ::= BEGIN
+   IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 };
+   Thing ::= INTEGER
+   Pair ::= SEQUENCE { first Thing, second Name }
+   END
+";
+    let position = text.find('|').unwrap();
+    let result = complete(
+        &service,
+        &text.replace('|', ""),
+        Some("d.txt"),
+        None,
+        position,
+    );
+    let detail = |label: &str| {
+        result
+            .items
+            .iter()
+            .find(|i| i.label == label)
+            .and_then(|i| i.detail.clone())
+    };
+    assert_eq!(
+        detail("Thing").as_deref(),
+        Some("Mine"),
+        "{:?}",
+        result.items
+    );
+    assert_eq!(detail("Name").as_deref(), Some("from Base"));
+    assert_eq!(detail("Pair").as_deref(), Some("this snippet"));
+    assert!(result.items.iter().any(|i| i.label == "INTEGER"));
+}

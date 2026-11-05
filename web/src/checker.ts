@@ -45,7 +45,7 @@ interface Tab {
   id: number;
   /** Name sent to the checker; null for pasted text. */
   name: string | null;
-  /** Draft or RFC this tab was fetched from, as it appears in the URL hash. */
+  /** Draft or RFC this tab was opened from, as it appears in the URL hash. */
   target: string;
   /** Value of the format select; empty means auto-detect. */
   format: string;
@@ -77,7 +77,7 @@ export function createChecker(root: HTMLElement): CheckerView {
   let nextId = 1;
   // Set while code (not the user) edits the shown document, so it does not schedule a check.
   let programmatic = false;
-  // A hash the Fetch button set itself; its `hashchange` has already been acted on.
+  // A hash the Open button set itself; its `hashchange` has already been acted on.
   let handledHash = "";
 
   const target = h("input", {
@@ -830,7 +830,7 @@ export function createChecker(root: HTMLElement): CheckerView {
           submitTarget();
         },
       },
-      h("div", { class: "input-group input-group-sm mb-2" }, target, h("button", { class: "btn btn-outline-primary", type: "submit" }, "Fetch")),
+      h("div", { class: "input-group input-group-sm mb-2" }, target, h("button", { class: "btn btn-outline-primary", type: "submit" }, "Open")),
       h(
         "div",
         { class: "d-flex flex-wrap gap-2 align-items-center" },

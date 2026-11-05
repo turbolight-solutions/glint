@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use glint_corpus::{CorpusProvider, Exports, Oid, preferred};
-use glint_extract::{Block, Format, detect_format, extract};
+use glint_extract::{Block, BlockKind, Format, detect_format, extract};
 use glint_sema::{
     DraftSource, Evaluator, ModuleModel, Options, SymbolKind, analyze, registered_arc,
 };
@@ -107,8 +107,32 @@ pub fn complete(
         .source_map
         .map_start(start)
         .map_or(position, |doc| byte_to_utf16(text, doc));
-    let items = complete_in_block(service, &block.text, start);
+    // Assignments quoted in the prose belong to no module: the names they can use are those of the document's
+    // modules.
+    let context = if block.kind == BlockKind::Fragment {
+        extraction
+            .blocks
+            .iter()
+            .filter(|b| b.kind != BlockKind::Fragment)
+            .flat_map(|b| module_models(&b.text))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let items = complete_in_block(service, &block.text, start, &context);
     Completion { from, items }
+}
+
+/// The models of the modules in `text`.
+fn module_models(text: &str) -> Vec<ModuleModel> {
+    let parse = parse_source_with(text, ParseOptions::corpus());
+    ast::SourceFile::cast(parse.syntax())
+        .map(|file| {
+            file.modules()
+                .filter_map(|m| ModuleModel::build(&m))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The offset in `block.text` that the document offset `at` falls on: the last one that maps at or before it.
@@ -147,8 +171,25 @@ fn significant(token: &SyntaxToken) -> bool {
     !token.kind().is_trivia()
 }
 
-fn complete_in_block(service: &Service, text: &str, start: usize) -> Vec<Item> {
+fn complete_in_block(
+    service: &Service,
+    text: &str,
+    start: usize,
+    context: &[ModuleModel],
+) -> Vec<Item> {
     let parse = parse_source_with(text, ParseOptions::corpus());
+    // The assignments of a fragment, which has no module of its own.
+    let fragment_names: Vec<String> = if context.is_empty() {
+        Vec::new()
+    } else {
+        ast::SourceFile::cast(parse.syntax())
+            .map(|file| {
+                file.assignments()
+                    .filter_map(|a| a.name().map(|n| n.text().to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
     let tokens: Vec<SyntaxToken> = parse
         .syntax()
         .descendants_with_tokens()
@@ -177,10 +218,19 @@ fn complete_in_block(service: &Service, text: &str, start: usize) -> Vec<Item> {
         corpus,
         &options,
     );
+    // A module still being written has no `END` yet, so its range stops at its last token, before the cursor: it
+    // then reaches to the end of the block.
+    let unterminated = |end: usize| {
+        tokens
+            .iter()
+            .find(|t| usize::from(t.text_range().end()) == end)
+            .is_none_or(|t| t.text() != "END")
+    };
     let module = analysis.drafts.iter().copied().find(|&id| {
         analysis.graph.module(id).is_some_and(|m| {
             let range = m.model.range;
-            usize::from(range.start()) <= start && start <= usize::from(range.end())
+            let end = usize::from(range.end());
+            usize::from(range.start()) <= start && (start <= end || unterminated(end))
         })
     });
     let model = module
@@ -222,7 +272,7 @@ fn complete_in_block(service: &Service, text: &str, start: usize) -> Vec<Item> {
         return Vec::new();
     }
 
-    reference_items(model)
+    reference_items(model, context, &fragment_names)
 }
 
 /// One component of an object identifier value written so far.
@@ -487,16 +537,57 @@ fn kind_name(kind: SymbolKind) -> &'static str {
     }
 }
 
-fn reference_items(model: Option<&ModuleModel>) -> Vec<Item> {
-    let mut items = Vec::new();
+fn case_kind(name: &str) -> &'static str {
+    if name.starts_with(|c: char| c.is_ascii_lowercase()) {
+        "value"
+    } else {
+        "type"
+    }
+}
+
+/// The names usable at the cursor: those of `model`, the module it is in; or, in a fragment, its own and those of
+/// the document's modules in `context`. And the built-in types.
+fn reference_items(
+    model: Option<&ModuleModel>,
+    context: &[ModuleModel],
+    fragment_names: &[String],
+) -> Vec<Item> {
+    // The built-in types first, so that a document with many names never loses them to the cap; the editor sorts.
+    let mut items: Vec<Item> = BUILTIN_TYPES
+        .iter()
+        .map(|builtin| Item {
+            label: (*builtin).to_owned(),
+            kind: "keyword",
+            detail: None,
+            apply: None,
+        })
+        .collect();
     let mut seen: HashSet<String> = HashSet::new();
-    if let Some(model) = model {
+    for name in fragment_names {
+        if seen.insert(name.clone()) {
+            items.push(Item {
+                label: name.clone(),
+                kind: case_kind(name),
+                detail: Some("this snippet".to_owned()),
+                apply: None,
+            });
+        }
+    }
+    let models: Vec<(&ModuleModel, bool)> = match model {
+        Some(model) => vec![(model, true)],
+        None => context.iter().map(|m| (m, false)).collect(),
+    };
+    for (model, own) in models {
         for symbol in &model.symbols {
             if seen.insert(symbol.name.clone()) {
                 items.push(Item {
                     label: symbol.name.clone(),
                     kind: kind_name(symbol.kind),
-                    detail: Some("this module".to_owned()),
+                    detail: Some(if own {
+                        "this module".to_owned()
+                    } else {
+                        model.name.clone()
+                    }),
                     apply: None,
                 });
             }
@@ -504,28 +595,15 @@ fn reference_items(model: Option<&ModuleModel>) -> Vec<Item> {
         for clause in &model.imports {
             for symbol in &clause.symbols {
                 if seen.insert(symbol.name.clone()) {
-                    let kind = if symbol.name.starts_with(|c: char| c.is_ascii_lowercase()) {
-                        "value"
-                    } else {
-                        "type"
-                    };
                     items.push(Item {
                         label: symbol.name.clone(),
-                        kind,
+                        kind: case_kind(&symbol.name),
                         detail: Some(format!("from {}", clause.module_name)),
                         apply: None,
                     });
                 }
             }
         }
-    }
-    for builtin in BUILTIN_TYPES {
-        items.push(Item {
-            label: (*builtin).to_owned(),
-            kind: "keyword",
-            detail: None,
-            apply: None,
-        });
     }
     items.truncate(MAX_ITEMS);
     items
