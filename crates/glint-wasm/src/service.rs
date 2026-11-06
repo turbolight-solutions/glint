@@ -8,8 +8,9 @@ use glint_check::{
     CheckOptions, Config, DocumentRef, ImportSummary, Report, SeveritySetting, check_document,
 };
 use glint_corpus::{
-    Corpus, CorpusData, CorpusProvider, DataError, Documents, LabelEvidence, ModuleRecord, Oid,
-    OidAssignment, ParseStatus, SCHEMA, SyntaxEra, draft_name, preferred, unique_label,
+    Corpus, CorpusData, CorpusProvider, DataError, Documents, LabelEvidence, LabelProblem,
+    ModuleRecord, Oid, OidAssignment, ParseStatus, SCHEMA, SyntaxEra, document_title, draft_name,
+    preferred, unique_label,
 };
 use glint_diag::{Diagnostic, FileId};
 use glint_extract::{BlockKind, Format, detect_format};
@@ -364,7 +365,9 @@ impl Service {
         })
     }
 
-    pub fn oid(&self, dotted: &str) -> Result<OidResponse> {
+    /// Looks up `dotted`. `names` are the names written for its arcs, in order, with an empty string for an arc
+    /// written as a bare number; each is compared with the labels the corpus has for that arc.
+    pub fn oid(&self, dotted: &str, names: &[String]) -> Result<OidResponse> {
         let oid: Oid = dotted
             .parse()
             .map_err(|e: glint_corpus::OidParseError| ServiceError::bad_request(e.to_string()))?;
@@ -391,12 +394,91 @@ impl Service {
             parent: oid.parent().map(|p| p.to_string()),
             module,
             labels: corpus.oid_labels().labels_of(&oid).to_vec(),
+            label_notes: label_notes(corpus, &oid, names),
             allowlisted,
             assignments,
             children,
             truncated,
         })
     }
+}
+
+fn document_list(documents: &[String]) -> String {
+    const SHOWN: usize = 3;
+    let titles: Vec<String> = documents
+        .iter()
+        .take(SHOWN)
+        .map(|d| document_title(d))
+        .collect();
+    let rest = documents.len().saturating_sub(SHOWN);
+    if rest > 0 {
+        format!("{} and {rest} more", titles.join(", "))
+    } else {
+        titles.join(", ")
+    }
+}
+
+/// The names written for the arcs of `oid`, checked as the checker checks labels (W142, W143, I145): against the
+/// labels the corpus has for each arc. The arcs after a wrongly placed one are under the wrong parent too, so the
+/// first such problem ends the list; an arc the corpus calls by another name does not.
+fn label_notes(corpus: &Corpus, oid: &Oid, names: &[String]) -> Vec<String> {
+    let table = corpus.oid_labels();
+    if table.allowed(oid).is_some() {
+        return Vec::new();
+    }
+    let mut notes = Vec::new();
+    for (length, name) in (1..=oid.len()).zip(names) {
+        if name.is_empty() {
+            continue;
+        }
+        let arc = Oid::new(oid.arcs().get(..length).unwrap_or_default().to_vec());
+        let number = arc.last().unwrap_or_default();
+        let parent = arc.parent().map_or_else(String::new, |p| p.to_string());
+        let defined = corpus.by_oid(&arc).is_some();
+        let problem = if length == 1 {
+            // The table does not check top-level arcs, whose labels never vary in practice; a name nobody writes
+            // for one is still worth a note.
+            let others: Vec<String> = table
+                .labels_of(&arc)
+                .iter()
+                .map(|e| e.label.clone())
+                .collect();
+            (!others.is_empty() && !others.contains(name))
+                .then_some(LabelProblem::Synonym { others })
+        } else {
+            table.check(&arc, name, None, defined)
+        };
+        match problem {
+            None => {}
+            Some(LabelProblem::Synonym { others }) => {
+                notes.push(format!(
+                    "The corpus calls {arc} {}, not {name}.",
+                    others.join(" or ")
+                ));
+            }
+            Some(LabelProblem::WrongNumber {
+                expected,
+                documents,
+            }) => {
+                notes.push(format!(
+                    "{name}({number}): under {parent} the corpus numbers {name} {expected} ({}).",
+                    document_list(&documents)
+                ));
+                break;
+            }
+            Some(LabelProblem::WrongParent {
+                expected_parent,
+                documents,
+            }) => {
+                notes.push(format!(
+                    "{name}({number}) is under {expected_parent} in the corpus, not under {parent} ({}). Check for a missing or extra arc before it.",
+                    document_list(&documents)
+                ));
+                break;
+            }
+        }
+    }
+    notes
 }
 
 // ---- requests ----
@@ -691,6 +773,8 @@ pub struct OidResponse {
     module: Option<ModuleRef>,
     /// The `name(number)` labels documents write for this arc.
     labels: Vec<LabelEvidence>,
+    /// Where the names written for the arcs disagree with the labels documents write for them.
+    label_notes: Vec<String>,
     /// Why the OID is on the allowlist of wrong but deployed OIDs, when it is.
     allowlisted: Option<String>,
     assignments: Vec<OidAssignment>,

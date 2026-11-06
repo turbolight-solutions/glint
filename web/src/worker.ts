@@ -97,7 +97,7 @@ async function answer(method: string, args: unknown[]): Promise<string> {
     case "module":
       return g.module(String(args[0]), String(args[1]), args[2] == null ? undefined : String(args[2]));
     case "oid":
-      return g.oid(String(args[0]));
+      return g.oid(String(args[0]), Array.isArray(args[1]) ? args[1].map(String) : []);
     case "complete":
       return g.complete(String(args[0]), args[1] == null ? undefined : String(args[1]), args[2] == null ? undefined : String(args[2]), Number(args[3]));
     default:

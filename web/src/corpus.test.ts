@@ -169,6 +169,7 @@ describe("OID lookup page", () => {
       parent: null,
       module: null,
       labels: [{ label: "pkix", documents: ["rfc5280"] }],
+      label_notes: (args[1] as string[]).includes("pkcs") ? ["The corpus calls 1.3.6.1.5.5.7 pkix, not pkcs."] : [],
       allowlisted: null,
       assignments: [],
       children: [],
@@ -185,6 +186,15 @@ describe("OID lookup page", () => {
     root.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true }));
   }
 
+  it("explains the formats with examples that look themselves up", () => {
+    const { root, input } = setup();
+    expect(root.textContent).toContain("Formats you can paste");
+    const example = [...root.querySelectorAll("button")].find((b) => b.textContent?.startsWith("{ iso(1)"));
+    example?.click();
+    expect(input.value).toContain("pkcs-1(1)");
+    expect(window.location.hash).toBe("#oid/1.2.840.113549.1.1");
+  });
+
   it("looks up the example OID when the box is empty", () => {
     const { root } = setup();
     submit(root);
@@ -198,11 +208,15 @@ describe("OID lookup page", () => {
     expect(window.location.hash).toBe("#oid/1.3.6.1");
   });
 
-  it("warns about a wrong arc name", () => {
-    const { root, input } = setup();
-    input.value = "iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5) pkcs(7)";
+  it("has the typed arc names checked and shows what the corpus says", async () => {
+    const { root, input, fetchMock } = setup();
+    // Already in the address bar, so submitting looks up at once, without the router.
+    window.location.hash = "#oid/1.3.6.1.5.5.7";
+    input.value = "iso(1) identified-organization(3) dod(6) internet(1) security(5) 5 pkcs(7)";
     submit(root);
-    expect(root.textContent).toContain("1.3.6.1.5.5.7 is pkix, not pkcs.");
+    await settle();
+    expect(fetchMock.mock.calls[0]?.slice(0, 2)).toEqual(["oid", ["1.3.6.1.5.5.7", ["iso", "identified-organization", "dod", "internet", "security", "", "pkcs"]]]);
+    expect(root.textContent).toContain("The corpus calls 1.3.6.1.5.5.7 pkix, not pkcs.");
   });
 
   it("says so when the text is not an OID", () => {

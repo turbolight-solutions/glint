@@ -132,6 +132,8 @@ export interface OidResponse {
   module: ModuleRef | null;
   /** The `name(number)` labels documents write for this arc. */
   labels: LabelEvidence[];
+  /** Where the names written for the arcs disagree with the labels documents write for them. */
+  label_notes: string[];
   /** Why the OID is on the allowlist of wrong but deployed OIDs, when it is. */
   allowlisted: string | null;
   assignments: OidAssignment[];
@@ -302,7 +304,8 @@ export const api = {
   corpus: () => call<CorpusResponse>("corpus", []),
   modules: (q: string, offset: number, limit: number, signal?: AbortSignal) => call<ModulePage>("modules", [q, offset, limit], signal),
   module: (source: string, name: string, oid?: string) => call<ModuleDetail>("module", [source, name, oid ?? null]),
-  oid: (dotted: string) => call<OidResponse>("oid", [dotted]),
+  /** `names` are the names written for the arcs, with an empty string for a bare number. */
+  oid: (dotted: string, names: string[] = []) => call<OidResponse>("oid", [dotted, names]),
   complete: (text: string, name: string | null, format: FormatName | null, position: number, signal?: AbortSignal) =>
     call<CompletionResponse>("complete", [text, name, format, position], signal),
 };

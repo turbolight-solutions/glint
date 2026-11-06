@@ -16,7 +16,7 @@ describe("parseOid", () => {
   it("accepts names with numbers in parentheses", () => {
     const parsed = parseOid("iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5) pkix(7)");
     expect(parsed?.oid).toBe(PKIX);
-    expect(parsed?.warnings).toEqual([]);
+    expect(parsed?.arcs.map((a) => a.name)).toEqual(["iso", "identified-organization", "dod", "internet", "security", "mechanisms", "pkix"]);
   });
 
   it("accepts value notation in braces across lines, tabs and odd spaces", () => {
@@ -27,7 +27,6 @@ describe("parseOid", () => {
   it("accepts the multi-line braced form from RFC module headers", () => {
     const parsed = parseOid("{ iso(1) identified-organization(3) dod(6) internet(1)\n                    security(5) mechanisms(5) pkix(7) }");
     expect(parsed?.oid).toBe(PKIX);
-    expect(parsed?.warnings).toEqual([]);
   });
 
   it("accepts a bare list of arcs", () => {
@@ -38,14 +37,8 @@ describe("parseOid", () => {
     expect(parseOid("joint-iso-itu-t(2) 16 840 1 101 3 4 2 1234567890123456789012")?.oid).toBe("2.16.840.1.101.3.4.2.1234567890123456789012");
   });
 
-  it("warns about a wrong name", () => {
-    const parsed = parseOid("iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5) pkcs(7)");
-    expect(parsed?.oid).toBe(PKIX);
-    expect(parsed?.warnings).toEqual(["1.3.6.1.5.5.7 is pkix, not pkcs."]);
-  });
-
-  it("accepts alternate spellings of a name", () => {
-    expect(parseOid("iso(1) org(3) dod(6) internet(1) security(5) mechanisms(5) id-pkix(7)")?.warnings).toEqual([]);
+  it("keeps arcs written as bare numbers unnamed", () => {
+    expect(parseOid("iso(1) 3 6")?.arcs).toEqual([{ name: "iso", number: "1" }, { number: "3" }, { number: "6" }]);
   });
 
   it("rejects text that is not an OID", () => {

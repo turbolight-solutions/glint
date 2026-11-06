@@ -108,9 +108,10 @@ impl Glint {
             .map_err(|e| js_error(&e))
     }
 
-    pub fn oid(&self, dotted: &str) -> Result<String, JsError> {
+    /// Looks up `dotted`; `names` are the names written for its arcs, with an empty string for a bare number.
+    pub fn oid(&self, dotted: &str, names: Vec<String>) -> Result<String, JsError> {
         self.service
-            .oid(dotted)
+            .oid(dotted, &names)
             .map(|r| json(&r))
             .map_err(|e| js_error(&e))
     }

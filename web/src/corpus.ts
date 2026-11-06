@@ -234,21 +234,74 @@ export function createOidPage(root: HTMLElement): OidPage {
   const notes = h("div", { class: "mt-2" });
   const output = h("div", { class: "mt-3" });
   let loaded = "\u0000";
+  /** The names last typed for the arcs of an OID, to check against the corpus when that OID is looked up. */
+  let typed: { oid: string; names: string[] } | null = null;
 
   function showNotes(warnings: string[]): void {
     replace(notes, ...warnings.map((w) => h("div", { class: "small text-warning-emphasis" }, w)));
   }
 
+  /** Puts an example in the box and looks it up, as if it had been typed. */
+  function example(text: string): HTMLElement {
+    return h(
+      "button",
+      {
+        type: "button",
+        class: "btn btn-link p-0 align-baseline font-monospace small text-start",
+        onclick: () => {
+          input.value = text;
+          submit();
+        },
+      },
+      text,
+    );
+  }
+
+  /** What the page does, shown until something is looked up. */
+  function intro(): HTMLElement {
+    return h(
+      "div",
+      { class: "small", style: "max-width: 48rem" },
+      h("p", {}, "Find every place the corpus assigns an object identifier, the names documents give its arcs, and what is registered beneath it."),
+      h("h2", { class: "h6" }, "Formats you can paste"),
+      h(
+        "ul",
+        {},
+        h("li", {}, "Dotted digits: ", example("2.5.29.17")),
+        h(
+          "li",
+          {},
+          "ASN.1 value notation, with or without braces: ",
+          example("{ iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs-1(1) }"),
+          ". Each name is checked against the labels documents in the corpus write for that arc.",
+        ),
+        h("li", {}, "Arc numbers separated by spaces: ", example("1 3 6 1 5 5 7 3 1")),
+      ),
+      h("p", {}, "Line breaks and other whitespace are ignored, so text copied from an RFC works as is."),
+      h("h2", { class: "h6" }, "What the results show"),
+      h(
+        "ul",
+        { class: "mb-0" },
+        h("li", {}, h("strong", {}, "Assigned as"), ": each module that names this exact OID, such as id-ce-subjectAltName in X.509 and RFC 5280."),
+        h("li", {}, h("strong", {}, "Labelled as"), ": the name(number) forms documents write for the last arc, such as pkix(7)."),
+        h("li", {}, h("strong", {}, "Below this OID"), ": assignments under it; ", example("1.3.6.1.5.5.7"), " has hundreds."),
+        h("li", {}, "Links to the parent arc and, when the OID identifies a module, to that module."),
+        h("li", {}, "A note when the OID is a known mistake that is deployed anyway, such as ", example("2.2.840.10040.2"), " (holdInstruction)."),
+      ),
+    );
+  }
+
   /** An empty box looks up the example shown as its placeholder; text that is not an OID says so. */
   function submit(): void {
     const parsed = parseOid(input.value.trim() === "" ? EXAMPLE_OID : input.value);
+    showNotes([]);
     if (!parsed) {
-      showNotes([]);
+      typed = null;
       loaded = "\u0000";
       replace(output, message("That is not an OID. Use dotted digits or names with numbers in parentheses, such as iso(1) identified-organization(3).", "text-danger"));
       return;
     }
-    showNotes(parsed.warnings);
+    typed = { oid: parsed.oid, names: parsed.arcs.map((a) => a.name ?? "") };
     const hash = oidHash(parsed.oid);
     // Looking up what is already shown does not change the hash, so there is no event to wait for.
     if (window.location.hash === hash) void lookup(parsed.oid);
@@ -281,8 +334,10 @@ export function createOidPage(root: HTMLElement): OidPage {
     loaded = oid;
     replace(output, message("Loading…"));
     try {
-      const result = await api.oid(oid);
+      const names = typed?.oid === oid && typed.names.some((n) => n !== "") ? typed.names : [];
+      const result = await api.oid(oid, names);
       if (loaded !== oid) return;
+      showNotes(result.label_notes);
       replace(
         output,
         h(
@@ -351,12 +406,13 @@ export function createOidPage(root: HTMLElement): OidPage {
       output,
     ),
   );
+  replace(output, intro());
 
   return {
     show(oid) {
       if (!oid) {
         loaded = "\u0000";
-        replace(output);
+        replace(output, intro());
         showNotes([]);
         return;
       }

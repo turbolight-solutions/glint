@@ -167,11 +167,32 @@ fn corpus_queries_answer_like_the_old_api() {
     assert_eq!(page["modules"][0]["name"], "Base");
     let detail = json(&service.module("rfc1000", "Base", None).unwrap());
     assert!(detail["text"].as_str().unwrap().contains("id-one"));
-    let oid = json(&service.oid("1.3.6").unwrap());
+    let oid = json(&service.oid("1.3.6", &[]).unwrap());
     assert_eq!(oid["labels"][0]["label"], "dod");
     let info = json(&service.corpus_info());
     assert_eq!(info["build"], BUILD);
     assert_eq!(info["modules"], 1);
+}
+
+#[test]
+fn oid_lookup_checks_the_names_written_for_its_arcs() {
+    let service = service();
+    let names = |list: &[&str]| list.iter().map(|n| (*n).to_owned()).collect::<Vec<_>>();
+    let notes = |oid: &str, written: &[&str]| {
+        json(&service.oid(oid, &names(written)).unwrap())["label_notes"].clone()
+    };
+    assert_eq!(
+        notes(
+            "1.3.6.1",
+            &["iso", "identified-organization", "dod", "internet"]
+        ),
+        serde_json::json!([])
+    );
+    assert_eq!(notes("1.3.6.1", &["", "", "", ""]), serde_json::json!([]));
+    assert_eq!(
+        notes("1.3.6.1", &["iso", "", "dad", "internet"]),
+        serde_json::json!(["The corpus calls 1.3.6 dod, not dad."])
+    );
 }
 
 /// The completions with the cursor at `|` in `text`.
