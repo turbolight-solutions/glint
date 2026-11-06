@@ -314,7 +314,11 @@ fn a_constraint_after_the_closing_brace_continues_a_fragment() {
         "{:?}",
         fragment.text
     );
-    assert!(fragment.text.contains("JWTClaimNames ::="), "{:?}", fragment.text);
+    assert!(
+        fragment.text.contains("JWTClaimNames ::="),
+        "{:?}",
+        fragment.text
+    );
     assert!(!fragment.text.contains("Prose"), "{:?}", fragment.text);
 }
 
