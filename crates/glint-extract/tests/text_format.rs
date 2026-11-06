@@ -280,3 +280,64 @@ fn a_brace_on_its_own_line_continues_a_fragment() {
         fragment.text
     );
 }
+
+#[test]
+fn a_constraint_after_the_closing_brace_continues_a_fragment() {
+    // RFC 8226, Section 8: the constraint sits at the snippet's own indent,
+    // after comments that follow the closing brace.
+    let text = "\
+8.  JWT Claim Constraints Syntax
+
+   The JWT Claim Constraints certificate extension has the following
+   syntax:
+
+     JWTClaimConstraints ::= SEQUENCE {
+       mustInclude [0] JWTClaimNames OPTIONAL,
+       permittedValues [1] JWTClaimPermittedValuesList OPTIONAL }
+         -- If the claim name is present, the claim MUST contain one of
+         -- the listed values.
+     ( WITH COMPONENTS { ..., mustInclude PRESENT } |
+       WITH COMPONENTS { ..., permittedValues PRESENT } )
+
+     JWTClaimNames ::= SEQUENCE SIZE (1..MAX) OF JWTClaimName
+
+   (Prose in parentheses after the snippet is not part of it.)
+";
+    let extraction = run(text, Format::Text);
+    assert_eq!(extraction.blocks.len(), 1, "{:?}", extraction.blocks);
+    let fragment = extraction.blocks.first().unwrap();
+    assert_eq!(fragment.kind, BlockKind::Fragment);
+    assert!(
+        fragment
+            .text
+            .contains("WITH COMPONENTS { ..., permittedValues PRESENT } )"),
+        "{:?}",
+        fragment.text
+    );
+    assert!(fragment.text.contains("JWTClaimNames ::="), "{:?}", fragment.text);
+    assert!(!fragment.text.contains("Prose"), "{:?}", fragment.text);
+}
+
+#[test]
+fn a_wrapped_trailing_comment_in_parentheses_ends_a_fragment() {
+    // RFC 2560, Section 4.2.1: the end-of-line comment wraps onto a line
+    // that starts with `(`, which is prose, not a constraint.
+    let text = "\
+4.2.1  ASN.1 Specification of the OCSP Response
+
+   KeyHash ::= OCTET STRING -- SHA-1 hash of responder's public key
+   (excluding the tag and length fields)
+
+   SingleResponse ::= SEQUENCE {
+      certID                       CertID }
+";
+    let extraction = run(text, Format::Text);
+    assert!(
+        extraction
+            .blocks
+            .iter()
+            .all(|b| !b.text.contains("excluding")),
+        "{:?}",
+        extraction.blocks
+    );
+}

@@ -67,6 +67,11 @@ fn strip_comment(text: &str) -> &str {
         .unwrap_or(text)
 }
 
+/// Whether `text` is code followed by a `--` comment on the same line.
+fn has_trailing_comment(text: &str) -> bool {
+    text.contains("--") && !strip_comment(text).trim().is_empty()
+}
+
 fn indent_of(text: &str) -> usize {
     text.bytes()
         .take_while(|b| matches!(b, b' ' | b'\t'))
@@ -313,13 +318,25 @@ impl<'a> Document<'a> {
                     }
                     let content = self.content(index);
                     let indent = indent_of(content);
+                    // At depth 0, a line at the block's own indent continues it
+                    // when it starts the next assignment, opens the braces of
+                    // this one, or adds a constraint after the closing brace,
+                    // as in `( WITH COMPONENTS { ... } )` (RFC 8226). A `(`
+                    // after code with a trailing comment is more likely the
+                    // comment wrapped onto the next line (RFC 2560's
+                    // `-- SHA-1 hash ...` / `(excluding the tag ...)`).
+                    let opens_constraint = || {
+                        content.trim_start().starts_with('(')
+                            && !has_trailing_comment(self.content(last))
+                    };
                     let belongs = if depth > 0 {
                         indent >= base_indent
                     } else {
                         indent > base_indent
                             || (indent == base_indent
                                 && (self.patterns.assignment.is_match(content)
-                                    || content.trim_start().starts_with('{')))
+                                    || content.trim_start().starts_with('{')
+                                    || opens_constraint()))
                     };
                     if !belongs {
                         break;
