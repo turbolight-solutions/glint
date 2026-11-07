@@ -28,8 +28,26 @@ function initTheme(): void {
   });
 }
 
+function initFooter(): void {
+  const storage = safeStorage();
+  const footer = element("app-footer");
+  if (storage?.getItem("glint-footer-dismissed") === "1") {
+    footer.remove();
+    return;
+  }
+  element("footer-dismiss").addEventListener("click", () => {
+    footer.remove();
+    try {
+      storage?.setItem("glint-footer-dismissed", "1");
+    } catch {
+      // storage can be blocked; the footer stays hidden for this visit
+    }
+  });
+}
+
 function main(): void {
   initTheme();
+  initFooter();
   const views = {
     checker: element("view-checker"),
     corpus: element("view-corpus"),
