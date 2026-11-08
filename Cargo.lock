@@ -626,8 +626,10 @@ dependencies = [
  "glint-corpus",
  "glint-diag",
  "glint-extract",
+ "glint-sema",
  "glint-syntax",
  "reqwest",
+ "serde",
  "serde_json",
  "sha2",
 ]
