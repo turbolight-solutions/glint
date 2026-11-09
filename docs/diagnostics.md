@@ -8,7 +8,7 @@ Implemented so far (M1, M2, M3, M4, M5):
 | --- | --- | --- | --- | --- |
 | `E001` | error | Syntax error: an expected token or construct is missing. Glint's own code; the spec's table has no generic syntax error | policy | `crates/glint-syntax/tests/x680_syntax.rs` |
 | `E010` | error | Lexical error: leading zero in a number, name ending in a hyphen, bad `bstring`/`hstring` character, unterminated comment or string, unexpected character | X.680 12.2–12.3, 12.6, 12.8–12.14 | `tests/lexical.rs` |
-| `E011` | error | Reserved word used as a reference name. A warning when the parser runs with `ParseOptions::corpus()` and the word is reserved only by editions after X.208 | X.680 12.2.2, 12.38 | `tests/lexical.rs`, `tests/rfc5280_1988.rs` |
+| `E011` | error | Reserved word used as a reference name. A warning when the parser runs with `ParseOptions::corpus()` and the word is reserved only by editions after X.208; not reported on a definition `E123` allows | X.680 12.2.2, 12.38 | `tests/lexical.rs`, `tests/rfc5280_1988.rs` |
 | `E108` | error | `WITH SUCCESSORS` / `WITH DESCENDANTS` without an assigned identifier | X.680 13.16 f | `tests/x680_syntax.rs` |
 | `W136` | warning | Unknown encoding reference in an encoding prefix or `ENCODING-CONTROL` section (only `TAG`, `XER` and `PER` are defined by Annex E); ignored | X.680 31.3, 54, Annex E | `tests/x680_syntax.rs` |
 | `W137` | warning | XML value notation present; kept as an opaque node and not checked | X.680 16.2 | `tests/x680_syntax.rs` |
@@ -34,7 +34,7 @@ Implemented so far (M1, M2, M3, M4, M5):
 | `E120` | error | Tag clash among `CHOICE` alternatives or `SET` components, with the conceptually added element and open types | X.680 27.3, 29.3, 29.9, 52.7; X.681 14.2 b | `tests/tags.rs` |
 | `E121` | error | Tag clash in a run of `OPTIONAL`/`DEFAULT` `SEQUENCE` components, or between extension additions and following root components | X.680 25.6, 25.7, 52.7 | `tests/tags.rs` |
 | `E122` | error | `IMPLICIT` on an untagged `CHOICE`, open type or dummy reference | X.680 31.2.9; X.681 14.2 c | `tests/tags.rs` |
-| `E123` | error | `UNIVERSAL` class tag in a user module | X.680 31.2.5 | `tests/tags.rs` |
+| `E123` | error | `UNIVERSAL` class tag in a user module. Not reported (nor `E011` on its name) for a 1988-syntax definition of a type X.680 built in later, with that type's own tag (`UniversalString`, `BMPString` or `UTF8String ::= [UNIVERSAL 28\|30\|12] IMPLICIT OCTET STRING`), in the published modules of `LEGACY_STRING_MODULES` (RFC 5280's `PKIX1Explicit88` and five others); an error anywhere else | X.680 31.2.5, 8.4 | `tests/tags.rs` |
 | `E124` | error | Textually tagged extension addition under `AUTOMATIC TAGS` when the root is untagged | X.680 25.9, 29.4 | `tests/tags.rs` |
 | `E125` | error | `VersionNumber` misuse | X.680 25.16 | `tests/tags.rs` |
 | `E126` | error | `COMPONENTS OF` names a type that is not a `SEQUENCE` (or `SET` inside a set) | X.680 25.5, 27.2 | `tests/tags.rs` |

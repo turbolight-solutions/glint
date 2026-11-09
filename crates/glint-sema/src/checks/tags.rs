@@ -8,6 +8,7 @@ use super::Ctx;
 use super::components::{Flat, expand};
 use crate::finding::Finding;
 use crate::graph::{Found, ModuleGraph, ModuleId};
+use crate::legacy::{is_legacy_string_module, legacy_string_definition};
 use crate::model::SymbolKind;
 use crate::view::{
     ComponentList, Region, TagClass, builtin_by_text, builtin_text, child, defined_type_ref,
@@ -373,11 +374,31 @@ fn check_tagged(
     };
     let decl = read_tag(&tag_node);
     if decl.class == TagClass::Universal {
-        findings.push(Finding::new(
+        let legacy = node
+            .parent()
+            .filter(|parent| type_child(parent).as_ref() == Some(node))
+            .and_then(|parent| legacy_string_definition(&parent));
+        let finding = Finding::new(
             "E123",
             "UNIVERSAL class tags are reserved for types defined in X.680",
             loc(decl.range),
-        ));
+        );
+        match legacy {
+            // A published 1988 module's own definition of a type that X.680 built in later, with that type's tag,
+            // is correct for the syntax it keeps to.
+            Some(_) if is_legacy_string_module(&ctx.loaded.model.name, ctx.loaded.oid.as_ref()) => {}
+            Some(name) => findings.push(
+                finding
+                    .with_note(format!(
+                        "this is how 1988 modules defined {name}, which X.208 (1988) lacked; only the published \
+                         1988 modules that do it may"
+                    ))
+                    .with_help(format!(
+                        "delete this definition and use the built-in {name}, which has this tag"
+                    )),
+            ),
+            None => findings.push(finding),
+        }
     }
     let implicit = tokens(node)
         .into_iter()

@@ -211,12 +211,13 @@ impl<'c> ModuleGraph<'c> {
         let Some(file) = ast::SourceFile::cast(root.clone()) else {
             return Vec::new();
         };
+        let syntax_errors = crate::legacy::without_legacy_name_errors(parse.errors(), &root);
         self.units.push(SourceUnit {
             id: source,
             origin,
             text,
             root,
-            syntax_errors: parse.errors().to_vec(),
+            syntax_errors,
         });
         let mut ids = Vec::new();
         for node in file.modules() {

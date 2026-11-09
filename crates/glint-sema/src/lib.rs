@@ -8,6 +8,7 @@ mod checks;
 mod eval;
 mod finding;
 mod graph;
+mod legacy;
 mod model;
 mod names;
 mod sem;
@@ -22,6 +23,10 @@ pub use finding::{Finding, Loc, SourceId};
 pub use graph::{
     Found, LoadedModule, Lookup, Matched, ModuleGraph, ModuleId, Origin, Peeled, QualifiedError,
     ResolvedImport, SourceUnit,
+};
+pub use legacy::{
+    LEGACY_STRING_MODULES, LEGACY_STRING_TYPES, is_legacy_string_module, legacy_string_definition,
+    without_legacy_name_errors,
 };
 pub use model::{
     AssignedId, ExportsModel, ImportClause, ImportedSymbol, ModuleModel, Selection, Symbol,

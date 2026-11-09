@@ -180,7 +180,7 @@ pub fn check_document(
         if is_ignored(&parse.syntax()) {
             continue;
         }
-        for error in parse.errors() {
+        for error in glint_sema::without_legacy_name_errors(parse.errors(), &parse.syntax()) {
             let range = usize::from(error.range.start())..usize::from(error.range.end());
             let mapped = block
                 .original_range(range)
