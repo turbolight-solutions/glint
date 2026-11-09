@@ -1,5 +1,7 @@
 mod common;
 use common::*;
+use glint_diag::Severity;
+use glint_syntax::{ParseOptions, parse_source_with};
 
 fn plain(body: &str) -> String {
     format!("M DEFINITIONS ::= BEGIN {body} END")
@@ -234,6 +236,108 @@ fn implicit_tag_on_an_open_type_is_an_error() {
 fn universal_tag_in_a_user_module_is_an_error() {
     let text = plain("T ::= [UNIVERSAL 5] IMPLICIT INTEGER");
     assert_eq!(tag_codes(&text), ["E123"]);
+}
+
+fn pkix1_explicit_88(body: &str) -> String {
+    format!(
+        "PKIX1Explicit88 {{ iso(1) identified-organization(3) dod(6) internet(1) security(5) mechanisms(5) \
+         pkix(7) id-mod(0) id-pkix1-explicit(18) }} DEFINITIONS EXPLICIT TAGS ::= BEGIN {body} END"
+    )
+}
+
+fn e123(findings: &[glint_sema::Finding]) -> Vec<&glint_sema::Finding> {
+    findings.iter().filter(|f| f.code == "E123").collect()
+}
+
+// X.680 31.2.5; X.208 has no UniversalString, BMPString or UTF8String (RFC 5280's PKIX1Explicit88)
+#[test]
+fn a_published_1988_definition_of_a_later_built_in_string_type_is_not_reported() {
+    for (name, tag) in [
+        ("UniversalString", 28),
+        ("BMPString", 30),
+        ("UTF8String", 12),
+    ] {
+        let findings = check(&pkix1_explicit_88(&format!(
+            "{name} ::= [UNIVERSAL {tag}] IMPLICIT OCTET STRING"
+        )));
+        assert!(e123(&findings).is_empty(), "{name}: {findings:?}");
+    }
+}
+
+#[test]
+fn every_listed_module_may_define_the_string_types() {
+    for (module, arcs, _) in glint_sema::LEGACY_STRING_MODULES {
+        let oid: Vec<String> = arcs.iter().map(u128::to_string).collect();
+        let text = format!(
+            "{module} {{ {} }} DEFINITIONS ::= BEGIN \
+             UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING END",
+            oid.join(" ")
+        );
+        let findings = check(&text);
+        assert!(e123(&findings).is_empty(), "{module}: {findings:?}");
+    }
+}
+
+#[test]
+fn a_1988_string_type_definition_in_any_other_module_is_an_error() {
+    let body = "UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING";
+    for text in [
+        // no module identifier
+        plain(body),
+        // a module that is not listed
+        format!("New-2026 {{ 1 3 6 1 5 5 7 0 999 }} DEFINITIONS ::= BEGIN {body} END"),
+        // a listed name with another identifier
+        format!("PKIX1Explicit88 {{ 1 3 6 1 5 5 7 0 999 }} DEFINITIONS ::= BEGIN {body} END"),
+        // a listed identifier under another name
+        format!("Other {{ 1 3 6 1 5 5 7 0 18 }} DEFINITIONS ::= BEGIN {body} END"),
+    ] {
+        let findings = check(&text);
+        let e123 = e123(&findings);
+        assert_eq!(e123.len(), 1, "{text}: {findings:?}");
+        assert_eq!(e123[0].severity, Severity::Error, "{text}");
+        assert!(
+            e123[0]
+                .help
+                .iter()
+                .any(|h| h.contains("built-in UTF8String")),
+            "{text}: {:?}",
+            e123[0].help
+        );
+    }
+}
+
+// X.680 12.2.2: the name is a reserved word only in editions later than the module's
+#[test]
+fn the_reserved_word_warning_is_dropped_only_for_a_listed_definition() {
+    let body = "UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING \
+                BMPString ::= [UNIVERSAL 30] IMPLICIT INTEGER";
+    let e011 = |text: &str| {
+        let parse = parse_source_with(text, ParseOptions::corpus());
+        let kept = glint_sema::without_legacy_name_errors(parse.errors(), &parse.syntax());
+        kept.iter()
+            .filter(|e| e.code == "E011")
+            .map(|e| text[usize::from(e.range.start())..usize::from(e.range.end())].to_owned())
+            .collect::<Vec<_>>()
+    };
+    // the BMPString definition is not the 1988 form, so its name is still reported
+    assert_eq!(e011(&pkix1_explicit_88(body)), ["BMPString"]);
+    assert_eq!(e011(&plain(body)), ["UTF8String", "BMPString"]);
+}
+
+#[test]
+fn another_universal_tag_in_a_listed_module_is_still_an_error() {
+    for body in [
+        "UTF8String ::= [UNIVERSAL 4] IMPLICIT OCTET STRING",
+        "UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING (SIZE (1..10))",
+        "BMPString ::= [UNIVERSAL 30] IMPLICIT INTEGER",
+        "T ::= [UNIVERSAL 12] IMPLICIT OCTET STRING",
+        "S ::= SEQUENCE { u [UNIVERSAL 12] IMPLICIT OCTET STRING }",
+    ] {
+        let findings = check(&pkix1_explicit_88(body));
+        let e123 = e123(&findings);
+        assert_eq!(e123.len(), 1, "{body}: {findings:?}");
+        assert_eq!(e123[0].severity, Severity::Error, "{body}");
+    }
 }
 
 // X.680 25.16

@@ -134,3 +134,27 @@ fn pins_from_the_command_line_apply() {
     let report = check_document("d.asn", text, Format::Bare, &corpus, &options);
     assert!(!codes(&report).contains(&"E101"), "{:?}", codes(&report));
 }
+
+// X.680 12.2.2, 31.2.5; X.208 (1988) has no UTF8String
+#[test]
+fn a_published_1988_string_type_definition_is_not_reported() {
+    let body = "DEFINITIONS IMPLICIT TAGS ::= BEGIN\n UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING\nEND\n";
+    let check = |text: &str| {
+        check_document(
+            "d.asn",
+            text,
+            Format::Bare,
+            &EmptyCorpus::default(),
+            &CheckOptions::default(),
+        )
+    };
+    let listed = check(&format!(
+        "EnrollmentMessageSyntax {{ iso(1) identified-organization(3) dod(6) internet(1) security(5) \
+         mechanisms(5) pkix(7) id-mod(0) id-mod-cmc2002(23) }}\n{body}"
+    ));
+    assert_eq!(codes(&listed), Vec::<&str>::new());
+    let new = check(&format!("New-2026 {{ 1 3 6 1 5 5 7 0 999 }}\n{body}"));
+    assert_eq!(codes(&new), ["E011", "E123"]);
+    let e123 = new.diagnostics.iter().find(|d| d.code == "E123").unwrap();
+    assert_eq!(e123.severity, Severity::Error);
+}
