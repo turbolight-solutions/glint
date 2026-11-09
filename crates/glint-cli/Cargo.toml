@@ -18,12 +18,14 @@ glint-check = { workspace = true }
 glint-corpus = { workspace = true }
 glint-diag = { workspace = true }
 glint-extract = { workspace = true }
+glint-sema = { workspace = true }
 glint-syntax = { workspace = true }
 reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-serde_json = { workspace = true }

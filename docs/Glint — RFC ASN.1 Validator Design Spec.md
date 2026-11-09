@@ -409,7 +409,8 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 | --- | --- |
 | `glint check <files...>` | Extract, parse, check; format auto-detected from extension and content (`-` reads stdin) |
 | `glint check --draft draft-ietf-lamps-foo-03` | Fetch a draft from the IETF archive, then check |
-| `glint extract <file> -o <dir>` | Write each extracted module to `<dir>/<ModuleName>.asn` |
+| `glint extract <file> -o <dir>` | Write each extracted module to `<dir>/<ModuleName>.asn`; when the document defines several modules of one name, each goes to `<ModuleName>-<oid>.asn`, as overrides name them |
+| `glint extract <file> --format json [-o <dir>]` | List the blocks on stdout as JSON: kind, section, title, line range, and each module's name, dotted OID (`null` unless every arc is a number) and line range; with `-o`, also the file each module (and, with `--fragments`, each fragment) was written to, holding its text as the corpus build records it |
 | `glint corpus list [--filter <text>]` | List modules with RFC, OID and status |
 | `glint corpus show <name\|oid\|document>` | Print a module's text and metadata; a document is `rfc5280`, `X.509`, ... |
 | `glint corpus oid <dotted-oid>` | Who assigns this OID, and its parent arcs |
