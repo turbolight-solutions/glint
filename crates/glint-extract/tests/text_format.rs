@@ -345,3 +345,116 @@ fn a_wrapped_trailing_comment_in_parentheses_ends_a_fragment() {
         extraction.blocks
     );
 }
+
+#[test]
+fn a_closing_brace_before_definitions_keeps_the_header_lines_above() {
+    // RFC 4120 Section 5: the name and the opening brace on one line, the arcs below, `} DEFINITIONS` last.
+    let source = "\
+5.  Specifications
+
+   KerberosV5Spec2 {
+           iso(1) identified-organization(3) dod(6) internet(1)
+           security(5) kerberosV5(2) modules(4) krb5spec2(2)
+   } DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+   Int32 ::= INTEGER
+
+   END
+";
+    let extraction = run(source, Format::Text);
+    let found = modules(&extraction);
+    assert_eq!(module_names(&found), ["KerberosV5Spec2"]);
+    assert!(
+        found[0].text.starts_with("KerberosV5Spec2 {"),
+        "{}",
+        found[0].text
+    );
+}
+
+#[test]
+fn a_name_and_an_identifier_in_paragraphs_of_their_own_start_the_module() {
+    // RFC 5751 Appendix A and RFC 5055 Section 8.
+    let source = "\
+   The module follows.
+
+   SecureMimeMessageV3dot1
+
+     { iso(1) member-body(2) us(840) rsadsi(113549)
+            pkcs(1) pkcs-9(9) smime(16) modules(0) msg-v3dot1(21) }
+
+   DEFINITIONS IMPLICIT TAGS ::=
+
+   BEGIN
+
+   Version ::= INTEGER
+
+   END
+";
+    let extraction = run(source, Format::Text);
+    let found = modules(&extraction);
+    assert_eq!(module_names(&found), ["SecureMimeMessageV3dot1"]);
+    assert!(found[0].text.starts_with("SecureMimeMessageV3dot1"));
+    assert!(!found[0].text.contains("module follows"));
+}
+
+#[test]
+fn a_header_after_a_heading_does_not_reach_into_the_prose_above() {
+    // RFC 1142 Section 11.2.17: no space before the brace, and a heading right above.
+    let source = "\
+operation shall fail with the generation of the con
+straintViolation specific error.;
+11.2.17 ASN1 Modules
+ISO10589-ISIS{tbd1}
+DEFINITIONS ::= BEGIN
+T ::= INTEGER
+END
+";
+    let extraction = run(source, Format::Text);
+    let found = modules(&extraction);
+    assert_eq!(module_names(&found), ["ISO10589-ISIS"]);
+    assert!(found[0].text.starts_with("ISO10589-ISIS{tbd1}"));
+}
+
+#[test]
+fn a_running_header_without_a_title_is_page_furniture() {
+    // RFC 5544 puts only the RFC number and the date in its running header.
+    let source = "\
+   M { 1 2 } DEFINITIONS ::= BEGIN
+
+   A ::= INTEGER
+
+Housley                     Standards Track                    [Page 8]
+\u{0C}
+RFC 5544                                                   February 2010
+
+
+   B ::= BOOLEAN
+
+   END
+";
+    let extraction = run(source, Format::Text);
+    let found = modules(&extraction);
+    assert_eq!(module_names(&found), ["M"]);
+    assert!(!found[0].text.contains("RFC 5544"), "{}", found[0].text);
+    assert!(found[0].text.contains("B ::= BOOLEAN"));
+}
+
+#[test]
+fn an_appendix_heading_without_the_word_appendix_names_the_appendix() {
+    // RFC 4120 titles its module appendix `A.  ASN.1 module`.
+    let source = "\
+11.  Acknowledgements
+
+   Thanks.
+
+A.  ASN.1 module
+
+KerberosV5Spec2 { 1 3 6 1 5 2 4 2 } DEFINITIONS EXPLICIT TAGS ::= BEGIN
+Int32 ::= INTEGER
+END
+";
+    let extraction = run(source, Format::Text);
+    let found = modules(&extraction);
+    assert_eq!(module_names(&found), ["KerberosV5Spec2"]);
+    assert_eq!(section_label(found[0]).as_deref(), Some("Appendix A"));
+}
