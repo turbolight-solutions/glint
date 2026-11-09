@@ -69,6 +69,56 @@ fn extract_reports_findings_with_exit_status() {
 }
 
 #[test]
+fn a_quoted_module_header_is_listed_as_a_fragment_without_a_module() {
+    let dir = std::env::temp_dir().join(format!("glint-extract-cli-quote-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("rfc9995.txt");
+    std::fs::write(
+        &path,
+        "2.1.  Module Header
+
+   ERS { 1 3 6 1 5 5 11 0 2 1 }
+   DEFINITIONS IMPLICIT TAGS ::=
+   BEGIN
+
+Appendix A.  Module
+
+   ERS { 1 3 6 1 5 5 11 0 2 1 }
+   DEFINITIONS IMPLICIT TAGS ::=
+   BEGIN
+   Old ::= INTEGER
+   END
+",
+    )
+    .unwrap();
+    let output = glint().arg("extract").arg(&path).output().unwrap();
+    let listing = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = listing.lines().collect();
+    assert_eq!(lines.len(), 2, "{listing}");
+    assert!(lines[0].starts_with("fragment  "), "{listing}");
+    assert!(
+        lines[1].starts_with("module   ERS  Appendix A"),
+        "{listing}"
+    );
+    let out = dir.join("out");
+    let output = glint()
+        .arg("extract")
+        .arg(&path)
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let files: Vec<_> = std::fs::read_dir(&out)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(files, ["ERS.asn"], "only the module is written");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn extract_lists_blocks_as_json_with_module_names_identifiers_and_lines() {
     let path = fixture("text/rfc5280-appendix-a.txt");
     let output = glint()
