@@ -696,3 +696,50 @@ fn active_drafts_join_the_corpus_but_are_no_label_evidence() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+const STUB_FIRST_RFC: &str = "\
+5.  Specifications
+
+   Spec { 1 3 6 1 5 2 4 2 } DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+   -- rest of definitions here
+
+   END
+
+Appendix A.  ASN.1 Module
+
+   Spec { 1 3 6 1 5 2 4 2 } DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+   Int32 ::= INTEGER (-2147483648..2147483647)
+
+   END
+";
+
+#[test]
+fn a_full_module_is_kept_over_an_earlier_stub_that_also_parses() {
+    // RFC 4120 shows its header with a placeholder body in Section 5 and the module in Appendix A.
+    let dir = std::env::temp_dir().join(format!("glint-stub-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    std::fs::write(rfcs.join("rfc9997.txt"), STUB_FIRST_RFC).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-08"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let corpus = read_corpus(&dir);
+    let found = corpus.by_name("Spec");
+    assert_eq!(found.len(), 1);
+    let module = &corpus.modules()[found[0]];
+    assert!(module.text.contains("Int32"), "{}", module.text);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

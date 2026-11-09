@@ -528,7 +528,9 @@ fn apply_overrides(
     Ok(())
 }
 
-/// Keeps one record per identity, preferring the one that parses without syntax errors, then the first.
+/// Keeps one record per identity, preferring the one that parses without syntax errors, then among those the
+/// longest, then the first. A document may quote a module's header with a placeholder body before the full module
+/// (RFC 4120 Section 5 and Appendix A), and both parse; among copies with errors, length says nothing.
 ///
 /// A module shown twice with the same text is nothing to report. One shown twice with different text (a header
 /// stub beside the full module, or two modules that really are different) is named, so a curator can tell
@@ -538,6 +540,7 @@ fn one_per_identity(mut made: Vec<Made>) -> (Vec<ModuleRecord>, Vec<String>) {
         identity(&a.record)
             .cmp(&identity(&b.record))
             .then(b.syntax_clean.cmp(&a.syntax_clean))
+            .then(clean_len(b).cmp(&clean_len(a)))
     });
     let mut kept: Vec<Made> = Vec::with_capacity(made.len());
     let mut notes = Vec::new();
@@ -552,6 +555,15 @@ fn one_per_identity(mut made: Vec<Made>) -> (Vec<ModuleRecord>, Vec<String>) {
         }
     }
     (kept.into_iter().map(|m| m.record).collect(), notes)
+}
+
+/// The text length of a record that parses cleanly, else 0.
+fn clean_len(made: &Made) -> usize {
+    if made.syntax_clean {
+        made.record.text.len()
+    } else {
+        0
+    }
 }
 
 fn duplicate_note(kept: &ModuleRecord, dropped: &ModuleRecord) -> String {

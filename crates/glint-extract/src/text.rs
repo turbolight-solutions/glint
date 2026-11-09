@@ -14,20 +14,26 @@ struct Patterns {
     heading_number: Regex,
     heading_appendix: Regex,
     heading_sub_appendix: Regex,
+    heading_top_appendix: Regex,
     toc_dots: Regex,
     definitions: Regex,
     header_rest: Regex,
     end_line: Regex,
     assignment: Regex,
+    module_reference: Regex,
 }
 
 static PATTERNS: LazyLock<Option<Patterns>> = LazyLock::new(|| {
     Some(Patterns {
         footer: Regex::new(r"\[Page \d+\]\s*$").ok()?,
-        header: Regex::new(r"^(?:RFC \d+|Internet-Draft)\s{2,}\S.*\S\s{2,}[A-Z][a-z]+ \d{4}\s*$").ok()?,
+        // The title between the document name and the date may be missing (RFC 5544).
+        header: Regex::new(r"^(?:RFC \d+|Internet-Draft)(?:\s{2,}\S.*\S)?\s{2,}[A-Z][a-z]+ \d{4}\s*$").ok()?,
         heading_number: Regex::new(r"^(\d+(?:\.\d+)*)\.?\s+([A-Z].*\S)\s*$").ok()?,
         heading_appendix: Regex::new(r"^Appendix\s+([A-Z](?:\.\d+)*)\.?\s+(\S.*\S)\s*$").ok()?,
         heading_sub_appendix: Regex::new(r"^([A-Z](?:\.\d+)+)\.?\s+([A-Z].*\S)\s*$").ok()?,
+        // `A.  ASN.1 module` (RFC 4120): an appendix without the word "Appendix"; the dot is required, so that a
+        // line starting with a one-letter word is not taken for one.
+        heading_top_appendix: Regex::new(r"^([A-Z])\.\s+([A-Z].*\S)\s*$").ok()?,
         toc_dots: Regex::new(r"\.{4,}").ok()?,
         definitions: Regex::new(r"\bDEFINITIONS\b").ok()?,
         header_rest: Regex::new(
@@ -36,6 +42,8 @@ static PATTERNS: LazyLock<Option<Patterns>> = LazyLock::new(|| {
         .ok()?,
         end_line: Regex::new(r"^\s*END\s*$").ok()?,
         assignment: Regex::new(r"^\s*(?:[A-Za-z][\w-]*\s*::=|[a-z][\w-]*\s+[A-Z][^:]*::=)").ok()?,
+        // X.680 12.5 modulereference: the characters of a typereference (12.2)
+        module_reference: Regex::new(r"^[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*$").ok()?,
     })
 });
 
@@ -126,59 +134,102 @@ impl<'a> Document<'a> {
     }
 
     /// The line where the module whose `DEFINITIONS` keyword is on line `index` begins: the module reference and
-    /// object identifier come before it, possibly in an earlier paragraph.
+    /// object identifier (X.680 13.1) come before it, on the same line, on the lines just above, or in earlier
+    /// paragraphs, as in `Name {` / arcs / `} DEFINITIONS` (RFC 4120) or `Name` / blank / `{ arcs }` / blank /
+    /// `DEFINITIONS` (RFC 5751). `index` itself when no header is found, so the block starts at the keyword.
     fn module_start(&self, index: usize, prefix: &str) -> usize {
-        if !prefix.trim().is_empty() {
-            let mut start = index;
-            let mut depth = brace_balance(prefix);
-            while depth > 0 && start > 0 {
-                let Some(previous) = start.checked_sub(1) else {
-                    break;
-                };
-                if self.class(previous) != Class::Content {
-                    break;
-                }
-                start = previous;
-                depth = depth.saturating_add(brace_balance(self.content(start)));
-            }
-            return start;
+        if prefix.trim().is_empty() {
+            return self
+                .previous_code(index)
+                .and_then(|last| self.header_start(last, 0))
+                .unwrap_or(index);
         }
-        let mut previous = self.previous_content(index);
+        let depth = brace_balance(prefix);
+        if depth >= 0 {
+            // `Name { arcs } DEFINITIONS` or `Name DEFINITIONS`: the whole header is on this line.
+            return index;
+        }
+        self.header_start(index, depth).unwrap_or(index)
+    }
+
+    /// The previous content line before `before` that holds code, skipping lines that are only a comment.
+    fn previous_code(&self, before: usize) -> Option<usize> {
+        let mut previous = self.previous_content(before);
         while let Some(line) = previous {
             if !strip_comment(self.content(line)).trim().is_empty() {
-                break;
+                return Some(line);
             }
             previous = self.previous_content(line);
         }
-        let Some(last) = previous else {
-            return index;
-        };
-        let mut first = last;
-        while first > 0 && last.saturating_sub(first) < 8 {
-            let Some(previous) = first.checked_sub(1) else {
-                break;
-            };
-            if self.class(previous) != Class::Content || self.is_end_line(previous) {
-                break;
-            }
-            first = previous;
-        }
-        let paragraph: Vec<&str> = (first..=last)
-            .map(|i| strip_comment(self.content(i)).trim())
-            .collect();
-        let starts_with_name = paragraph
-            .first()
-            .is_some_and(|line| line.starts_with(|c: char| c.is_ascii_uppercase()));
-        let ends_properly = paragraph
-            .last()
-            .is_some_and(|line| line.ends_with('}') || !line.contains(char::is_whitespace));
-        let not_end = !self.is_end_line(first);
-        let free = (first..=last).all(|i| self.is_free_content(i));
-        if starts_with_name && ends_properly && not_end && free {
-            first
+        None
+    }
+
+    /// The first line of a module header whose last line before `DEFINITIONS` is `last`. A negative `depth` is
+    /// the brace balance of the text before `DEFINITIONS` on `last` (`} DEFINITIONS`); otherwise `last` is a line
+    /// of its own above the keyword. Walks back to the `{` that opens the object identifier, across blank lines
+    /// and page furniture, then to the module reference: the text before that `{`, or a lone reference on the
+    /// previous line. The layouts, as RFCs write them:
+    /// - `Name {` / arcs / `} DEFINITIONS ...` (RFC 4120 Section 5);
+    /// - `Name { arcs` / `arcs }` / blank / `DEFINITIONS ...` (RFC 5280 Appendix A.1);
+    /// - `Name` / blank / `{ arcs }` / blank / `DEFINITIONS ...` (RFC 5751 Appendix A, RFC 5055 Section 8);
+    /// - `Name` / blank / `DEFINITIONS ...`, with no identifier (RFC 3163 Appendix A.1).
+    fn header_start(&self, last: usize, depth: i32) -> Option<usize> {
+        /// Lines an object identifier may span; RFC headers use at most five.
+        const MAX_OID_LINES: usize = 12;
+        let mut depth = if depth < 0 {
+            depth
         } else {
-            index
+            let code = strip_comment(self.content(last)).trim();
+            if self.patterns.module_reference.is_match(code) {
+                // `Name` alone, then `DEFINITIONS` with no object identifier.
+                return self.usable_header(last, last);
+            }
+            if !code.ends_with('}') {
+                return None;
+            }
+            brace_balance(code)
+        };
+        let mut line = last;
+        let mut spanned = 1_usize;
+        while depth < 0 {
+            if spanned >= MAX_OID_LINES {
+                return None;
+            }
+            line = self.previous_content(line)?;
+            spanned = spanned.saturating_add(1);
+            if self.is_end_line(line) || self.is_heading(line) {
+                return None;
+            }
+            depth = depth.saturating_add(brace_balance(self.content(line)));
         }
+        let opening = strip_comment(self.content(line));
+        let before_brace = opening.split('{').next().unwrap_or_default().trim();
+        // The reference is the last word: RFC 2156 writes `MIXER Definitions { ... }`, which the parser reads as
+        // a module named `Definitions`.
+        let reference = before_brace.split_whitespace().last().unwrap_or_default();
+        if before_brace.starts_with(|c: char| c.is_ascii_uppercase())
+            && self.patterns.module_reference.is_match(reference)
+        {
+            return self.usable_header(line, last);
+        }
+        if !before_brace.is_empty() {
+            return None;
+        }
+        let name = self.previous_code(line)?;
+        let reference = strip_comment(self.content(name)).trim();
+        if self.patterns.module_reference.is_match(reference) {
+            self.usable_header(name, last)
+        } else {
+            None
+        }
+    }
+
+    /// `first` when the header lines `first..=last` are free content, and `first` is not an `END` or a heading.
+    fn usable_header(&self, first: usize, last: usize) -> Option<usize> {
+        let free = (first..=last)
+            .filter(|&i| self.class(i) == Class::Content)
+            .all(|i| self.is_free_content(i));
+        (free && !self.is_end_line(first) && !self.is_heading(first)).then_some(first)
     }
 
     fn is_end_line(&self, index: usize) -> bool {
@@ -438,6 +489,8 @@ fn heading_of(patterns: &Patterns, content: &str) -> Option<(SectionRef, String)
     let (captures, appendix) = if let Some(c) = patterns.heading_appendix.captures(content) {
         (c, true)
     } else if let Some(c) = patterns.heading_sub_appendix.captures(content) {
+        (c, true)
+    } else if let Some(c) = patterns.heading_top_appendix.captures(content) {
         (c, true)
     } else {
         (patterns.heading_number.captures(content)?, false)
