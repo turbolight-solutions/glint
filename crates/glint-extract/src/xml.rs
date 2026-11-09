@@ -1,13 +1,79 @@
 use std::ops::Range;
+use std::sync::LazyLock;
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
+use regex::Regex;
 
 use crate::block::BlockKind;
 use crate::block::{Origin, SectionRef};
 use crate::classify::{block_kind, looks_like_asn1};
 use crate::sink::{Candidate, Marking, Sink};
-use crate::source_map::Assembler;
+use crate::source_map::{Assembler, Mapped};
+
+/// A module reference and object identifier with nothing else (X.680 13.1), once comments are removed: the head
+/// of a module whose `DEFINITIONS ... BEGIN` the author put in the next `<sourcecode>` (RFC 9286 Appendix A).
+static HEADER_ONLY: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^\s*[A-Z][A-Za-z0-9-]*\s*(?:\{[^{}]*\})?\s*$").ok());
+
+static COMMENT: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"--[^\n]*").ok());
+
+fn is_header_only(text: &str) -> bool {
+    let (Some(header), Some(comment)) = (HEADER_ONLY.as_ref(), COMMENT.as_ref()) else {
+        return false;
+    };
+    header.is_match(&comment.replace_all(text, ""))
+}
+
+/// A captured ASN.1 element, before it is handed to the [`Sink`].
+struct Captured {
+    candidate: Candidate,
+    marking: Marking,
+}
+
+impl Captured {
+    /// Whether `next` continues this element's module header: this one holds only the module reference and
+    /// object identifier, and `next`, in the same section, starts with `DEFINITIONS`.
+    fn continues_into(&self, next: &Self) -> bool {
+        self.candidate.origin.section == next.candidate.origin.section
+            && is_header_only(&self.candidate.text)
+            && next.candidate.text.trim_start().starts_with("DEFINITIONS")
+    }
+
+    /// This element's text followed by `next`'s, as one block spanning both elements.
+    fn join(self, next: Self) -> Self {
+        let mut assembler = Assembler::default();
+        let first = &self.candidate;
+        assembler.push_slice(
+            Mapped {
+                text: &first.text,
+                map: &first.map,
+            },
+            0..first.text.len(),
+        );
+        if !first.text.ends_with('\n') {
+            let at = first.origin.span.end;
+            assembler.push_mapped("\n", at..at);
+        }
+        let second = &next.candidate;
+        assembler.push_slice(
+            Mapped {
+                text: &second.text,
+                map: &second.map,
+            },
+            0..second.text.len(),
+        );
+        let (text, map) = assembler.finish();
+        let origin = Origin {
+            span: first.origin.span.start..second.origin.span.end,
+            ..first.origin.clone()
+        };
+        Self {
+            candidate: Candidate { text, map, origin },
+            marking: next.marking,
+        }
+    }
+}
 
 /// What an `<sourcecode>` or `<artwork>` element holds, judged by its `type` attribute.
 enum Typing {
@@ -221,6 +287,8 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
     let mut numbering = Numbering::default();
     let mut capture: Option<Capture> = None;
     let mut name_text: Option<String> = None;
+    // A header-only element waits here for the element that may continue it.
+    let mut pending: Option<Captured> = None;
 
     loop {
         let before = position(&reader);
@@ -291,8 +359,21 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
                 let name = end.local_name().as_ref().to_owned();
                 if capture.as_ref().is_some_and(|c| c.element == name)
                     && let Some(done) = capture.take()
+                    && let Some(captured) = finish_capture(source, &done, before, after, sink)
                 {
-                    finish_capture(source, &done, before, after, sink);
+                    let captured = match pending.take() {
+                        Some(header) if header.continues_into(&captured) => header.join(captured),
+                        Some(other) => {
+                            sink.accept(other.candidate, other.marking);
+                            captured
+                        }
+                        None => captured,
+                    };
+                    if is_header_only(&captured.candidate.text) {
+                        pending = Some(captured);
+                    } else {
+                        sink.accept(captured.candidate, captured.marking);
+                    }
                 }
                 if name == "name"
                     && let Some(title) = name_text.take()
@@ -303,6 +384,9 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
             }
             _ => {}
         }
+    }
+    if let Some(header) = pending {
+        sink.accept(header.candidate, header.marking);
     }
     if let Some(unfinished) = capture {
         sink.note(
@@ -356,13 +440,14 @@ fn close_element(name: &str, stack: &mut Vec<Frame>, sections: &mut Vec<SectionI
     sections.truncate(sections.len().saturating_sub(closed_sections));
 }
 
+/// The ASN.1 candidate of a closed element, or `None` when the element is not ASN.1.
 fn finish_capture(
     source: &str,
     capture: &Capture,
     end_start: usize,
     end_after: usize,
     sink: &mut Sink,
-) {
+) -> Option<Captured> {
     let content = capture.content_start..end_start.max(capture.content_start);
     let span = capture.tag_start..end_after;
     let marking = match typing(capture.type_attr.as_deref()) {
@@ -379,7 +464,7 @@ fn finish_capture(
             }
             Marking::Declared
         }
-        Typing::Other => return,
+        Typing::Other => return None,
         Typing::Missing => Marking::Guessed { warn: true },
     };
 
@@ -387,7 +472,7 @@ fn finish_capture(
     if capture.element == "artwork" && marking != Marking::Declared {
         let is_module = looks_like_asn1(&text) && block_kind(&text) != BlockKind::Fragment;
         if !is_module {
-            return;
+            return None;
         }
     }
     let origin = Origin {
@@ -400,5 +485,8 @@ fn finish_capture(
         title: capture.section.as_ref().and_then(|info| info.title.clone()),
         span,
     };
-    sink.accept(Candidate { text, map, origin }, marking);
+    Some(Captured {
+        candidate: Candidate { text, map, origin },
+        marking,
+    })
 }

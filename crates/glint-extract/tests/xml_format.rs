@@ -250,3 +250,42 @@ fn multibyte_text_maps_correctly() {
     let extraction = run(source, Format::Xml);
     assert_eq!(extraction.blocks.len(), 1);
 }
+
+#[test]
+fn a_module_header_in_its_own_sourcecode_joins_the_next_one() {
+    // RFC 9286 Appendix A puts the name and identifier in one element and `DEFINITIONS ... END` in the next.
+    let source = r#"<rfc><back><section><name>ASN.1 Module</name>
+<sourcecode type="asn.1">
+    RPKIManifest { iso(1) member-body(2) us(840) rsadsi(113549)
+                   pkcs(1) pkcs9(9) smime(16) mod(0) 60 }
+</sourcecode>
+<sourcecode type="asn.1">
+DEFINITIONS EXPLICIT TAGS ::=
+   BEGIN
+   Manifest ::= SEQUENCE { a INTEGER }
+   END
+</sourcecode>
+</section></back></rfc>"#;
+    let extraction = run(source, Format::Xml);
+    assert_eq!(module_names(&modules(&extraction)), ["RPKIManifest"]);
+    assert_eq!(extraction.blocks.len(), 1);
+    assert!(extraction.notes.is_empty(), "{:?}", extraction.notes);
+    let block = &extraction.blocks[0];
+    let original = &source[block.origin.span.clone()];
+    assert!(original.starts_with("<sourcecode") && original.ends_with("</sourcecode>"));
+}
+
+#[test]
+fn a_header_only_sourcecode_with_nothing_after_it_is_still_reported() {
+    let source = r#"<rfc><middle><section><sourcecode type="asn.1">
+    Lonely { 1 2 3 }
+</sourcecode></section><section><sourcecode type="asn.1">
+DEFINITIONS ::= BEGIN END
+</sourcecode></section></middle></rfc>"#;
+    let extraction = run(source, Format::Xml);
+    assert_eq!(
+        codes(&extraction),
+        ["W201"],
+        "the header is not joined across sections"
+    );
+}
