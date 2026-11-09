@@ -337,14 +337,59 @@ fn one_rfc_can_define_two_modules_with_the_same_name() {
         report.contains(ERS_88) && report.contains(ERS_97),
         "{report}"
     );
-    for oid in [ERS_88, ERS_97] {
-        assert!(
-            report.contains(&format!(
-                "ERS ({oid}) is defined twice in rfc9998 with different text"
-            )),
-            "the dropped header is named in the report: {report}"
-        );
-    }
+    assert!(
+        !report.contains("is defined twice"),
+        "the headers quoted in sections 2.1 and 2.2 are fragments, not second definitions: {report}"
+    );
+}
+
+/// A module given twice with different bodies, the first a stub, as RFC 4120 Section 5 and Appendix A do.
+const STUB_TWICE_RFC: &str =
+    "Request for Comments: 9996                                   Test Author
+Category: Standards Track                                   January 2026
+
+
+                       Stub and Module
+
+5.  Specifications
+
+   Spec { 1 3 6 1 5 2 4 2 } DEFINITIONS EXPLICIT TAGS ::= BEGIN
+   -- rest of definitions here
+   END
+
+Appendix A.  ASN.1 Module
+
+   Spec { 1 3 6 1 5 2 4 2 } DEFINITIONS EXPLICIT TAGS ::= BEGIN
+   Thing ::= INTEGER
+   END
+";
+
+#[test]
+fn a_module_defined_twice_with_different_text_is_named_in_the_report() {
+    let dir = std::env::temp_dir().join(format!("glint-stub-twice-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    std::fs::write(rfcs.join("rfc9996.txt"), STUB_TWICE_RFC).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-04"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = std::fs::read_to_string(dir.join("out/report.md")).unwrap();
+    assert!(
+        report.contains("Spec (1.3.6.1.5.2.4.2) is defined twice in rfc9996 with different text"),
+        "{report}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
