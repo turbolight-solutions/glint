@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -343,10 +344,17 @@ fn list_blocks_json(
 }
 
 /// Write each block's modules (and, with `fragments`, each fragment) to `dir`; returns the files written, block by
-/// block.
+/// block. A module is written to `<Name>.asn`. When the document defines several modules of one name (RFC 4998
+/// defines `ERS` for 1988 and for 1997 syntax), each is written to `<Name>-<oid>.asn`, as overrides name them, so
+/// the file says which module it holds whatever the order in the document.
 fn write_modules(dir: &Path, blocks: &[Block], fragments: bool) -> Result<Vec<Written>, String> {
     std::fs::create_dir_all(dir)
         .map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
+    let mut defined: HashMap<String, usize> = HashMap::new();
+    for module in blocks.iter().flat_map(modules_of) {
+        let count = defined.entry(module_name(&module)).or_default();
+        *count = count.saturating_add(1);
+    }
     let mut used: Vec<String> = Vec::new();
     let mut fragment_count = 0_u32;
     let mut written = Vec::with_capacity(blocks.len());
@@ -361,10 +369,16 @@ fn write_modules(dir: &Path, blocks: &[Block], fragments: bool) -> Result<Vec<Wr
             }
         } else {
             for module in modules {
-                let name = module.name.unwrap_or_else(|| "module".to_owned());
+                let name = module_name(&module);
+                let stem = match module_oid(module.text) {
+                    Some(oid) if defined.get(&name).is_some_and(|&n| n > 1) => {
+                        format!("{name}-{oid}")
+                    }
+                    _ => name,
+                };
                 files
                     .modules
-                    .push(write_file(dir, &name, module.text, &mut used)?);
+                    .push(write_file(dir, &stem, module.text, &mut used)?);
             }
         }
         written.push(files);
@@ -372,8 +386,13 @@ fn write_modules(dir: &Path, blocks: &[Block], fragments: bool) -> Result<Vec<Wr
     Ok(written)
 }
 
+/// The name a module's file is named after.
+fn module_name(module: &Module<'_>) -> String {
+    module.name.clone().unwrap_or_else(|| "module".to_owned())
+}
+
 /// Write `body` without trailing whitespace, plus a newline, to `<dir>/<name>.asn`, or `<name>-<n>.asn` when that
-/// name is taken; returns the file name.
+/// name is taken (two modules of one name without a numeric OID, or with the same one); returns the file name.
 fn write_file(
     dir: &Path,
     name: &str,

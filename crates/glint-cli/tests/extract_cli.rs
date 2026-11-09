@@ -164,16 +164,47 @@ fn json_with_an_output_directory_names_the_file_of_each_module() {
         .iter()
         .map(|m| (m["oid"].as_str().unwrap(), m["file"].as_str().unwrap()))
         .collect();
-    assert_eq!(files, [("1.2.3", "T.asn"), ("1.2.4", "T-2.asn")]);
+    assert_eq!(files, [("1.2.3", "T-1.2.3.asn"), ("1.2.4", "T-1.2.4.asn")]);
     assert_eq!(
-        std::fs::read_to_string(out.join("T.asn")).unwrap(),
+        std::fs::read_to_string(out.join("T-1.2.3.asn")).unwrap(),
         "T { 1 2 3 } DEFINITIONS ::= BEGIN A ::= INTEGER END\n",
         "trimmed at both ends, as the corpus build records it"
     );
     assert_eq!(
-        std::fs::read_to_string(out.join("T-2.asn")).unwrap(),
+        std::fs::read_to_string(out.join("T-1.2.4.asn")).unwrap(),
         "T { 1 2 4 } DEFINITIONS ::= BEGIN B ::= BOOLEAN END\n"
     );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn twins_without_a_numeric_oid_are_numbered() {
+    let dir = std::env::temp_dir().join(format!("glint-extract-twins-tbd-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("twins.asn");
+    std::fs::write(
+        &path,
+        "  T { 1 2 TBD } DEFINITIONS ::= BEGIN A ::= INTEGER END\n\n  T { 1 2 TBD } DEFINITIONS ::= BEGIN B ::= BOOLEAN END\n",
+    )
+    .unwrap();
+    let out = dir.join("out");
+    let output = glint()
+        .args(["extract", "--format", "json", "-o"])
+        .arg(&out)
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let listing: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let files: Vec<&str> = listing["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|block| block["modules"].as_array().unwrap())
+        .map(|m| m["file"].as_str().unwrap())
+        .collect();
+    assert_eq!(files, ["T.asn", "T-2.asn"]);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
