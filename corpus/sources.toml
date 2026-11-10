@@ -6,10 +6,11 @@
 # the bundle holds a module of the body.
 #
 # A `[[module]]` is one downloadable module. `document` is the specification it is published in (`X.509`) and
-# `edition` its edition; the module's `oid` is its definitive identifier and identifies the entry: editions of a
-# specification reuse the module name and change the OID, so list each edition you want as its own entry. A module
-# whose header gives no OID (X.680 13.1 allows that) is listed without `oid` and identified by `document` and
-# `name`; only imports that give no OID take it.
+# `edition` its edition, as the body dates it: ITU-T's approval date as `MM/YYYY`, followed by any corrigendum or
+# amendment the file includes (`07/1994, Cor. 1 07/1995`). The module's `oid` is its definitive identifier and
+# identifies the entry: editions of a specification reuse the module name and change the OID, so list each edition
+# you want as its own entry. A module whose header gives no OID (X.680 13.1 allows that) is listed without `oid` and
+# identified by `document` and `name`; only imports that give no OID take it.
 # `url` must give the module itself (ITU-T's .asn files, not their HTML renderings): a download that is not a module
 # whose identifier is that `oid` (without `oid`: a module of that name with no OID) fails the build, as does one
 # that fails.
@@ -26,6 +27,477 @@ notice = "Modules from ITU-T Recommendations are the property of ITU-T and are i
 
 [[module]]
 body = "itu-t"
+document = "T.101"
+edition = "11/1994"
+name = "Videotex-Coding-Attributes"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t101/1994/Videotex-Coding-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Colour-Attributes"
+oid = "2.8.1.5.14"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Colour-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Default-Value-Lists"
+oid = "2.8.1.5.11"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Default-Value-Lists.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Document-Profile-Descriptor"
+oid = "2.8.1.5.6"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Document-Profile-Descriptor.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Identifiers-and-Expressions"
+oid = "2.8.1.5.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Identifiers-and-Expressions.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Interchange-Data-Elements"
+oid = "2.8.1.5.5"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Interchange-Data-Elements.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Layout-Descriptors"
+oid = "2.8.1.5.8"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Layout-Descriptors.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Logical-Descriptors"
+oid = "2.8.1.5.9"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Logical-Descriptors.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Protected-Part-Descriptors"
+oid = "2.8.1.5.13"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Protected-Part-Descriptors.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Style-Descriptors"
+oid = "2.8.1.5.10"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Style-Descriptors.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.415"
+edition = "03/1993"
+name = "Text-Units"
+oid = "2.8.1.5.12"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t415/1993/Text-Units.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.416"
+edition = "03/1993"
+name = "Character-Coding-Attributes"
+oid = "2.8.1.6.3"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t416/1993/Character-Coding-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.416"
+edition = "03/1993"
+name = "Character-Presentation-Attributes"
+oid = "2.8.1.6.2"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t416/1993/Character-Presentation-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.416"
+edition = "03/1993"
+name = "Character-Profile-Attributes"
+oid = "2.8.1.6.4"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t416/1993/Character-Profile-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.417"
+edition = "03/1993"
+name = "Raster-Gr-Coding-Attributes"
+oid = "2.8.1.7.3"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t417/1993/Raster-Gr-Coding-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.417"
+edition = "03/1993"
+name = "Raster-Gr-Presentation-Attributes"
+oid = "2.8.1.7.2"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t417/1993/Raster-Gr-Presentation-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.417"
+edition = "03/1993"
+name = "Raster-Gr-Profile-Attributes"
+oid = "2.8.1.7.4"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t417/1993/Raster-Gr-Profile-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.418"
+edition = "03/1993"
+name = "Geo-Gr-Coding-Attributes"
+oid = "2.8.1.8.3"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t418/1993/Geo-Gr-Coding-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.418"
+edition = "03/1993"
+name = "Geo-Gr-Presentation-Attributes"
+oid = "2.8.1.8.2"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t418/1993/Geo-Gr-Presentation-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.418"
+edition = "03/1993"
+name = "Geo-Gr-Profile-Attributes"
+oid = "2.8.1.8.4"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t418/1993/Geo-Gr-Profile-Attributes.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.422"
+edition = "08/1995"
+name = "External-References"
+oid = "2.8.1.12.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t422/1995/External-References.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.422"
+edition = "08/1995"
+name = "Location-Expressions"
+oid = "2.8.1.12.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t422/1995/Location-Expressions.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.422"
+edition = "08/1995"
+name = "Subprofiles"
+oid = "2.8.1.12.2"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t422/1995/Subprofiles.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.424"
+edition = "07/1996"
+name = "Link-Descriptors"
+oid = "2.8.1.14.3"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t424/1996/Link-Descriptors.asn"
+
+[[module]]
+body = "itu-t"
+document = "T.424"
+edition = "07/1996"
+name = "Temporal-Relationships"
+oid = "2.8.1.14.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/t/t424/1996/Temporal-Relationships.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.227"
+edition = "04/1995"
+name = "ACSE-1"
+oid = "2.2.0.0.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x227/1995/ACSE-1.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.228"
+edition = "11/1988"
+name = "Reliable-Transfer-APDU"
+oid = "2.3.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x228/1988/Reliable-Transfer-APDU.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.402"
+edition = "06/1999"
+name = "MHSObjectIdentifiers"
+oid = "2.6.5.0.0.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x402/1999/MHSObjectIdentifiers.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTAAbstractService"
+oid = "2.6.3.0.2.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTAAbstractService.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTSAbstractService"
+oid = "2.6.3.0.1.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSAbstractService.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTSAbstractService88"
+oid = "2.6.3.0.1.1988"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSAbstractService88.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTSObjectIdentifiers"
+oid = "2.6.3.0.0.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSObjectIdentifiers.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.411"
+edition = "06/1999"
+name = "MTSUpperBounds"
+oid = "2.6.3.0.3.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSUpperBounds.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.413"
+edition = "06/1999"
+name = "MSAbstractService"
+oid = "2.6.4.0.1.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x413/1999/MSAbstractService.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.413"
+edition = "06/1999"
+name = "MSGeneralAttributeTypes"
+oid = "2.6.4.0.2.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x413/1999/MSGeneralAttributeTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.413"
+edition = "06/1999"
+name = "MSGeneralAutoActionTypes"
+oid = "2.6.4.0.3.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x413/1999/MSGeneralAutoActionTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.413"
+edition = "06/1999"
+name = "MSMatchingRules"
+oid = "2.6.4.0.5.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x413/1999/MSMatchingRules.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.413"
+edition = "06/1999"
+name = "MSObjectIdentifiers"
+oid = "2.6.4.0.0.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x413/1999/MSObjectIdentifiers.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.413"
+edition = "06/1999"
+name = "MSUpperBounds"
+oid = "2.6.4.0.4.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x413/1999/MSUpperBounds.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.419"
+edition = "06/1999"
+name = "MHSProtocolObjectIdentifiers"
+oid = "2.6.0.0.0.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x419/1999/MHSProtocolObjectIdentifiers.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.419"
+edition = "06/1999"
+name = "MSAccessProtocol"
+oid = "2.6.0.0.2.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x419/1999/MSAccessProtocol.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.419"
+edition = "06/1999"
+name = "MTSAccessProtocol"
+oid = "2.6.0.0.1.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x419/1999/MTSAccessProtocol.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSAbstractService"
+oid = "2.6.1.0.3.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSAbstractService.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSExtendedBodyPartTypes"
+oid = "2.6.1.0.7.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSExtendedBodyPartTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSExtendedBodyPartTypes2"
+oid = "1.0.10021.7.0.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSExtendedBodyPartTypes2.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSExtendedVoiceBodyPartType"
+oid = "2.6.1.0.11"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSExtendedVoiceBodyPartType.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSFileTransferBodyPartType"
+oid = "2.6.1.0.9"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSFileTransferBodyPartType.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSForwardedContentBodyPartType"
+oid = "2.6.1.0.15"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSForwardedContentBodyPartType.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSForwardedReportBodyPartType"
+oid = "2.6.1.0.12"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSForwardedReportBodyPartType.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSHeadingExtensions"
+oid = "2.6.1.0.6.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSHeadingExtensions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSInformationObjects"
+oid = "2.6.1.0.2.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSInformationObjects.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSObjectIdentifiers"
+oid = "2.6.1.0.0.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSObjectIdentifiers.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSSecurityExtensions"
+oid = "2.6.1.0.14.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSSecurityExtensions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "IPMSUpperBounds"
+oid = "2.6.1.0.10.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSUpperBounds.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "PKCS7"
+oid = "1.2.840.113549.1.7.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/PKCS7.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.420"
+edition = "06/1999"
+name = "PKCS7BodyPartType"
+oid = "2.6.1.0.16"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/PKCS7BodyPartType.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "BasicAccessControl"
+oid = "2.5.1.24.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/BasicAccessControl.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "DSAOperationalAttributeTypes"
+oid = "2.5.1.22.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/DSAOperationalAttributeTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "EnhancedSecurity"
+oid = "2.5.1.28.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/EnhancedSecurity.asn"
+
+[[module]]
+body = "itu-t"
 document = "X.501"
 edition = "10/2012"
 name = "InformationFramework"
@@ -36,9 +508,49 @@ url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/InformationFramew
 body = "itu-t"
 document = "X.501"
 edition = "10/2012"
+name = "LdapSystemSchema"
+oid = "2.5.1.38.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/LdapSystemSchema.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "OperationalBindingManagement"
+oid = "2.5.1.18.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/OperationalBindingManagement.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "SchemaAdministration"
+oid = "2.5.1.23.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/SchemaAdministration.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
+name = "ServiceAdministration"
+oid = "2.5.1.33.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/ServiceAdministration.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.501"
+edition = "10/2012"
 name = "UsefulDefinitions"
 oid = "2.5.1.0.7"
 url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x501/2012/UsefulDefinitions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.509"
+edition = "10/2012"
+name = "AttributeCertificateDefinitions"
+oid = "2.5.1.32.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x509/2012/AttributeCertificateDefinitions.asn"
 
 [[module]]
 body = "itu-t"
@@ -58,11 +570,75 @@ url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x509/2012/CertificateExtens
 
 [[module]]
 body = "itu-t"
+document = "X.511"
+edition = "10/2012"
+name = "DirectoryAbstractService"
+oid = "2.5.1.2.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x511/2012/DirectoryAbstractService.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.518"
+edition = "10/2012"
+name = "DistributedOperations"
+oid = "2.5.1.3.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x518/2012/DistributedOperations.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.518"
+edition = "10/2012"
+name = "HierarchicalOperationalBindings"
+oid = "2.5.1.20.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x518/2012/HierarchicalOperationalBindings.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.519"
+edition = "10/2012"
+name = "CommonProtocolSpecification"
+oid = "2.5.1.35.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x519/2012/CommonProtocolSpecification.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.519"
+edition = "10/2012"
+name = "DirectoryOSIProtocols"
+oid = "2.5.1.37.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x519/2012/DirectoryOSIProtocols.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.519"
+edition = "10/2012"
+name = "DirectoryOperationalBindingTypes"
+oid = "2.5.1.25.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x519/2012/DirectoryOperationalBindingTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.519"
+edition = "10/2012"
+name = "OSIProtocolSpecification"
+oid = "2.5.1.36.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x519/2012/OSIProtocolSpecification.asn"
+
+[[module]]
+body = "itu-t"
 document = "X.520"
 edition = "10/2012"
 name = "SelectedAttributeTypes"
 oid = "2.5.1.5.7"
 url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x520/2012/SelectedAttributeTypes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.520"
+edition = "10/2016"
+name = "UpperBounds"
+oid = "2.5.1.10.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x520/2016/UpperBounds.asn"
 
 [[module]]
 body = "itu-t"
@@ -74,24 +650,56 @@ url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x521/2012/SelectedObjectCla
 
 [[module]]
 body = "itu-t"
-document = "X.411"
-edition = "06/1999"
-name = "MTSAbstractService"
-oid = "2.6.3.0.1.1"
-url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSAbstractService.asn"
+document = "X.525"
+edition = "10/2012"
+name = "DirectoryShadowAbstractService"
+oid = "2.5.1.15.7"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x525/2012/DirectoryShadowAbstractService.asn"
 
 [[module]]
 body = "itu-t"
-document = "X.411"
-edition = "06/1999"
-name = "MTSUpperBounds"
-oid = "2.6.3.0.3.1"
-url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x411/1999/MTSUpperBounds.asn"
+document = "X.880"
+edition = "07/1994, Cor. 1 07/1995"
+name = "Remote-Operations-Generic-ROS-PDUs"
+oid = "2.4.6.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x880/1994-TC1/Remote-Operations-Generic-ROS-PDUs.asn"
 
 [[module]]
 body = "itu-t"
-document = "X.420"
-edition = "06/1999"
-name = "IPMSAbstractService"
-oid = "2.6.1.0.3.0"
-url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x420/1999/IPMSAbstractService.asn"
+document = "X.880"
+edition = "07/1994, Cor. 1 07/1995"
+name = "Remote-Operations-Information-Objects"
+oid = "2.4.5.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x880/1994-TC1/Remote-Operations-Information-Objects.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.880"
+edition = "07/1994, Cor. 1 07/1995"
+name = "Remote-Operations-Useful-Definitions"
+oid = "2.4.7.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x880/1994-TC1/Remote-Operations-Useful-Definitions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.881"
+edition = "07/1994"
+name = "Remote-Operations-Information-Objects-extensions"
+oid = "2.4.8.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x881/1994/Remote-Operations-Information-Objects-extensions.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.882"
+edition = "07/1994, Cor. 1 07/1995, Amd. 1 11/1995"
+name = "Remote-Operations-Abstract-Syntaxes"
+oid = "2.4.12.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x882/1994-TC1-Amd1/Remote-Operations-Abstract-Syntaxes.asn"
+
+[[module]]
+body = "itu-t"
+document = "X.882"
+edition = "07/1994, Cor. 1 07/1995, Amd. 1 11/1995"
+name = "Remote-Operations-Realizations"
+oid = "2.4.9.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x882/1994-TC1-Amd1/Remote-Operations-Realizations.asn"
