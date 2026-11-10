@@ -511,6 +511,22 @@ url = "https://example.test/Pinned.asn"
 include = "always"
 "#;
 
+/// Runs corpus-build over the RFCs in `dir/rfc` with the manifest `dir/sources.toml` and the cache `dir/cache`.
+fn build_sources_in(dir: &Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_corpus-build"));
+    command
+        .arg("--rfc-dir")
+        .arg(dir.join("rfc"))
+        .arg("--sources")
+        .arg(dir.join("sources.toml"))
+        .arg("--cache")
+        .arg(dir.join("cache"))
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-04"]);
+    command
+}
+
 /// Builds a corpus of one RFC plus the sources manifest, with the downloads already in the cache.
 fn build_with_sources(
     tag: &str,
@@ -532,17 +548,7 @@ fn build_with_sources(
         std::fs::write(cache.join(format!("{name}-{oid}.asn")), text).unwrap();
     }
     std::fs::write(dir.join("sources.toml"), manifest).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_corpus-build"));
-    command
-        .arg("--rfc-dir")
-        .arg(&rfcs)
-        .arg("--sources")
-        .arg(dir.join("sources.toml"))
-        .arg("--cache")
-        .arg(&cache)
-        .arg("--out")
-        .arg(dir.join("out"))
-        .args(["--date", "2026-11-04"]);
+    let mut command = build_sources_in(&dir);
     if !overrides.is_empty() {
         let over = dir.join("overrides/ts-102-941");
         std::fs::create_dir_all(&over).unwrap();
@@ -591,18 +597,7 @@ fn a_chain_of_listed_modules_is_fetched_to_its_end() {
         ));
     }
     std::fs::write(dir.join("sources.toml"), manifest).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
-        .arg("--rfc-dir")
-        .arg(&rfcs)
-        .arg("--sources")
-        .arg(dir.join("sources.toml"))
-        .arg("--cache")
-        .arg(&cache)
-        .arg("--out")
-        .arg(dir.join("out"))
-        .args(["--date", "2026-11-04"])
-        .output()
-        .unwrap();
+    let output = build_sources_in(&dir).output().unwrap();
     assert!(
         output.status.success(),
         "{}",
@@ -647,10 +642,44 @@ fn standalone_modules_join_the_corpus_beside_the_rfc_modules() {
 }
 
 #[test]
+fn a_cached_page_that_is_not_the_module_fails_the_build() {
+    // An HTML page cached as the module (an entry that pointed at a rendering, or an error page served with status
+    // 200) is not used: it is downloaded again, and when that fails too the build fails before writing anything.
+    let dir = std::env::temp_dir().join(format!("glint-src-html-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("rfc")).unwrap();
+    std::fs::create_dir_all(dir.join("cache")).unwrap();
+    std::fs::write(dir.join("rfc/rfc9997.txt"), IMPORTING_RFC).unwrap();
+    std::fs::write(
+        dir.join("cache/Standalone-1.2.3.4.asn"),
+        "<HTML><BODY><PRE>Standalone { 1 2 3 4 } <B>DEFINITIONS</B> ::= <B>BEGIN</B></PRE></BODY></HTML>\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("sources.toml"),
+        MANIFEST.replace("include = \"always\"", ""),
+    )
+    .unwrap();
+    let output = build_sources_in(&dir).output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("Standalone 1.2.3.4 from https://example.test/Standalone.asn"),
+        "{stderr}"
+    );
+    assert!(
+        !dir.join("out").join(latest_path()).exists(),
+        "nothing is published"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_body_with_no_modules_in_the_corpus_adds_no_notice() {
-    // Nothing imports `Unused` or `Pinned` once they are on demand, so no ETSI module is bundled.
+    // Nothing imports `Elsewhere`, `Unused` or `Pinned` once they are on demand, so no ETSI module is bundled.
     let manifest = MANIFEST
         .replace("include = \"always\"", "")
+        .replace("name = \"Standalone\"", "name = \"Elsewhere\"")
         .replace("oid = \"1.2.3.4\"", "oid = \"1.2.3.7\"");
     let (dir, output) = build_with_sources("notice", &manifest, &[]);
     assert!(

@@ -151,22 +151,36 @@ pub struct Fetched {
     pub source: ModuleSource,
 }
 
-/// Fetches (or reads from `cache`) each of `entries`.
+/// Fetches (or reads from `cache`) each of `entries`. A file is used, and cached, only when it is the module the
+/// entry lists: a module whose definitive identifier is the entry's OID (13.8; the module of the entry's name if the
+/// file has several). Anything else (an HTML page,
+/// an error page served with status 200, another edition) is a problem naming the URL, and a cached file that is
+/// not the module is downloaded again.
 pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
     let mut out = Vec::new();
     let mut problems = Vec::new();
     let _ = std::fs::create_dir_all(cache);
     for entry in entries {
         let file = cache.join(format!("{}-{}.asn", entry.name, entry.oid));
-        let bytes = match std::fs::read(&file) {
-            Ok(bytes) => Some(bytes),
-            Err(_) => download(&entry.url).inspect(|body| {
-                let _ = std::fs::write(&file, body);
+        let cached = std::fs::read(&file)
+            .ok()
+            .map(|bytes| decode(&bytes))
+            .filter(|text| not_the_module(text, entry).is_none());
+        let text = match cached {
+            Some(text) => Ok(text),
+            None => download(&entry.url).and_then(|(bytes, content_type)| {
+                let text = decode(&bytes);
+                match not_the_module(&text, entry) {
+                    None => {
+                        let _ = std::fs::write(&file, &bytes);
+                        Ok(text)
+                    }
+                    Some(why) => Err(format!("{why} (content type {content_type})")),
+                }
             }),
         };
-        let text = bytes.map(|bytes| decode(&bytes));
         match text {
-            Some(text) => out.push(Fetched {
+            Ok(text) => out.push(Fetched {
                 name: entry.name.clone(),
                 oid: entry.oid.clone(),
                 text,
@@ -179,8 +193,8 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
                     kind: SourceKind::Standalone,
                 },
             }),
-            None => problems.push(format!(
-                "could not fetch {} {} from {}",
+            Err(why) => problems.push(format!(
+                "{} {} from {}: {why}",
                 entry.name, entry.oid, entry.url
             )),
         }
@@ -188,12 +202,30 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
     (out, problems)
 }
 
-fn download(url: &str) -> Option<Vec<u8>> {
-    let response = reqwest::blocking::get(url).ok()?;
-    if !response.status().is_success() {
-        return None;
+/// Why `text` is not the module `entry` lists, or `None` when it is.
+fn not_the_module(text: &str, entry: &Entry) -> Option<String> {
+    match crate::build::module_oid(text, &entry.name) {
+        None => Some("not an ASN.1 module with an identifier".to_owned()),
+        Some(oid) if oid != entry.oid => Some(format!("the module's identifier is {oid}")),
+        Some(_) => None,
     }
-    Some(response.bytes().ok()?.to_vec())
+}
+
+/// The body of a successful download and its content type.
+fn download(url: &str) -> Result<(Vec<u8>, String), String> {
+    let response = reqwest::blocking::get(url).map_err(|e| e.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("HTTP {status}"));
+    }
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("not given")
+        .to_owned();
+    let bytes = response.bytes().map_err(|e| e.to_string())?;
+    Ok((bytes.to_vec(), content_type))
 }
 
 /// The text of a downloaded module. Older modules on ITU-T's site are Windows-1252, not UTF-8: the ISO/IEC ones
@@ -263,6 +295,25 @@ mod tests {
             .iter()
             .map(|e| e.oid.to_string())
             .collect()
+    }
+
+    #[test]
+    fn only_the_listed_module_is_the_module() {
+        let entry = entry("Standalone", "1.2.3.4", "2012");
+        assert_eq!(
+            not_the_module("Standalone { 1 2 3 4 } DEFINITIONS ::= BEGIN END", &entry),
+            None
+        );
+        assert_eq!(
+            not_the_module("Standalone { 1 2 3 5 } DEFINITIONS ::= BEGIN END", &entry).as_deref(),
+            Some("the module's identifier is 1.2.3.5")
+        );
+        let page =
+            "<HTML><PRE>Standalone { 1 2 3 4 } <B>DEFINITIONS</B> ::= <B>BEGIN</B></PRE></HTML>";
+        assert_eq!(
+            not_the_module(page, &entry).as_deref(),
+            Some("not an ASN.1 module with an identifier")
+        );
     }
 
     #[test]

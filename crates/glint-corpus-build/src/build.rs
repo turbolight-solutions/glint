@@ -103,11 +103,12 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         Some(path) => read_manifest(path)?,
         None => Manifest::default(),
     };
-    let mut source_problems: Vec<String> = Vec::new();
+    // A listed module that cannot be bundled fails the build: the data would otherwise be published without it.
+    let mut standalone_problems: Vec<String> = Vec::new();
     let (always, problems) = fetch(&manifest.always(), &settings.cache);
-    source_problems.extend(problems);
+    standalone_problems.extend(problems);
     for item in always {
-        candidates.push(standalone_candidate(item, &mut source_problems));
+        candidates.push(standalone_candidate(item));
     }
 
     if let Some(errata) = &settings.errata {
@@ -137,8 +138,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         .map(|c| make_record(c, meta_of(&meta, c)))
         .collect();
     let mut unreadable = made.iter().filter(|m| m.is_none()).count();
-    let (mut records, collapsed) = one_per_identity(made.into_iter().flatten().collect());
-    source_problems.extend(collapsed);
+    let (mut records, mut source_problems) = one_per_identity(made.into_iter().flatten().collect());
     let mut fetched_oids: HashSet<Oid> = HashSet::new();
     // A fetched module can import another listed module, so fetch until a round adds nothing. Each round fetches
     // only entries whose OID the corpus lacks, so there are at most as many rounds as entries.
@@ -148,14 +148,14 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         let needs = unresolved_imports(&records, &defined);
         let wanted = select(&manifest.module, &needs, &defined);
         let (fetched, problems) = fetch(&wanted, &settings.cache);
-        source_problems.extend(problems);
+        standalone_problems.extend(problems);
         if fetched.is_empty() {
             break;
         }
         let mut batch: Vec<Candidate> = Vec::new();
         for item in fetched {
             fetched_oids.insert(item.oid.clone());
-            batch.push(standalone_candidate(item, &mut source_problems));
+            batch.push(standalone_candidate(item));
         }
         apply_overrides(&mut batch, &mut pending, &mut applied)?;
         for candidate in &batch {
@@ -163,13 +163,21 @@ pub fn run(settings: &Settings) -> Result<String, String> {
                 Some(made) => records.push(made.record),
                 None => {
                     unreadable = unreadable.saturating_add(1);
-                    source_problems.push(format!(
+                    standalone_problems.push(format!(
                         "could not read {} in {}",
                         candidate.name, candidate.source.document
                     ));
                 }
             }
         }
+    }
+    if !standalone_problems.is_empty() {
+        standalone_problems.sort();
+        standalone_problems.dedup();
+        return Err(format!(
+            "listed modules could not be bundled:\n  {}",
+            standalone_problems.join("\n  ")
+        ));
     }
     source_problems.sort();
     source_problems.dedup();
@@ -458,17 +466,8 @@ fn meta_of<'a>(meta: &'a HashMap<u32, RfcMeta>, candidate: &Candidate) -> Option
         .and_then(|number| meta.get(&number))
 }
 
-/// A downloaded module as a candidate. Reports when its definitive identifier is not the one the manifest lists.
-fn standalone_candidate(item: Fetched, problems: &mut Vec<String>) -> Candidate {
-    let found = module_oid(&item.text, &item.name);
-    if found.as_ref() != Some(&item.oid) {
-        problems.push(format!(
-            "{}: the manifest says {} but the module's identifier is {}",
-            item.name,
-            item.oid,
-            found.map_or_else(|| "absent".to_owned(), |oid| oid.to_string())
-        ));
-    }
+/// A downloaded module as a candidate. `fetch` has checked that it is the module the manifest lists.
+fn standalone_candidate(item: Fetched) -> Candidate {
     Candidate {
         name: item.name,
         text: item.text.trim().to_owned(),
@@ -596,7 +595,7 @@ fn parses_cleanly(text: &str) -> bool {
 }
 
 /// The definitive identifier of the module called `name` in `text`.
-fn module_oid(text: &str, name: &str) -> Option<Oid> {
+pub(crate) fn module_oid(text: &str, name: &str) -> Option<Oid> {
     let parse = parse_source_with(text, ParseOptions::corpus());
     let file = ast::SourceFile::cast(parse.syntax())?;
     let module = file
