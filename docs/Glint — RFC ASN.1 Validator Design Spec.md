@@ -412,6 +412,7 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 | `glint check --draft draft-ietf-lamps-foo-03` | Fetch a draft from the IETF archive, then check |
 | `glint extract <file> -o <dir>` | Write each extracted module to `<dir>/<ModuleName>.asn`; when the document defines several modules of one name, each goes to `<ModuleName>-<oid>.asn`, as overrides name them |
 | `glint extract <file> --format json [-o <dir>]` | List the blocks on stdout as JSON: kind, section, title, line range, and each module's name, dotted OID (`null` unless every arc is a number) and line range; with `-o`, also the file each module (and, with `--fragments`, each fragment) was written to, holding its text as the corpus build records it |
+| `glint closure <files...> [--module rfc9881#X509-ML-DSA-2025] -o <dir>` | Write the modules and every module they import, resolved as `glint check` resolves imports, as they are, for a compiler which reads one module per file and finds imports by name (see "Import closures" below): `modules/<Name>.asn` per module, `modules.tsv` (name, input or dependency, source) and `combined.asn` (every module in one file), both with dependencies first. Exit 1 when the set is incomplete or needs two modules of one name (one `error:` line naming every problem), 2 on a usage or output error; nothing is written then |
 | `glint corpus list [--filter <text>]` | List modules with RFC, OID and status |
 | `glint corpus show <name\|oid\|document>` | Print a module's text and metadata; a document is `rfc5280`, `X.509`, ... |
 | `glint corpus oid <dotted-oid>` | Who assigns this OID, and its parent arcs |
@@ -421,6 +422,10 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <corpus.json>`, `--pin Name=rfcNNNN|<oid>`, `--no-snippets`, `--color auto|always|never`.
 
 Exit codes: `0` no errors, `1` errors found (or warnings with `--deny-warnings`), `2` usage or I/O failure.
+
+### Import closures (`glint closure`)
+
+`glint closure` exists for tools outside Glint: ASN.1 compilers that read one module per file and look imports up by module name (erlc requires a file's name to be its module's name; it needs no particular order, and `erlc modules/*.asn` compiles the set), which is how most compilers take a module set. It resolves imports exactly as `glint check` does (OID first, X.680 13.9-13.12) and writes what it resolved, each module as it is. The one thing it cannot write, two modules of one name (one file per name), is an error. X.680 allows importing from two modules of one name (13.10, NOTE); such a compiler keeps one module per name.
 
 ### Config file (`glint.toml`)
 
