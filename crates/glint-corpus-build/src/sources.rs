@@ -158,12 +158,13 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
     let _ = std::fs::create_dir_all(cache);
     for entry in entries {
         let file = cache.join(format!("{}-{}.asn", entry.name, entry.oid));
-        let text = match std::fs::read_to_string(&file) {
-            Ok(text) => Some(text),
+        let bytes = match std::fs::read(&file) {
+            Ok(bytes) => Some(bytes),
             Err(_) => download(&entry.url).inspect(|body| {
                 let _ = std::fs::write(&file, body);
             }),
         };
+        let text = bytes.map(|bytes| decode(&bytes));
         match text {
             Some(text) => out.push(Fetched {
                 name: entry.name.clone(),
@@ -187,13 +188,42 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
     (out, problems)
 }
 
-fn download(url: &str) -> Option<String> {
+fn download(url: &str) -> Option<Vec<u8>> {
     let response = reqwest::blocking::get(url).ok()?;
     if !response.status().is_success() {
         return None;
     }
-    let bytes = response.bytes().ok()?;
-    Some(String::from_utf8_lossy(&bytes).into_owned())
+    Some(response.bytes().ok()?.to_vec())
+}
+
+/// The text of a downloaded module. Older modules on ITU-T's site are Windows-1252, not UTF-8: the ISO/IEC ones
+/// say "Copyright \u{a9} ISO/IEC" with byte 0xA9. A lossy UTF-8 reading would replace the copyright sign in the
+/// notice the module is published with, so a file that is not UTF-8 is read as Windows-1252.
+fn decode(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_owned(),
+        Err(_) => bytes.iter().map(|&b| windows_1252(b)).collect(),
+    }
+}
+
+/// One Windows-1252 byte as a character (WHATWG Encoding Standard, index-windows-1252): 0x80-0x9F are
+/// typographic characters, the five bytes the code page leaves unassigned map to the C1 control of that value,
+/// and every other byte is the Latin-1 character of that value.
+fn windows_1252(byte: u8) -> char {
+    const HIGH: [char; 32] = [
+        '\u{20ac}', '\u{81}', '\u{201a}', '\u{192}', '\u{201e}', '\u{2026}', '\u{2020}',
+        '\u{2021}', '\u{2c6}', '\u{2030}', '\u{160}', '\u{2039}', '\u{152}', '\u{8d}', '\u{17d}',
+        '\u{8f}', '\u{90}', '\u{2018}', '\u{2019}', '\u{201c}', '\u{201d}', '\u{2022}', '\u{2013}',
+        '\u{2014}', '\u{2dc}', '\u{2122}', '\u{161}', '\u{203a}', '\u{153}', '\u{9d}', '\u{17e}',
+        '\u{178}',
+    ];
+    match byte
+        .checked_sub(0x80)
+        .and_then(|i| HIGH.get(usize::from(i)))
+    {
+        Some(&c) => c,
+        None => char::from(byte),
+    }
 }
 
 #[cfg(test)]
@@ -233,6 +263,24 @@ mod tests {
             .iter()
             .map(|e| e.oid.to_string())
             .collect()
+    }
+
+    #[test]
+    fn a_module_that_is_not_utf8_is_read_as_windows_1252() {
+        // ISO/IEC 8571-4's module on ITU-T's site: a copyright sign and curly quotes.
+        let text = decode(b"-- Copyright \xa9 ISO/IEC 1988. \x93No Value Available\x94 \x81");
+        assert_eq!(
+            text,
+            "-- Copyright \u{a9} ISO/IEC 1988. \u{201c}No Value Available\u{201d} \u{81}"
+        );
+    }
+
+    #[test]
+    fn a_utf8_module_is_read_as_it_is() {
+        assert_eq!(
+            decode("-- Copyright \u{a9} ITU-T".as_bytes()),
+            "-- Copyright \u{a9} ITU-T"
+        );
     }
 
     #[test]
