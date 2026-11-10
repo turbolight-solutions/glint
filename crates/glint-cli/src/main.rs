@@ -30,8 +30,11 @@ enum Command {
     Check(check_cmd::Args),
     /// Write a module set and every module it imports, one module per file, for a compiler
     ///
-    /// Imports are resolved as `glint check` resolves them, and every module is written as it is. A set that needs two
-    /// modules of one name is an error, since one file per name cannot hold them.
+    /// Imports are resolved as `glint check` resolves them, and every module is written as it is, unless an option asks
+    /// for a rewrite. A set that needs two modules of one name is an error without `--rename`, since one file per name
+    /// cannot hold them. Whatever else a compiler that reads one module per file and finds imports by name may reject
+    /// is a warning, on stderr and in the header of combined.asn, naming the option that rewrites it: `--rename` for an
+    /// import resolved by its OID to a module of another name. Every rewrite is reported too.
     ///
     /// The output directory gets `modules/<Name>.asn` per module, `modules.tsv` (name, input or dependency,
     /// source; dependencies first) and `combined.asn` (every module in one file, dependencies first).

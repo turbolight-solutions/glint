@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Args as ClapArgs;
-use glint_check::{Closure, ClosureInput, Problem, Role, closure};
+use glint_check::{Closure, ClosureInput, ClosureOptions, Problem, Role, Warning, closure};
 use glint_corpus::{Corpus, CorpusProvider, Oid};
 
 use crate::common::{EXIT_ERRORS, EXIT_FAILURE, EXIT_OK, load_corpus};
@@ -26,6 +26,10 @@ pub struct Args {
     /// Resolve imports of `Name` to the module published in `rfcNNNN`, or to the module with that OID
     #[arg(long = "pin", value_name = "NAME=rfcNNNN|OID")]
     pins: Vec<String>,
+    /// Give modules of one name names of their own (`PKIX1Explicit88-rfc2459`), and rename an import resolved by
+    /// its OID to a module of another name to that module
+    #[arg(long)]
+    rename: bool,
 }
 
 /// The module texts the closure starts from, or every reason one cannot be read.
@@ -131,11 +135,20 @@ pub fn run(args: &Args) -> ExitCode {
         Ok(inputs) => inputs,
         Err(problems) => return incomplete(&problems),
     };
-    let result = match closure(&inputs, &corpus, &pins) {
+    let rewrites = ClosureOptions {
+        rename: args.rename,
+    };
+    let result = match closure(&inputs, &corpus, &pins, rewrites) {
         Ok(result) => result,
         Err(problems) => {
-            let problems: Vec<String> = problems.iter().map(Problem::to_string).collect();
-            return incomplete(&problems);
+            let mut lines: Vec<String> = problems.iter().map(Problem::to_string).collect();
+            if problems
+                .iter()
+                .any(|p| matches!(p, Problem::SameName { .. }))
+            {
+                lines.push("--rename gives each module a name of its own".to_owned());
+            }
+            return incomplete(&lines);
         }
     };
     report(&result);
@@ -171,8 +184,30 @@ fn check_out_dir(dir: &Path) -> Result<(), String> {
     }
 }
 
-/// Tells on standard error the import cycles.
+/// The option that fixes `warning`.
+fn fixed_by(warning: &Warning) -> &'static str {
+    match warning {
+        Warning::ImportName(_) => "--rename renames the import",
+    }
+}
+
+/// Tells on standard error what was left as written that a compiler may reject, every rewrite, and import cycles.
 fn report(result: &Closure) {
+    for warning in &result.warnings {
+        eprintln!("glint: warning: {warning} ({})", fixed_by(warning));
+    }
+    for rename in &result.module_renames {
+        eprintln!(
+            "glint: {}: renamed to {}, since the set needs another module named {}",
+            rename.source, rename.to, rename.from
+        );
+    }
+    for rename in &result.renames {
+        eprintln!(
+            "glint: {}: import of {} renamed to {}, the module it resolves to",
+            rename.importer, rename.from, rename.to
+        );
+    }
     for cycle in &result.cycles {
         eprintln!(
             "glint: import cycle: {}; the order of these modules is approximate",
@@ -204,6 +239,41 @@ fn combined_header(result: &Closure, build: &str) -> String {
             module.role.as_str(),
             module.source
         );
+    }
+    if !result.module_renames.is_empty() {
+        let _ = writeln!(
+            header,
+            "--\n-- Modules renamed, since the set needs two modules of their name:"
+        );
+        for rename in &result.module_renames {
+            let _ = writeln!(
+                header,
+                "--   {}: {} -> {}",
+                rename.source, rename.from, rename.to
+            );
+        }
+    }
+    if !result.renames.is_empty() {
+        let _ = writeln!(
+            header,
+            "--\n-- Imports renamed to the module they resolve to:"
+        );
+        for rename in &result.renames {
+            let _ = writeln!(
+                header,
+                "--   {}: {} -> {}",
+                rename.importer, rename.from, rename.to
+            );
+        }
+    }
+    if !result.warnings.is_empty() {
+        let _ = writeln!(
+            header,
+            "--\n-- Left as written, though a compiler may reject it:"
+        );
+        for warning in &result.warnings {
+            let _ = writeln!(header, "--   {warning} ({})", fixed_by(warning));
+        }
     }
     if !result.cycles.is_empty() {
         let _ = writeln!(header, "--\n-- Import cycles (order approximate):");

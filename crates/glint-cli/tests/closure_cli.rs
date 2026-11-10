@@ -111,7 +111,74 @@ fn closure_writes_one_file_per_module_with_the_order_and_sources() {
 }
 
 #[test]
-fn two_modules_of_one_name_exit_one() {
+fn a_dependency_with_the_name_of_an_input_is_written_under_a_name_of_its_own() {
+    let dir = scratch("same-name");
+    let corpus = corpus_file(&dir);
+    let base = dir.join("base.asn");
+    std::fs::write(
+        &base,
+        "Base { 1 3 6 1 4 1 99 2 } DEFINITIONS ::= BEGIN\nOther ::= BOOLEAN\nEND\n",
+    )
+    .unwrap();
+    let top = dir.join("top.asn");
+    std::fs::write(
+        &top,
+        "Top { 1 3 6 1 4 1 99 3 } DEFINITIONS ::= BEGIN\nIMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 }\n\
+         Other FROM Base { 1 3 6 1 4 1 99 2 };\nThing ::= SEQUENCE { name Name, other Other }\nEND\n",
+    )
+    .unwrap();
+    let out = dir.join("out");
+    let output = glint()
+        .arg("closure")
+        .arg("--corpus")
+        .arg(&corpus)
+        .arg(&base)
+        .arg(&top)
+        .arg("--rename")
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains(
+            "rfc1000#Base: renamed to Base-rfc1000, since the set needs another module named Base"
+        ),
+        "{stderr}"
+    );
+    assert_eq!(
+        entries(&out.join("modules")),
+        ["Base-rfc1000.asn", "Base.asn", "Top.asn"]
+    );
+    let table = std::fs::read_to_string(out.join("modules.tsv")).unwrap();
+    assert!(
+        table.contains("Base-rfc1000\tdependency\trfc1000#Base\n"),
+        "{table}"
+    );
+    let top = std::fs::read_to_string(out.join("modules/Top.asn")).unwrap();
+    assert!(
+        top.contains("FROM Base-rfc1000 { 1 3 6 1 4 1 99 1 }"),
+        "{top}"
+    );
+    assert!(top.contains("FROM Base { 1 3 6 1 4 1 99 2 }"), "{top}");
+    let dependency = std::fs::read_to_string(out.join("modules/Base-rfc1000.asn")).unwrap();
+    assert!(
+        dependency.starts_with("Base-rfc1000 { 1 3 6 1 4 1 99 1 }"),
+        "{dependency}"
+    );
+    let combined = std::fs::read_to_string(out.join("combined.asn")).unwrap();
+    assert!(
+        combined.contains(
+            "-- Modules renamed, since the set needs two modules of their name:\n--   rfc1000#Base: Base -> Base-rfc1000"
+        ),
+        "{combined}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn without_rename_two_modules_of_one_name_exit_one_and_say_how_to_fix_it() {
     let dir = scratch("same-name-error");
     let corpus = corpus_file(&dir);
     let base = dir.join("base.asn");
@@ -143,7 +210,7 @@ fn two_modules_of_one_name_exit_one() {
     assert!(
         stderr.contains(&format!(
             "glint: error: the set needs 2 modules named Base ({}, rfc1000#Base), and a compiler that finds \
-             modules by name takes one",
+             modules by name takes one; --rename gives each module a name of its own",
             base.display()
         )),
         "{stderr}"

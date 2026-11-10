@@ -6,7 +6,10 @@ mod config;
 mod pipeline;
 mod source;
 
-pub use closure::{Closure, ClosureInput, ClosureModule, Problem, Role, closure};
+pub use closure::{
+    Closure, ClosureInput, ClosureModule, ClosureOptions, ModuleRename, Problem, Rename, Role,
+    Warning, closure,
+};
 pub use config::{Config, ConfigError, SeveritySetting};
 pub use pipeline::{
     BlockSummary, CheckOptions, ImportSummary, ModuleSummary, Report, check_document, document_id,

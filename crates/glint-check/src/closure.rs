@@ -2,15 +2,47 @@
 //! (X.680 13.9-13.12, 13.16 f), in dependency order, for a compiler that reads one module per file and looks imports
 //! up by name.
 //!
-//! The modules are written as they are. Two modules of one name are a [`Problem`], since such a compiler keeps one
-//! module per name and one file per name cannot hold them.
+//! The modules are written as they are, except for the rewrites [`ClosureOptions`] asks for. What such a compiler
+//! cannot take and no option fixes is reported: two modules of one name are a [`Problem`], since one file per name
+//! cannot hold them; anything else is a [`Warning`]. The rewrites, each reported:
+//! - `rename`: two modules of one name that the set needs (RFC 5280's and RFC 2459's `PKIX1Explicit88`) get names
+//!   of their own, and an import that resolves (by its object identifier) to a module of another name is renamed to
+//!   that module, in the `FROM` clause and in `Old.symbol` references.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
 use glint_corpus::{CorpusProvider, Oid, unique_label};
 use glint_sema::{AssignedId, Matched, ModuleGraph, ModuleId, Options, Origin};
-use glint_syntax::{ParseOptions, parse_source_with};
+use glint_syntax::{ParseOptions, SyntaxKind, TextRange, parse_source_with};
+
+/// The rewrites to make; with none, every module is written as it is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ClosureOptions {
+    /// Give modules of one name names of their own, and rename imports to the module their identifier resolves to.
+    pub rename: bool,
+}
+
+/// Something in the closure that a compiler which finds imports by name may reject, left as written because the
+/// option that fixes it was not given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Warning {
+    /// An import resolves by its identifier to a module of another name (fixed by `rename`).
+    ImportName(Rename),
+}
+
+impl fmt::Display for Warning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ImportName(rename) => write!(
+                f,
+                "{}: imports {}, which resolves by its identifier to {}; a compiler that finds imports by name \
+                 will not find it",
+                rename.importer, rename.from, rename.to
+            ),
+        }
+    }
+}
 
 /// A module to start the closure from.
 #[derive(Debug, Clone)]
@@ -36,7 +68,7 @@ impl Role {
     }
 }
 
-/// One module of the closure.
+/// One module of the closure, rewritten.
 #[derive(Debug, Clone)]
 pub struct ClosureModule {
     pub name: String,
@@ -46,15 +78,37 @@ pub struct ClosureModule {
     pub text: String,
 }
 
+/// An import renamed to the module its identifier resolved to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rename {
+    pub importer: String,
+    pub from: String,
+    pub to: String,
+}
+
+/// A module given a new name because the closure needs another module of its name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModuleRename {
+    /// The corpus label or input label of the module.
+    pub source: String,
+    pub from: String,
+    pub to: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Closure {
     /// Dependencies before the modules that import them.
     pub modules: Vec<ClosureModule>,
+    /// Modules renamed so that every module of the closure has its own name.
+    pub module_renames: Vec<ModuleRename>,
+    pub renames: Vec<Rename>,
     /// Import cycles, as module names; the order within a cycle is approximate.
     pub cycles: Vec<Vec<String>>,
+    /// What was left as written that a compiler may reject.
+    pub warnings: Vec<Warning>,
 }
 
-/// Why the closure cannot be written.
+/// Why the closure is not complete.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Problem {
     /// The input holds no module definition.
@@ -65,7 +119,7 @@ pub enum Problem {
         identifier: Option<String>,
         importers: Vec<String>,
     },
-    /// The set needs two or more modules of one name: their sources.
+    /// The set needs two or more modules of one name (fixed by `rename`): their sources.
     SameName { name: String, sources: Vec<String> },
 }
 
@@ -94,12 +148,14 @@ impl fmt::Display for Problem {
     }
 }
 
-/// Resolves the imports of `inputs` against `corpus` and returns every module needed, or every reason the set cannot
-/// be written. `pins` are `Name -> rfcNNNN | dotted OID`, as for `glint check --pin`.
+/// Resolves the imports of `inputs` against `corpus` and returns every module needed, with the rewrites `rewrites`
+/// asks for, or every reason the set cannot be written. `pins` are `Name -> rfcNNNN | dotted OID`, as for `glint
+/// check --pin`.
 pub fn closure(
     inputs: &[ClosureInput],
     corpus: &dyn CorpusProvider,
     pins: &[(String, String)],
+    rewrites: ClosureOptions,
 ) -> Result<Closure, Vec<Problem>> {
     let options = Options {
         pins: pins.iter().cloned().collect(),
@@ -167,19 +223,53 @@ pub fn closure(
 
     let walk = Walk::new(&graph, &roots);
     problems.extend(walk.missing(&graph));
-    problems.extend(
-        same_names(&graph, &walk.order)
-            .into_iter()
-            .map(|(name, ids)| Problem::SameName {
-                name,
-                sources: ids
-                    .iter()
-                    .map(|&id| source_label(&graph, id, &labels))
-                    .collect(),
-            }),
-    );
+    let mut warnings = Vec::new();
+    if !rewrites.rename {
+        problems.extend(
+            same_names(&graph, &walk.order)
+                .into_iter()
+                .map(|(name, ids)| Problem::SameName {
+                    name,
+                    sources: ids
+                        .iter()
+                        .map(|&id| source_label(&graph, id, &labels))
+                        .collect(),
+                }),
+        );
+    }
     if !problems.is_empty() {
         return Err(problems);
+    }
+
+    let mut edits: HashMap<ModuleId, Vec<(TextRange, String)>> = HashMap::new();
+    // Rewrites not asked for are worked out on a copy of the edits that is then dropped, to report what they would
+    // change.
+    let mut dropped: HashMap<ModuleId, Vec<(TextRange, String)>> = HashMap::new();
+    let (names, module_renames) = if rewrites.rename {
+        distinct_names(&graph, &walk.order, &roots, &labels)
+    } else {
+        (HashMap::new(), Vec::new())
+    };
+    for (&id, name) in &names {
+        if let Some(module) = graph.module(id) {
+            edits
+                .entry(id)
+                .or_default()
+                .push((module.model.name_range, name.clone()));
+        }
+    }
+    let mut renames = renames(
+        &graph,
+        &walk.order,
+        &names,
+        if rewrites.rename {
+            &mut edits
+        } else {
+            &mut dropped
+        },
+    );
+    if !rewrites.rename {
+        warnings.extend(renames.drain(..).map(Warning::ImportName));
     }
 
     let root_set: HashSet<ModuleId> = roots.iter().copied().collect();
@@ -190,11 +280,20 @@ pub fn closure(
             let module = graph.module(id)?;
             let unit = graph.unit(module.source)?;
             let range = module.model.range;
-            let text = unit
-                .text
-                .get(usize::from(range.start())..usize::from(range.end()))?;
+            let start = usize::from(range.start());
+            let mut text = unit.text.get(start..usize::from(range.end()))?.to_owned();
+            let mut changes = edits.remove(&id).unwrap_or_default();
+            changes.sort_by_key(|(range, _)| std::cmp::Reverse(range.start()));
+            for (change, replacement) in changes {
+                let from = usize::from(change.start()).checked_sub(start)?;
+                let to = usize::from(change.end()).checked_sub(start)?;
+                text.replace_range(from..to, &replacement);
+            }
             Some(ClosureModule {
-                name: module.model.name.clone(),
+                name: names
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| module.model.name.clone()),
                 role: if root_set.contains(&id) {
                     Role::Input
                 } else {
@@ -207,7 +306,10 @@ pub fn closure(
         .collect();
     Ok(Closure {
         modules,
+        module_renames,
+        renames,
         cycles: walk.cycles,
+        warnings,
     })
 }
 
@@ -383,4 +485,131 @@ fn same_names(graph: &ModuleGraph<'_>, order: &[ModuleId]) -> BTreeMap<String, V
     }
     by_name.retain(|_, ids| ids.len() > 1);
     by_name
+}
+
+/// New names for modules of the closure that share a name with another, so that a compiler that finds modules by
+/// name can take them all. X.680 allows importing from two modules of one name (13.10, NOTE), but such a compiler
+/// keeps one module per name. An input keeps its name when it is the only input of that name; every other module
+/// of the name becomes `<Name>-<document>` (`PKIX1Explicit88-rfc2459`), or `<Name>-<document>-<OID arcs>` when the
+/// document defines more than one module of the name (RFC 4998's two `ERS`), so the name never depends on order.
+fn distinct_names(
+    graph: &ModuleGraph<'_>,
+    order: &[ModuleId],
+    roots: &[ModuleId],
+    labels: &HashMap<ModuleId, String>,
+) -> (HashMap<ModuleId, String>, Vec<ModuleRename>) {
+    let document_of = |id: ModuleId| match graph.module(id).map(|m| m.origin) {
+        Some(Origin::Corpus { record }) => graph
+            .corpus()
+            .modules()
+            .get(record)
+            .map_or_else(|| "input".to_owned(), |r| r.source.document.clone()),
+        _ => "input".to_owned(),
+    };
+    let mut taken: HashSet<String> = order.iter().map(|&id| module_name(graph, id)).collect();
+    let mut names = HashMap::new();
+    let mut renamed = Vec::new();
+    for (name, ids) in &same_names(graph, order) {
+        let inputs = ids.iter().filter(|id| roots.contains(id)).count();
+        let documents: Vec<String> = ids.iter().map(|&id| document_of(id)).collect();
+        for (&id, document) in ids.iter().zip(&documents) {
+            if inputs == 1 && roots.contains(&id) {
+                continue;
+            }
+            let twins = documents.iter().filter(|d| *d == document).count() > 1;
+            let oid = graph
+                .module(id)
+                .and_then(|m| m.oid.as_ref())
+                .map(ToString::to_string);
+            let base = match &oid {
+                Some(oid) if twins => reference(&format!("{name}-{document}-{oid}")),
+                _ => reference(&format!("{name}-{document}")),
+            };
+            let new_name = std::iter::once(base.clone())
+                .chain((2_u32..).map(|copy| format!("{base}-{copy}")))
+                .find(|candidate| !taken.contains(candidate))
+                .unwrap_or(base);
+            taken.insert(new_name.clone());
+            renamed.push(ModuleRename {
+                source: source_label(graph, id, labels),
+                from: name.clone(),
+                to: new_name.clone(),
+            });
+            names.insert(id, new_name);
+        }
+    }
+    (names, renamed)
+}
+
+/// `text` as a module reference (X.680 12.2, 12.5): letters, digits and single hyphens, not ending in a hyphen.
+fn reference(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        let c = if c.is_ascii_alphanumeric() { c } else { '-' };
+        if !(c == '-' && out.ends_with('-')) {
+            out.push(c);
+        }
+    }
+    out.trim_end_matches('-').to_owned()
+}
+
+/// Renames imports that resolved to a module of another name, or to a module given a new name (`names`), in the
+/// `FROM` clause and in `Old.symbol` references, and returns what was renamed.
+fn renames(
+    graph: &ModuleGraph<'_>,
+    order: &[ModuleId],
+    names: &HashMap<ModuleId, String>,
+    edits: &mut HashMap<ModuleId, Vec<(TextRange, String)>>,
+) -> Vec<Rename> {
+    let final_name = |id: ModuleId| {
+        names
+            .get(&id)
+            .cloned()
+            .unwrap_or_else(|| module_name(graph, id))
+    };
+    let mut renamed = Vec::new();
+    for &id in order {
+        let Some(module) = graph.module(id) else {
+            continue;
+        };
+        for (clause, resolved) in module.model.imports.iter().zip(&module.imports) {
+            let Some(target) = resolved.target else {
+                continue;
+            };
+            if resolved.matched == Matched::SelfImport {
+                continue;
+            }
+            let real = final_name(target);
+            if real == clause.module_name {
+                continue;
+            }
+            let changes = edits.entry(id).or_default();
+            changes.push((clause.module_range, real.clone()));
+            let tokens: Vec<_> = module
+                .node
+                .syntax()
+                .descendants_with_tokens()
+                .filter_map(|element| element.into_token())
+                .filter(|t| !t.kind().is_trivia())
+                .collect();
+            for (index, token) in tokens.iter().enumerate() {
+                let dotted = tokens
+                    .get(index.saturating_add(1))
+                    .is_some_and(|next| next.kind() == SyntaxKind::Dot);
+                if token.kind() == SyntaxKind::UpperName
+                    && token.text() == clause.module_name
+                    && dotted
+                    && token.text_range() != clause.module_range
+                {
+                    changes.push((token.text_range(), real.clone()));
+                }
+            }
+            renamed.push(Rename {
+                importer: final_name(id),
+                from: clause.module_name.clone(),
+                to: real,
+            });
+        }
+    }
+    renamed
 }
