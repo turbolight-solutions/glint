@@ -556,6 +556,66 @@ fn build_with_sources(
 }
 
 #[test]
+fn a_chain_of_listed_modules_is_fetched_to_its_end() {
+    // Standalone imports Link1, which imports Link2, ... Link5: each link is found only once the one before it is
+    // fetched, so the chain takes six rounds.
+    let dir = std::env::temp_dir().join(format!("glint-src-chain-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    let cache = dir.join("cache");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(rfcs.join("rfc9997.txt"), IMPORTING_RFC).unwrap();
+    let mut manifest = String::from("[[body]]\nid = \"etsi\"\nnotice = \"ETSI credit\"\n");
+    let links = ["Standalone", "Link1", "Link2", "Link3", "Link4", "Link5"];
+    for (i, name) in links.iter().enumerate() {
+        let oid = if i == 0 {
+            "1.2.3.4".to_owned()
+        } else {
+            format!("1.2.3.4{i}")
+        };
+        let import = match links.get(i + 1) {
+            Some(next) => format!(
+                "IMPORTS Next FROM {next} {{ 1 2 3 4{} }};\nShared ::= Next\n",
+                i + 1
+            ),
+            None => "Shared ::= INTEGER\n".to_owned(),
+        };
+        let text = format!(
+            "{name} {{ {} }}\nDEFINITIONS ::= BEGIN\n{import}Next ::= INTEGER\nEND\n",
+            oid.replace('.', " ")
+        );
+        std::fs::write(cache.join(format!("{name}-{oid}.asn")), text).unwrap();
+        manifest.push_str(&format!(
+            "\n[[module]]\nbody = \"etsi\"\ndocument = \"TS 102 941\"\nname = \"{name}\"\noid = \"{oid}\"\nurl = \"https://example.test/{name}.asn\"\n"
+        ));
+    }
+    std::fs::write(dir.join("sources.toml"), manifest).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--sources")
+        .arg(dir.join("sources.toml"))
+        .arg("--cache")
+        .arg(&cache)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-04"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let corpus = read_corpus(&dir);
+    for name in links {
+        assert_eq!(corpus.by_name(name).len(), 1, "{name} is bundled");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn standalone_modules_join_the_corpus_beside_the_rfc_modules() {
     let (dir, output) = build_with_sources("join", MANIFEST, &[]);
     assert!(

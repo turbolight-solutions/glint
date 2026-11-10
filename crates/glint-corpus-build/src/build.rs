@@ -140,7 +140,9 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let (mut records, collapsed) = one_per_identity(made.into_iter().flatten().collect());
     source_problems.extend(collapsed);
     let mut fetched_oids: HashSet<Oid> = HashSet::new();
-    for _ in 0..4 {
+    // A fetched module can import another listed module, so fetch until a round adds nothing. Each round fetches
+    // only entries whose OID the corpus lacks, so there are at most as many rounds as entries.
+    for _ in 0..=manifest.module.len() {
         let mut defined = defined_by(&records);
         defined.oids.extend(fetched_oids.iter().cloned());
         let needs = unresolved_imports(&records, &defined);
