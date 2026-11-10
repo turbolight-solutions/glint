@@ -36,6 +36,10 @@ pub struct Args {
     /// the corpus gives it elsewhere, or one from 10000 up; an RFC's is left as written, with a warning
     #[arg(long)]
     renumber: bool,
+    /// Comment out 1988 definitions of `UniversalString`, `BMPString` and `UTF8String` with their own universal
+    /// tag, which current ASN.1 has built in, and the imports of them
+    #[arg(long)]
+    builtin_strings: bool,
 }
 
 /// The module texts the closure starts from, or every reason one cannot be read.
@@ -144,6 +148,7 @@ pub fn run(args: &Args) -> ExitCode {
     let rewrites = ClosureOptions {
         rename: args.rename,
         renumber: args.renumber,
+        builtin_strings: args.builtin_strings,
     };
     let result = match closure(&inputs, &corpus, &pins, rewrites) {
         Ok(result) => result,
@@ -207,6 +212,7 @@ fn fixed_by(warning: &Warning) -> &'static str {
             "only a correction of the document, such as an RFC erratum, can number it; --renumber numbers drafts \
              and input files only"
         }
+        Warning::BuiltinString(_) => "--builtin-strings comments it out",
     }
 }
 
@@ -225,6 +231,18 @@ fn report(result: &Closure) {
         eprintln!(
             "glint: {}: import of {} renamed to {}, the module it resolves to",
             rename.importer, rename.from, rename.to
+        );
+    }
+    for definition in &result.builtin_definitions {
+        eprintln!(
+            "glint: {}: definition of {} commented out; it is a built-in type in current ASN.1",
+            definition.module, definition.name
+        );
+    }
+    for import in &result.builtin_imports {
+        eprintln!(
+            "glint: {}: import of {} from {} commented out; it is a built-in type in current ASN.1",
+            import.importer, import.name, import.from
         );
     }
     for fill in &result.arcs {
@@ -296,6 +314,29 @@ fn combined_header(result: &Closure, build: &str) -> String {
                 header,
                 "--   {}: {} -> {}",
                 rename.importer, rename.from, rename.to
+            );
+        }
+    }
+    if !result.builtin_definitions.is_empty() {
+        let _ = writeln!(
+            header,
+            "--\n-- Definitions of built-in types commented out (/* */ in the module text):\n\
+             --   These modules are written in 1988 ASN.1 (X.208), which has no UniversalString, BMPString or\n\
+             --   UTF8String, so they define them with the universal tag a later edition gave the type, e.g.\n\
+             --   UniversalString ::= [UNIVERSAL 28] IMPLICIT OCTET STRING. In current ASN.1 these are built-in\n\
+             --   types: their names are reserved words (X.680 12.38) that no type reference may be (12.2.2), and\n\
+             --   no module may assign universal tags (31.2.5), so a compiler rejects the definition. The built-in\n\
+             --   type is encoded alike. Only a definition with exactly the type's own tag is commented out, as\n\
+             --   RFC 5280's PKIX1Implicit88 says to do \"if 'new' types are supported\"; imports of it are too."
+        );
+        for definition in &result.builtin_definitions {
+            let _ = writeln!(header, "--   {}: {}", definition.module, definition.name);
+        }
+        for import in &result.builtin_imports {
+            let _ = writeln!(
+                header,
+                "--   {}: import of {} from {}",
+                import.importer, import.name, import.from
             );
         }
     }

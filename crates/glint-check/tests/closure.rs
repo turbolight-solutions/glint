@@ -53,6 +53,7 @@ fn input(text: &str) -> ClosureInput {
 const AS_WRITTEN: ClosureOptions = ClosureOptions {
     rename: false,
     renumber: false,
+    builtin_strings: false,
 };
 const RENAME: ClosureOptions = ClosureOptions {
     rename: true,
@@ -60,6 +61,10 @@ const RENAME: ClosureOptions = ClosureOptions {
 };
 const RENUMBER: ClosureOptions = ClosureOptions {
     renumber: true,
+    ..AS_WRITTEN
+};
+const BUILTIN_STRINGS: ClosureOptions = ClosureOptions {
+    builtin_strings: true,
     ..AS_WRITTEN
 };
 
@@ -241,6 +246,122 @@ fn same_named_modules_of_one_document_are_told_apart_by_identifier() {
     let mut got = names(&result);
     got.sort_unstable();
     assert_eq!(got, ["Base-rfc4-1-2-3", "Base-rfc4-1-2-9", "Top"]);
+}
+
+const EXPLICIT88: &str = "Explicit88 { 1 2 5 } DEFINITIONS ::= BEGIN
+UniversalString ::= [UNIVERSAL 28] IMPLICIT OCTET STRING -- defined in ASN.1:1993
+BMPString ::= [UNIVERSAL 30] IMPLICIT OCTET STRING
+UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING
+Name ::= CHOICE { utf8 UTF8String, bmp BMPString }
+END";
+
+#[test]
+fn definitions_of_built_in_string_types_and_their_imports_are_commented_out() {
+    // RFC 5280's PKIX1Explicit88 is 1988 ASN.1 and defines these types with their universal tags.
+    let corpus = corpus(vec![record(5280, EXPLICIT88)]);
+    let result = run(
+        &[input(
+            "Implicit88 DEFINITIONS ::= BEGIN IMPORTS BMPString, UTF8String, -- new types --\n\
+             Name, UniversalString FROM Explicit88 { 1 2 5 }; A ::= SEQUENCE { n Name, s UTF8String } END",
+        )],
+        &corpus,
+        BUILTIN_STRINGS,
+    );
+    let explicit = text_of(&result, "Explicit88");
+    assert!(
+        explicit.contains(
+            "/* UniversalString ::= [UNIVERSAL 28] IMPLICIT OCTET STRING */ -- built in since ASN.1:1994; \
+             see the header of combined.asn -- -- defined in ASN.1:1993"
+        ),
+        "{explicit}"
+    );
+    assert!(explicit.contains("/* UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING */"));
+    assert!(explicit.contains("Name ::= CHOICE { utf8 UTF8String, bmp BMPString }"));
+    let implicit = text_of(&result, "Implicit88");
+    assert!(
+        implicit.contains(
+            "IMPORTS /* BMPString, UTF8String, */ -- new types --\nName/* , UniversalString */ FROM"
+        ),
+        "{implicit}"
+    );
+    let definitions: Vec<&str> = result
+        .builtin_definitions
+        .iter()
+        .map(|d| d.name.as_str())
+        .collect();
+    assert_eq!(definitions, ["UniversalString", "BMPString", "UTF8String"]);
+    let imports: Vec<(&str, &str)> = result
+        .builtin_imports
+        .iter()
+        .map(|i| (i.importer.as_str(), i.name.as_str()))
+        .collect();
+    assert_eq!(
+        imports,
+        [
+            ("Implicit88", "BMPString"),
+            ("Implicit88", "UTF8String"),
+            ("Implicit88", "UniversalString")
+        ]
+    );
+}
+
+#[test]
+fn without_builtin_strings_a_definition_of_a_built_in_string_type_is_a_warning() {
+    let corpus = corpus(vec![record(5280, EXPLICIT88)]);
+    let result = run(
+        &[input(
+            "Top DEFINITIONS ::= BEGIN IMPORTS UTF8String FROM Explicit88 { 1 2 5 }; A ::= UTF8String END",
+        )],
+        &corpus,
+        AS_WRITTEN,
+    );
+    assert_eq!(text_of(&result, "Explicit88"), EXPLICIT88);
+    assert!(result.builtin_definitions.is_empty() && result.builtin_imports.is_empty());
+    let warnings: Vec<String> = result.warnings.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        warnings,
+        ["UniversalString", "BMPString", "UTF8String"].map(|name| format!(
+            "Explicit88: defines {name}, a built-in type in current ASN.1, which a compiler of current ASN.1 \
+             rejects"
+        ))
+    );
+}
+
+#[test]
+fn an_import_of_nothing_but_a_built_in_string_type_is_commented_out_whole() {
+    // RFC 5698's DSSC imports UTF8String alone from PKIX1Explicit88.
+    let corpus = corpus(vec![record(5280, EXPLICIT88)]);
+    let result = run(
+        &[input(
+            "Dssc DEFINITIONS ::= BEGIN IMPORTS UTF8String FROM Explicit88 { 1 2 5 }; A ::= UTF8String END",
+        )],
+        &corpus,
+        BUILTIN_STRINGS,
+    );
+    let dssc = text_of(&result, "Dssc");
+    assert!(
+        dssc.contains(
+            "IMPORTS /* UTF8String FROM Explicit88 { 1 2 5 } */ -- a built-in type in current ASN.1 --;"
+        ),
+        "{dssc}"
+    );
+}
+
+#[test]
+fn a_definition_with_another_tag_is_left_for_the_compiler() {
+    let corpus = corpus(vec![record(
+        1,
+        "Odd { 1 2 6 } DEFINITIONS ::= BEGIN UTF8String ::= [UNIVERSAL 4] IMPLICIT OCTET STRING END",
+    )]);
+    let result = run(
+        &[input(
+            "Top DEFINITIONS ::= BEGIN IMPORTS UTF8String FROM Odd { 1 2 6 }; A ::= UTF8String END",
+        )],
+        &corpus,
+        BUILTIN_STRINGS,
+    );
+    assert!(result.builtin_definitions.is_empty() && result.builtin_imports.is_empty());
+    assert!(text_of(&result, "Odd").contains("UTF8String ::= [UNIVERSAL 4] IMPLICIT OCTET STRING"));
 }
 
 #[test]

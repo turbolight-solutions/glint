@@ -34,9 +34,10 @@ enum Command {
     /// for a rewrite. A set that needs two modules of one name is an error without `--rename`, since one file per name
     /// cannot hold them. Whatever else a compiler that reads one module per file and finds imports by name may reject
     /// is a warning, on stderr and in the header of combined.asn, naming the option that rewrites it: `--rename` for an
-    /// import resolved by its OID to a module of another name, and `--renumber` for an OID arc with no number (`TBD`)
-    /// in an Internet-Draft or an input file. Such an arc in an RFC needs an erratum: it is a warning that no option
-    /// fixes. Every rewrite is reported too.
+    /// import resolved by its OID to a module of another name, `--renumber` for an OID arc with no number (`TBD`) in
+    /// an Internet-Draft or an input file, and `--builtin-strings` for 1988-syntax definitions of `UniversalString`,
+    /// `BMPString` and `UTF8String`, which current ASN.1 has built in. An OID arc with no number in an RFC needs an
+    /// erratum: it is a warning that no option fixes. Every rewrite is reported too.
     ///
     /// The output directory gets `modules/<Name>.asn` per module, `modules.tsv` (name, input or dependency,
     /// source; dependencies first) and `combined.asn` (every module in one file, dependencies first).

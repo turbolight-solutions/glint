@@ -15,6 +15,9 @@
 //!   [`FIRST_AUTO_ARC`] up, in key order. Only modules of Internet-Drafts and input texts are renumbered: an arc
 //!   with no number in a published document (an RFC) is left as written, with a warning, since only a correction of
 //!   the document (an RFC erratum) can number it.
+//! - `builtin_strings`: a 1988-syntax module's own definition of `UniversalString`, `BMPString` or `UTF8String` with
+//!   the type's universal tag is commented out, with the imports of it, since these are built-in types in current
+//!   ASN.1 (see [`glint_sema::legacy_string_definition`]).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
@@ -24,7 +27,25 @@ use glint_sema::{
     AssignedId, Evaluator, Matched, ModuleGraph, ModuleId, Options, Origin, PlaceholderArc,
     placeholder_arc,
 };
-use glint_syntax::{ParseOptions, SyntaxKind, SyntaxNode, TextRange, parse_source_with};
+use glint_syntax::{ParseOptions, SyntaxKind, SyntaxNode, TextRange, TextSize, parse_source_with};
+
+/// A definition of a built-in string type that the closure commented out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuiltinDefinition {
+    /// The module, by its name in the closure.
+    pub module: String,
+    pub name: String,
+}
+
+/// An import of a commented-out definition that the closure commented out too.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuiltinImport {
+    /// The importing module, by its name in the closure.
+    pub importer: String,
+    pub name: String,
+    /// The module it was imported from, by its name in the closure.
+    pub from: String,
+}
 
 /// The rewrites to make; with none, every module is written as it is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -33,6 +54,8 @@ pub struct ClosureOptions {
     pub rename: bool,
     /// Give object identifier arcs that have no number one.
     pub renumber: bool,
+    /// Comment out 1988 definitions of built-in string types, and the imports of them.
+    pub builtin_strings: bool,
 }
 
 /// Something in the closure that a compiler which finds imports by name may reject, left as written because the
@@ -53,6 +76,8 @@ pub enum Warning {
         document: String,
         sites: Vec<(String, String)>,
     },
+    /// A 1988 definition of a built-in string type (fixed by `builtin_strings`).
+    BuiltinString(BuiltinDefinition),
 }
 
 impl fmt::Display for Warning {
@@ -77,6 +102,11 @@ impl fmt::Display for Warning {
                 f,
                 "OID: {key} has no number for its last arc in {}, as published in {document}",
                 written_sites(sites)
+            ),
+            Self::BuiltinString(definition) => write!(
+                f,
+                "{}: defines {}, a built-in type in current ASN.1, which a compiler of current ASN.1 rejects",
+                definition.module, definition.name
             ),
         }
     }
@@ -186,6 +216,10 @@ pub struct Closure {
     pub modules: Vec<ClosureModule>,
     /// Modules renamed so that every module of the closure has its own name.
     pub module_renames: Vec<ModuleRename>,
+    /// Definitions of built-in string types commented out ([`glint_sema::legacy_string_definition`]).
+    pub builtin_definitions: Vec<BuiltinDefinition>,
+    /// Imports of those definitions commented out.
+    pub builtin_imports: Vec<BuiltinImport>,
     pub renames: Vec<Rename>,
     pub arcs: Vec<ArcFill>,
     /// Import cycles, as module names; the order within a cycle is approximate.
@@ -438,6 +472,20 @@ pub fn closure(
     if !rewrites.rename {
         warnings.extend(renames.drain(..).map(Warning::ImportName));
     }
+    let (mut builtin_definitions, mut builtin_imports) = builtin_strings(
+        &graph,
+        &walk.order,
+        &names,
+        if rewrites.builtin_strings {
+            &mut edits
+        } else {
+            &mut dropped
+        },
+    );
+    if !rewrites.builtin_strings {
+        warnings.extend(builtin_definitions.drain(..).map(Warning::BuiltinString));
+        builtin_imports.clear();
+    }
 
     let root_set: HashSet<ModuleId> = roots.iter().copied().collect();
     let modules = walk
@@ -474,6 +522,8 @@ pub fn closure(
     Ok(Closure {
         modules,
         module_renames,
+        builtin_definitions,
+        builtin_imports,
         renames,
         arcs,
         cycles: walk.cycles,
@@ -707,6 +757,144 @@ fn distinct_names(
         }
     }
     (names, renamed)
+}
+
+/// Comments out each 1988 definition of a built-in string type, and each import of such a definition.
+///
+/// X.208 (1988) had no `UniversalString`, `BMPString` or `UTF8String`, so modules that keep to 1988 syntax define
+/// them by hand with the universal tag a later edition gave the type, as RFC 5280's `PKIX1Explicit88` does
+/// (`UniversalString ::= [UNIVERSAL 28] IMPLICIT OCTET STRING`). Under current ASN.1 the names are reserved words
+/// (X.680 12.38, 12.2.2) and a user module may not use universal tags (31.2.5), so a compiler of current ASN.1
+/// rejects the definition; the built-in type is encoded alike. Exactly that form
+/// ([`glint_sema::legacy_string_definition`]) is commented out, in any module of the closure, as RFC 5280's
+/// `PKIX1Implicit88` asks a reader to do "if 'new' types are supported"; any other definition of these names is
+/// left for the compiler. An import of it goes too: the imported symbol, or the whole `SymbolsFromModule` when nothing else is
+/// imported from that module (`IMPORTS ;` is valid, 13.1). Uses `/* */` comments (12.6.4), which may span lines
+/// and contain `--`, so nothing of the author's text is lost. Edits are insertions, so they compose with the
+/// renames made inside a commented-out import.
+fn builtin_strings(
+    graph: &ModuleGraph<'_>,
+    order: &[ModuleId],
+    names: &HashMap<ModuleId, String>,
+    edits: &mut HashMap<ModuleId, Vec<(TextRange, String)>>,
+) -> (Vec<BuiltinDefinition>, Vec<BuiltinImport>) {
+    let final_name = |id: ModuleId| {
+        names
+            .get(&id)
+            .cloned()
+            .unwrap_or_else(|| module_name(graph, id))
+    };
+    let mut removed: HashMap<ModuleId, Vec<String>> = HashMap::new();
+    let mut definitions = Vec::new();
+    for &id in order {
+        let Some(module) = graph.module(id) else {
+            continue;
+        };
+        for symbol in &module.model.symbols {
+            let Some(name) = glint_sema::legacy_string_definition(&symbol.node) else {
+                continue;
+            };
+            let text = symbol.node.text().to_string();
+            if text.contains("/*") || text.contains("*/") {
+                continue;
+            }
+            let range = symbol.node.text_range();
+            comment_out(
+                edits.entry(id).or_default(),
+                range,
+                "built in since ASN.1:1994; see the header of combined.asn",
+            );
+            removed.entry(id).or_default().push(name.to_owned());
+            definitions.push(BuiltinDefinition {
+                module: final_name(id),
+                name: name.to_owned(),
+            });
+        }
+    }
+    let mut imports = Vec::new();
+    for &id in order {
+        let Some(module) = graph.module(id) else {
+            continue;
+        };
+        for (clause, resolved) in module.model.imports.iter().zip(&module.imports) {
+            let Some(gone) = resolved.target.and_then(|t| removed.get(&t)) else {
+                continue;
+            };
+            let drop: Vec<bool> = clause
+                .symbols
+                .iter()
+                .map(|s| gone.contains(&s.name))
+                .collect();
+            if !drop.contains(&true) {
+                continue;
+            }
+            let from = resolved.target.map(final_name).unwrap_or_default();
+            for (symbol, _) in clause.symbols.iter().zip(&drop).filter(|(_, d)| **d) {
+                imports.push(BuiltinImport {
+                    importer: final_name(id),
+                    name: symbol.name.clone(),
+                    from: from.clone(),
+                });
+            }
+            let changes = edits.entry(id).or_default();
+            let Some(last_kept) = drop.iter().rposition(|d| !d) else {
+                comment_out(changes, clause.range, "a built-in type in current ASN.1");
+                continue;
+            };
+            // Each run of dropped symbols before the last one kept, `X, Y,` through the comma after it, is one
+            // comment, so no two comments meet.
+            let mut index = 0;
+            while index < last_kept {
+                if !drop.get(index).copied().unwrap_or(false) {
+                    index = index.saturating_add(1);
+                    continue;
+                }
+                let first = index;
+                while drop.get(index).copied().unwrap_or(false) {
+                    index = index.saturating_add(1);
+                }
+                let last = index.checked_sub(1).and_then(|i| clause.symbols.get(i));
+                if let (Some(start), Some(last)) = (clause.symbols.get(first), last) {
+                    let end = comma_after(module.node.syntax(), last.range.end())
+                        .or_else(|| clause.symbols.get(index).map(|next| next.range.start()))
+                        .unwrap_or(last.range.end());
+                    comment_out(changes, TextRange::new(start.range.start(), end), "");
+                }
+            }
+            // `, X, Y` after the last symbol kept.
+            if let (Some(kept), Some(last)) = (clause.symbols.get(last_kept), clause.symbols.last())
+                && last_kept.saturating_add(1) < clause.symbols.len()
+            {
+                comment_out(
+                    changes,
+                    TextRange::new(kept.range.end(), last.range.end()),
+                    "",
+                );
+            }
+        }
+    }
+    (definitions, imports)
+}
+
+/// The end of the comma that is the first token after `offset`, if it is one.
+fn comma_after(node: &SyntaxNode, offset: TextSize) -> Option<TextSize> {
+    node.descendants_with_tokens()
+        .filter_map(|element| element.into_token())
+        .filter(|t| !t.kind().is_trivia())
+        .find(|t| t.text_range().start() >= offset)
+        .filter(|t| t.kind() == SyntaxKind::Comma)
+        .map(|t| t.text_range().end())
+}
+
+/// Wraps `range` in a `/* */` comment by two insertions, with `note` after it as a `--` comment.
+fn comment_out(changes: &mut Vec<(TextRange, String)>, range: TextRange, note: &str) {
+    changes.push((TextRange::empty(range.start()), "/* ".to_owned()));
+    let end = if note.is_empty() {
+        " */".to_owned()
+    } else {
+        format!(" */ -- {note} --")
+    };
+    changes.push((TextRange::empty(range.end()), end));
 }
 
 /// `text` as a module reference (X.680 12.2, 12.5): letters, digits and single hyphens, not ending in a hyphen.
