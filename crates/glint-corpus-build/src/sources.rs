@@ -25,14 +25,15 @@ pub struct Body {
 }
 
 /// One downloadable module. The OID is the identity: editions of a specification keep the module name and change
-/// the OID, so several entries may share a name.
+/// the OID, so several entries may share a name. A module whose header gives no OID (13.1 allows an empty
+/// "DefinitiveIdentification") is listed without one and identified by its document and name.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Entry {
     pub body: String,
     pub document: String,
     pub edition: Option<String>,
     pub name: String,
-    pub oid: Oid,
+    pub oid: Option<Oid>,
     pub url: String,
     #[serde(default)]
     pub include: Include,
@@ -51,6 +52,7 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
     let manifest: Manifest =
         toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut seen: HashSet<&Oid> = HashSet::new();
+    let mut seen_without: HashSet<(&str, &str)> = HashSet::new();
     for entry in &manifest.module {
         if entry.body == BODY_RFC {
             return Err(format!(
@@ -67,13 +69,23 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
                 entry.body
             ));
         }
-        if !seen.insert(&entry.oid) {
-            return Err(format!(
-                "{}: OID {} is listed twice (second time as {})",
-                path.display(),
-                entry.oid,
-                entry.name
-            ));
+        match &entry.oid {
+            Some(oid) if !seen.insert(oid) => {
+                return Err(format!(
+                    "{}: OID {oid} is listed twice (second time as {})",
+                    path.display(),
+                    entry.name
+                ));
+            }
+            None if !seen_without.insert((&entry.document, &entry.name)) => {
+                return Err(format!(
+                    "{}: {} of {} is listed twice without an OID",
+                    path.display(),
+                    entry.name,
+                    entry.document
+                ));
+            }
+            _ => {}
         }
     }
     Ok(manifest)
@@ -107,6 +119,8 @@ pub struct Defined {
 /// The `when-imported` entries to download for `needs`. An import with an OID takes the entry with that OID.
 /// Otherwise, or when the manifest has no such OID, it takes the entries of that name, but only while no module of
 /// the name is defined at all, so a name-only import never pulls in a second edition of a module the corpus has.
+/// An entry without an OID is taken only by an import without one: an import that gives an OID names a module
+/// that has one.
 pub fn select<'a>(
     manifest: &'a [Entry],
     needs: &HashSet<Need>,
@@ -122,31 +136,41 @@ pub fn select<'a>(
         let exact: Vec<&Entry> = need
             .oid
             .as_ref()
-            .map(|oid| on_demand().filter(|e| &e.oid == oid).collect())
+            .map(|oid| {
+                on_demand()
+                    .filter(|e| e.oid.as_ref() == Some(oid))
+                    .collect()
+            })
             .unwrap_or_default();
         let candidates: Vec<&Entry> = if exact.is_empty() {
             if defined.names.contains(&need.name) {
                 Vec::new()
             } else {
-                on_demand().filter(|e| e.name == need.name).collect()
+                on_demand()
+                    .filter(|e| e.name == need.name && (e.oid.is_some() || need.oid.is_none()))
+                    .collect()
             }
         } else {
             exact
         };
         for entry in candidates {
-            if !defined.oids.contains(&entry.oid) && !chosen.iter().any(|c| c.oid == entry.oid) {
+            let defined_already = entry
+                .oid
+                .as_ref()
+                .is_some_and(|oid| defined.oids.contains(oid));
+            if !defined_already && !chosen.iter().any(|c| std::ptr::eq(*c, entry)) {
                 chosen.push(entry);
             }
         }
     }
-    chosen.sort_by(|a, b| a.oid.cmp(&b.oid));
+    chosen.sort_by(|a, b| (&a.oid, &a.document, &a.name).cmp(&(&b.oid, &b.document, &b.name)));
     chosen
 }
 
 /// A downloaded module with the source record it will carry.
 pub struct Fetched {
     pub name: String,
-    pub oid: Oid,
+    pub oid: Option<Oid>,
     pub text: String,
     pub source: ModuleSource,
 }
@@ -161,7 +185,7 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
     let mut problems = Vec::new();
     let _ = std::fs::create_dir_all(cache);
     for entry in entries {
-        let file = cache.join(format!("{}-{}.asn", entry.name, entry.oid));
+        let file = cache.join(cache_name(entry));
         let cached = std::fs::read(&file)
             .ok()
             .map(|bytes| decode(&bytes))
@@ -193,21 +217,59 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
                     kind: SourceKind::Standalone,
                 },
             }),
-            Err(why) => problems.push(format!(
-                "{} {} from {}: {why}",
-                entry.name, entry.oid, entry.url
-            )),
+            Err(why) => problems.push(format!("{} from {}: {why}", entry_label(entry), entry.url)),
         }
     }
     (out, problems)
 }
 
-/// Why `text` is not the module `entry` lists, or `None` when it is.
+/// The cache file of `entry`: by name and OID, or by document and name for an entry without an OID.
+fn cache_name(entry: &Entry) -> String {
+    match &entry.oid {
+        Some(oid) => format!("{}-{oid}.asn", entry.name),
+        None => {
+            let document: String = entry
+                .document
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '.' {
+                        c
+                    } else {
+                        '-'
+                    }
+                })
+                .collect();
+            format!("{document}-{}.asn", entry.name)
+        }
+    }
+}
+
+/// `entry` in a problem: its name and OID, or its name and document when it has no OID.
+fn entry_label(entry: &Entry) -> String {
+    match &entry.oid {
+        Some(oid) => format!("{} {oid}", entry.name),
+        None => format!("{} of {}", entry.name, entry.document),
+    }
+}
+
+/// Why `text` is not the module `entry` lists, or `None` when it is. With an OID, the module whose definitive
+/// identifier is that OID (13.8; the module of the entry's name if the file has several). Without one, a module of
+/// the entry's name whose header gives no OID: a module that has one is listed with it.
 fn not_the_module(text: &str, entry: &Entry) -> Option<String> {
-    match crate::build::module_oid(text, &entry.name) {
-        None => Some("not an ASN.1 module with an identifier".to_owned()),
-        Some(oid) if oid != entry.oid => Some(format!("the module's identifier is {oid}")),
-        Some(_) => None,
+    let Some((name, found)) = crate::build::module_identity(text, &entry.name) else {
+        return Some("not an ASN.1 module".to_owned());
+    };
+    match (&entry.oid, found) {
+        (Some(listed), Some(oid)) if &oid == listed => None,
+        (Some(_), Some(oid)) => Some(format!("the module's identifier is {oid}")),
+        (Some(_), None) => Some(format!(
+            "module {name} has no identifier; list it without `oid`"
+        )),
+        (None, Some(oid)) => Some(format!(
+            "the module's identifier is {oid}; list it with `oid`"
+        )),
+        (None, None) if name != entry.name => Some(format!("the module is called {name}")),
+        (None, None) => None,
     }
 }
 
@@ -265,7 +327,7 @@ mod tests {
     fn entry(name: &str, oid: &str, edition: &str) -> Entry {
         Entry {
             name: name.to_owned(),
-            oid: oid.parse().unwrap(),
+            oid: Some(oid.parse().unwrap()),
             url: format!("https://example.test/{name}/{edition}.asn"),
             body: "itu-t".to_owned(),
             document: "X.509".to_owned(),
@@ -293,7 +355,11 @@ mod tests {
         let needs: HashSet<Need> = needs.iter().cloned().collect();
         select(manifest, &needs, defined)
             .iter()
-            .map(|e| e.oid.to_string())
+            .map(|e| {
+                e.oid
+                    .as_ref()
+                    .map_or_else(|| e.name.clone(), ToString::to_string)
+            })
             .collect()
     }
 
@@ -312,8 +378,63 @@ mod tests {
             "<HTML><PRE>Standalone { 1 2 3 4 } <B>DEFINITIONS</B> ::= <B>BEGIN</B></PRE></HTML>";
         assert_eq!(
             not_the_module(page, &entry).as_deref(),
-            Some("not an ASN.1 module with an identifier")
+            Some("not an ASN.1 module")
         );
+        assert_eq!(
+            not_the_module("Standalone DEFINITIONS ::= BEGIN END", &entry).as_deref(),
+            Some("module Standalone has no identifier; list it without `oid`")
+        );
+    }
+
+    fn without_oid(name: &str) -> Entry {
+        Entry {
+            oid: None,
+            document: "T.101".to_owned(),
+            ..entry(name, "1", "1994")
+        }
+    }
+
+    #[test]
+    fn an_entry_without_an_oid_is_a_module_of_its_name_without_one() {
+        let entry = without_oid("Videotex");
+        assert_eq!(
+            not_the_module("Videotex DEFINITIONS ::= BEGIN END", &entry),
+            None
+        );
+        assert_eq!(
+            not_the_module("Videotex { 1 2 3 } DEFINITIONS ::= BEGIN END", &entry).as_deref(),
+            Some("the module's identifier is 1.2.3; list it with `oid`")
+        );
+        assert_eq!(
+            not_the_module("Teletex DEFINITIONS ::= BEGIN END", &entry).as_deref(),
+            Some("the module is called Teletex")
+        );
+        assert_eq!(cache_name(&entry), "T.101-Videotex.asn");
+        assert_eq!(
+            cache_name(&Entry {
+                document: "ISO/IEC 9541-2".to_owned(),
+                ..without_oid("Font")
+            }),
+            "ISO-IEC-9541-2-Font.asn"
+        );
+    }
+
+    #[test]
+    fn only_an_import_without_an_oid_takes_an_entry_without_one() {
+        let manifest = vec![without_oid("Videotex")];
+        let by_name = picked(&manifest, &[need("Videotex", None)], &Defined::default());
+        assert_eq!(by_name, ["Videotex"]);
+        let by_oid = picked(
+            &manifest,
+            &[need("Videotex", Some("1.2.3"))],
+            &Defined::default(),
+        );
+        assert!(by_oid.is_empty());
+        let defined = Defined {
+            names: HashSet::from(["Videotex".to_owned()]),
+            ..Defined::default()
+        };
+        assert!(picked(&manifest, &[need("Videotex", None)], &defined).is_empty());
     }
 
     #[test]

@@ -642,6 +642,46 @@ fn standalone_modules_join_the_corpus_beside_the_rfc_modules() {
 }
 
 #[test]
+fn a_listed_module_without_an_oid_satisfies_an_import_by_name() {
+    // X.680 13.1 allows a module header without an OID; T.101's Videotex-Coding-Attributes has none, and the
+    // modules that use it import it by name alone.
+    let dir = std::env::temp_dir().join(format!("glint-src-no-oid-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("rfc")).unwrap();
+    std::fs::create_dir_all(dir.join("cache")).unwrap();
+    std::fs::write(
+        dir.join("rfc/rfc9997.txt"),
+        IMPORTING_RFC.replace("FROM Standalone { 1 2 3 4 }", "FROM NoOid"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("cache/TS-102-941-NoOid.asn"),
+        "NoOid DEFINITIONS ::= BEGIN\nShared ::= INTEGER\nEND\n",
+    )
+    .unwrap();
+    let manifest = "[[body]]\nid = \"etsi\"\nnotice = \"ETSI credit\"\n\n[[module]]\nbody = \"etsi\"\n\
+        document = \"TS 102 941\"\nname = \"NoOid\"\nurl = \"https://example.test/NoOid.asn\"\n";
+    std::fs::write(dir.join("sources.toml"), manifest).unwrap();
+    let output = build_sources_in(&dir).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let corpus = read_corpus(&dir);
+    let bundled = &corpus.modules()[corpus.by_name("NoOid")[0]];
+    assert_eq!(bundled.oid, None);
+    assert_eq!(bundled.source.document, "TS 102 941");
+    let importer = &corpus.modules()[corpus.by_name("Importer")[0]];
+    assert_eq!(
+        importer.parse_status,
+        glint_corpus::ParseStatus::Clean,
+        "the import by name is satisfied"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_cached_page_that_is_not_the_module_fails_the_build() {
     // An HTML page cached as the module (an entry that pointed at a rendering, or an error page served with status
     // 200) is not used: it is downloaded again, and when that fails too the build fails before writing anything.

@@ -154,7 +154,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         }
         let mut batch: Vec<Candidate> = Vec::new();
         for item in fetched {
-            fetched_oids.insert(item.oid.clone());
+            fetched_oids.extend(item.oid.clone());
             batch.push(standalone_candidate(item));
         }
         apply_overrides(&mut batch, &mut pending, &mut applied)?;
@@ -595,7 +595,14 @@ fn parses_cleanly(text: &str) -> bool {
 }
 
 /// The definitive identifier of the module called `name` in `text`.
-pub(crate) fn module_oid(text: &str, name: &str) -> Option<Oid> {
+fn module_oid(text: &str, name: &str) -> Option<Oid> {
+    module_identity(text, name).and_then(|(_, oid)| oid)
+}
+
+/// The module called `name` in `text`, or else its first module: the module's name and its definitive identifier,
+/// `None` when the header has none (13.1 allows an empty "DefinitiveIdentification"). `None` when `text` has no
+/// module.
+pub(crate) fn module_identity(text: &str, name: &str) -> Option<(String, Option<Oid>)> {
     let parse = parse_source_with(text, ParseOptions::corpus());
     let file = ast::SourceFile::cast(parse.syntax())?;
     let module = file
@@ -603,7 +610,11 @@ pub(crate) fn module_oid(text: &str, name: &str) -> Option<Oid> {
         .find(|m| m.name().is_some_and(|n| n.text() == name))
         .or_else(|| file.modules().next())?;
     let model = ModuleModel::build(&module)?;
-    model.oid_group.as_ref().and_then(Evaluator::literal_oid)
+    let found = module.name()?.text().to_string();
+    Some((
+        found,
+        model.oid_group.as_ref().and_then(Evaluator::literal_oid),
+    ))
 }
 
 /// Indexes of the candidates an override replaces: those of its document and module name, narrowed to its OID when

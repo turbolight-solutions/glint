@@ -7,9 +7,12 @@
 #
 # A `[[module]]` is one downloadable module. `document` is the specification it is published in (`X.509`) and
 # `edition` its edition; the module's `oid` is its definitive identifier and identifies the entry: editions of a
-# specification reuse the module name and change the OID, so list each edition you want as its own entry.
+# specification reuse the module name and change the OID, so list each edition you want as its own entry. A module
+# whose header gives no OID (X.680 13.1 allows that) is listed without `oid` and identified by `document` and
+# `name`; only imports that give no OID take it.
 # `url` must give the module itself (ITU-T's .asn files, not their HTML renderings): a download that is not a module
-# whose identifier is that `oid` fails the build, as does one that fails.
+# whose identifier is that `oid` (without `oid`: a module of that name with no OID) fails the build, as does one
+# that fails.
 #
 # `include` says when the module is bundled:
 #   "when-imported" (default)  only when some corpus module imports it and nothing in the corpus satisfies the
