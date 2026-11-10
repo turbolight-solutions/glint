@@ -917,3 +917,114 @@ fn a_full_module_is_kept_over_an_earlier_stub_that_also_parses() {
     assert!(module.text.contains("Int32"), "{}", module.text);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// An SMI module (it imports RFC1155-SMI) and a module that uses it, as RFC 1303 has `RFC-1303` and its usage
+/// example `FourBSD-ISODE`.
+const SMI_RFC: &str = "\
+3.1.  Definitions
+
+   Macros DEFINITIONS ::= BEGIN
+   IMPORTS ObjectName FROM RFC1155-SMI;
+   Thing ::= ObjectName
+   END
+
+3.4.  Usage Example
+
+   Example DEFINITIONS ::= BEGIN
+   IMPORTS Thing FROM Macros;
+   Used ::= Thing
+   END
+";
+
+/// A module that imports the usage example, so it is skipped only once the example is.
+const SMI_USER_RFC: &str = "\
+Appendix A.  Module
+
+   Deeper DEFINITIONS ::= BEGIN
+   IMPORTS Used FROM Example;
+   Again ::= Used
+   END
+";
+
+/// An SMI module whose name an ASN.1 module also has, as RFC 1448 and 1905 have an SMI `SNMPv2-PDU` and RFC 3416
+/// an ASN.1 one.
+const SMI_TWIN_RFC: &str = "\
+Appendix A.  Module
+
+   Shared DEFINITIONS ::= BEGIN
+   IMPORTS ObjectName FROM SNMPv2-SMI;
+   Value ::= ObjectName
+   END
+";
+
+const ASN1_TWIN_RFC: &str = "\
+Appendix A.  Modules
+
+   Shared DEFINITIONS ::= BEGIN
+   Value ::= INTEGER
+   END
+
+   KeptImporter DEFINITIONS ::= BEGIN
+   IMPORTS Value FROM Shared;
+   Kept ::= Value
+   END
+";
+
+#[test]
+fn a_module_that_needs_a_skipped_smi_module_is_skipped_too() {
+    let dir = std::env::temp_dir().join(format!("glint-smi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    for (rfc, text) in [
+        (9991, SMI_RFC),
+        (9992, SMI_USER_RFC),
+        (9993, SMI_TWIN_RFC),
+        (9994, ASN1_TWIN_RFC),
+    ] {
+        std::fs::write(rfcs.join(format!("rfc{rfc}.txt")), text).unwrap();
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-10"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let corpus = read_corpus(&dir);
+    for name in ["Macros", "Example", "Deeper"] {
+        assert!(corpus.by_name(name).is_empty(), "{name} is skipped");
+    }
+    // The import of Shared is satisfied by the ASN.1 module, so it never reaches the SMI one.
+    assert_eq!(corpus.by_name("Shared").len(), 1);
+    assert_eq!(corpus.by_name("KeptImporter").len(), 1);
+    let documents: Vec<&str> = corpus.documents().iter().map(|d| d.id.as_str()).collect();
+    assert_eq!(
+        documents,
+        ["rfc9994"],
+        "documents left with no module are not listed"
+    );
+
+    let report = std::fs::read_to_string(dir.join("out/report.md")).unwrap();
+    let skipped = report
+        .split("## Skipped SMI modules")
+        .nth(1)
+        .and_then(|rest| rest.split("\n## ").next())
+        .unwrap();
+    for line in [
+        "- RFC 9991: `Macros`",
+        "- RFC 9991: `Example`",
+        "- RFC 9992: `Deeper`",
+        "- RFC 9993: `Shared`",
+    ] {
+        assert!(skipped.contains(line), "{line} in {skipped}");
+    }
+    assert!(!skipped.contains("KeptImporter"), "{skipped}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

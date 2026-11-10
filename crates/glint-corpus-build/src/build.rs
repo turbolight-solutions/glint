@@ -49,6 +49,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
 
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut skipped_smi: Vec<(u32, String)> = Vec::new();
+    // Every module skipped as SMI, RFC or draft, by name and OID: imports of them are resolved against this.
+    let mut smi_modules: Vec<(String, Option<Oid>)> = Vec::new();
     let mut extraction_notes: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     let mut rfcs_with_modules: HashSet<u32> = HashSet::new();
     // The text of every document with a module, by document id, for documents.bin.
@@ -59,6 +61,10 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         }
         for candidate in extraction.candidates {
             if candidate.smi {
+                smi_modules.push((
+                    candidate.name.clone(),
+                    module_oid(&candidate.text, &candidate.name),
+                ));
                 skipped_smi.push((rfc, candidate.name));
             } else {
                 rfcs_with_modules.insert(rfc);
@@ -87,11 +93,12 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     };
     let mut drafts_with_modules = 0_usize;
     for (id, extraction) in extracted_drafts {
-        let modules: Vec<Candidate> = extraction
-            .candidates
-            .into_iter()
-            .filter(|c| !c.smi)
-            .collect();
+        let (smi, modules): (Vec<Candidate>, Vec<Candidate>) =
+            extraction.candidates.into_iter().partition(|c| c.smi);
+        smi_modules.extend(
+            smi.iter()
+                .map(|c| (c.name.clone(), module_oid(&c.text, &c.name))),
+        );
         if !modules.is_empty() {
             drafts_with_modules = drafts_with_modules.saturating_add(1);
             candidates.extend(modules);
@@ -169,6 +176,28 @@ pub fn run(settings: &Settings) -> Result<String, String> {
                     ));
                 }
             }
+        }
+    }
+    // A module that imports a skipped SMI module, where nothing in the corpus satisfies the import, is written in
+    // that module's macros: it is skipped too. RFC 1303's FourBSD-ISODE uses the MODULE-CONFORMANCE macro of its
+    // RFC-1303, which imports RFC1155-SMI.
+    let mut emptied: HashSet<String> = HashSet::new();
+    for record in skip_smi_importers(&mut records, &mut smi_modules) {
+        if let Some(rfc) = record.source.rfc_number() {
+            skipped_smi.push((rfc, record.name.clone()));
+        }
+        emptied.insert(record.source.document.clone());
+    }
+    skipped_smi.sort_by_key(|(rfc, _)| *rfc);
+    for record in &records {
+        emptied.remove(&record.source.document);
+    }
+    for id in &emptied {
+        texts_by_id.remove(id);
+        if let Some(rfc) = glint_corpus::rfc_number(id) {
+            rfcs_with_modules.remove(&rfc);
+        } else {
+            drafts_with_modules = drafts_with_modules.saturating_sub(1);
         }
     }
     if !standalone_problems.is_empty() {
@@ -659,34 +688,76 @@ fn defined_by(records: &[ModuleRecord]) -> Defined {
 /// Imports of `records` that nothing in the corpus satisfies: by OID when the import has a literal one, otherwise
 /// by name.
 fn unresolved_imports(records: &[ModuleRecord], defined: &Defined) -> HashSet<Need> {
-    let mut missing = HashSet::new();
-    for record in records {
-        let parse = parse_source_with(&record.text, ParseOptions::corpus());
-        let Some(file) = ast::SourceFile::cast(parse.syntax()) else {
-            continue;
-        };
-        for module in file.modules() {
-            if let Some(model) = ModuleModel::build(&module) {
-                for clause in &model.imports {
-                    let oid = match &clause.assigned {
-                        Some((AssignedId::Oid { group }, _)) => Evaluator::literal_oid(group),
-                        _ => None,
-                    };
-                    let satisfied = match &oid {
-                        Some(oid) => defined.oids.contains(oid),
-                        None => defined.names.contains(&clause.module_name),
-                    };
-                    if !satisfied {
-                        missing.insert(Need {
-                            name: clause.module_name.clone(),
-                            oid,
-                        });
-                    }
-                }
+    records
+        .iter()
+        .flat_map(imports_of)
+        .filter(|need| !satisfied(need, defined))
+        .collect()
+}
+
+/// Whether the corpus satisfies `need`: by OID when the import has a literal one, otherwise by name.
+fn satisfied(need: &Need, defined: &Defined) -> bool {
+    match &need.oid {
+        Some(oid) => defined.oids.contains(oid),
+        None => defined.names.contains(&need.name),
+    }
+}
+
+/// The modules `record` imports, each with the literal OID its `FROM` clause gives, if any.
+fn imports_of(record: &ModuleRecord) -> Vec<Need> {
+    let parse = parse_source_with(&record.text, ParseOptions::corpus());
+    let Some(file) = ast::SourceFile::cast(parse.syntax()) else {
+        return Vec::new();
+    };
+    let mut needs = Vec::new();
+    for module in file.modules() {
+        if let Some(model) = ModuleModel::build(&module) {
+            for clause in &model.imports {
+                let oid = match &clause.assigned {
+                    Some((AssignedId::Oid { group }, _)) => Evaluator::literal_oid(group),
+                    _ => None,
+                };
+                needs.push(Need {
+                    name: clause.module_name.clone(),
+                    oid,
+                });
             }
         }
     }
-    missing
+    needs
+}
+
+/// Removes from `records`, and returns, each module with an import that nothing in the corpus satisfies and that
+/// names a module of `smi`: by OID when both the import and that module have one, otherwise by name. Such a module
+/// is written in the SMI module's macros. A removed module is added to `smi`, and the search repeats until it
+/// removes nothing. An import the corpus satisfies is never followed to an SMI module of the same name: RFC 3416's
+/// SNMPv2-PDU is ASN.1, those of RFC 1448 and 1905 are SMI.
+fn skip_smi_importers(
+    records: &mut Vec<ModuleRecord>,
+    smi: &mut Vec<(String, Option<Oid>)>,
+) -> Vec<ModuleRecord> {
+    let mut removed = Vec::new();
+    loop {
+        let defined = defined_by(records);
+        let names_smi = |need: &Need| {
+            smi.iter().any(|(name, oid)| match (&need.oid, oid) {
+                (Some(wanted), Some(oid)) => wanted == oid,
+                _ => *name == need.name,
+            })
+        };
+        let (skip, keep): (Vec<ModuleRecord>, Vec<ModuleRecord>) =
+            std::mem::take(records).into_iter().partition(|record| {
+                imports_of(record)
+                    .iter()
+                    .any(|need| !satisfied(need, &defined) && names_smi(need))
+            });
+        *records = keep;
+        if skip.is_empty() {
+            return removed;
+        }
+        smi.extend(skip.iter().map(|r| (r.name.clone(), r.oid.clone())));
+        removed.extend(skip);
+    }
 }
 
 fn line_of(text: &str, offset: usize) -> u32 {
