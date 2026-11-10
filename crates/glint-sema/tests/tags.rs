@@ -264,6 +264,18 @@ fn a_published_1988_definition_of_a_later_built_in_string_type_is_not_reported()
     }
 }
 
+// RFC 4683's module defines UTF8String as its 1988 modules do; it is listed though it does not parse as published
+// (its IMPORTS lacks the closing semicolon).
+#[test]
+fn rfc_4683_may_define_utf8string() {
+    let text = "PKIXSIM {iso(1) identified-organization(3) dod(6) internet(1) \
+                security(5) mechanisms(5) pkix(7) id-mod(0) id-mod-sim2005(38) } \
+                DEFINITIONS EXPLICIT TAGS ::= BEGIN \
+                UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING END";
+    let findings = check(text);
+    assert!(e123(&findings).is_empty(), "{findings:?}");
+}
+
 #[test]
 fn every_listed_module_may_define_the_string_types() {
     for (module, arcs, _) in glint_sema::LEGACY_STRING_MODULES {

@@ -31,7 +31,7 @@ pub const LEGACY_STRING_TYPES: [(&str, u128); 3] = [
 /// identifier, with the documents that publish them. In these the definition is correct for the syntax they keep
 /// to, so Glint reports nothing on it; a new module has no reason to keep to 1988 syntax, so anywhere else the
 /// definition is an error. The list is closed; it grows only if an older document that does this is found.
-pub const LEGACY_STRING_MODULES: [(&str, &[u128], &str); 6] = [
+pub const LEGACY_STRING_MODULES: [(&str, &[u128], &str); 7] = [
     ("PKIX1Explicit88", &[1, 3, 6, 1, 5, 5, 7, 0, 1], "RFC 2459"),
     ("PKIXCMP", &[1, 3, 6, 1, 5, 5, 7, 0, 9], "RFC 2510"),
     (
@@ -44,6 +44,7 @@ pub const LEGACY_STRING_MODULES: [(&str, &[u128], &str); 6] = [
         &[1, 3, 6, 1, 5, 5, 7, 0, 18],
         "RFC 3280, RFC 5280",
     ),
+    ("PKIXSIM", &[1, 3, 6, 1, 5, 5, 7, 0, 38], "RFC 4683"),
     // As published, `dod(4)`, and as RFC 5272 erratum 2063 corrects it, `dod(6)`.
     (
         "EnrollmentMessageSyntax",
