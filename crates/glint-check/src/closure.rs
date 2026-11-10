@@ -8,19 +8,31 @@
 //! - `rename`: two modules of one name that the set needs (RFC 5280's and RFC 2459's `PKIX1Explicit88`) get names
 //!   of their own, and an import that resolves (by its object identifier) to a module of another name is renamed to
 //!   that module, in the `FROM` clause and in `Old.symbol` references.
+//! - `renumber`: an object identifier whose last arc has no number (`TBD`, `TBDMOD`, `name(TBD)`) gets one. Arcs are
+//!   keyed by what they identify: a module (its header and every `FROM` clause that imports it) or a value (`id-x
+//!   OBJECT IDENTIFIER ::= { ... }`). When the set or the corpus gives the key a number elsewhere, that number is
+//!   copied; when it gives two different numbers, the closure fails; otherwise numbers are assigned from
+//!   [`FIRST_AUTO_ARC`] up, in key order. Only modules of Internet-Drafts and input texts are renumbered: an arc
+//!   with no number in a published document (an RFC) is left as written, with a warning, since only a correction of
+//!   the document (an RFC erratum) can number it.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
 use glint_corpus::{CorpusProvider, Oid, unique_label};
-use glint_sema::{AssignedId, Matched, ModuleGraph, ModuleId, Options, Origin};
-use glint_syntax::{ParseOptions, SyntaxKind, TextRange, parse_source_with};
+use glint_sema::{
+    AssignedId, Evaluator, Matched, ModuleGraph, ModuleId, Options, Origin, PlaceholderArc,
+    placeholder_arc,
+};
+use glint_syntax::{ParseOptions, SyntaxKind, SyntaxNode, TextRange, parse_source_with};
 
 /// The rewrites to make; with none, every module is written as it is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ClosureOptions {
     /// Give modules of one name names of their own, and rename imports to the module their identifier resolves to.
     pub rename: bool,
+    /// Give object identifier arcs that have no number one.
+    pub renumber: bool,
 }
 
 /// Something in the closure that a compiler which finds imports by name may reject, left as written because the
@@ -29,6 +41,18 @@ pub struct ClosureOptions {
 pub enum Warning {
     /// An import resolves by its identifier to a module of another name (fixed by `rename`).
     ImportName(Rename),
+    /// An object identifier arc has no number (fixed by `renumber`): the modules, each with what is written.
+    Placeholder {
+        key: OidKey,
+        sites: Vec<(String, String)>,
+    },
+    /// An object identifier arc has no number in a published document, which no option numbers: only a correction
+    /// of the document (an RFC erratum) can. The modules, each with what is written.
+    PublishedPlaceholder {
+        key: OidKey,
+        document: String,
+        sites: Vec<(String, String)>,
+    },
 }
 
 impl fmt::Display for Warning {
@@ -40,9 +64,35 @@ impl fmt::Display for Warning {
                  will not find it",
                 rename.importer, rename.from, rename.to
             ),
+            Self::Placeholder { key, sites } => write!(
+                f,
+                "OID: {key} has no number for its last arc in {}",
+                written_sites(sites)
+            ),
+            Self::PublishedPlaceholder {
+                key,
+                document,
+                sites,
+            } => write!(
+                f,
+                "OID: {key} has no number for its last arc in {}, as published in {document}",
+                written_sites(sites)
+            ),
         }
     }
 }
+
+/// `Module (TBD), Other (TBD1)`.
+fn written_sites(sites: &[(String, String)]) -> String {
+    let sites: Vec<String> = sites
+        .iter()
+        .map(|(module, written)| format!("{module} ({written})"))
+        .collect();
+    sites.join(", ")
+}
+
+/// The first number given to an arc that has none anywhere.
+pub const FIRST_AUTO_ARC: u128 = 10_000;
 
 /// A module to start the closure from.
 #[derive(Debug, Clone)]
@@ -78,6 +128,41 @@ pub struct ClosureModule {
     pub text: String,
 }
 
+/// What an object identifier arc identifies.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum OidKey {
+    Module(String),
+    Value(String),
+}
+
+impl fmt::Display for OidKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Module(name) => write!(f, "module {name}"),
+            Self::Value(name) => write!(f, "value {name}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArcOrigin {
+    /// Taken from where the key already has this number.
+    Copied {
+        from: String,
+    },
+    AutoAssigned,
+}
+
+/// A number given to the placeholder arcs of one key.
+#[derive(Debug, Clone)]
+pub struct ArcFill {
+    pub key: OidKey,
+    pub arc: u128,
+    pub origin: ArcOrigin,
+    /// The modules whose text was changed, each with what the author had written.
+    pub sites: Vec<(String, String)>,
+}
+
 /// An import renamed to the module its identifier resolved to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rename {
@@ -102,6 +187,7 @@ pub struct Closure {
     /// Modules renamed so that every module of the closure has its own name.
     pub module_renames: Vec<ModuleRename>,
     pub renames: Vec<Rename>,
+    pub arcs: Vec<ArcFill>,
     /// Import cycles, as module names; the order within a cycle is approximate.
     pub cycles: Vec<Vec<String>>,
     /// What was left as written that a compiler may reject.
@@ -121,6 +207,11 @@ pub enum Problem {
     },
     /// The set needs two or more modules of one name (fixed by `rename`): their sources.
     SameName { name: String, sources: Vec<String> },
+    /// The key has two different numbers in the set or the corpus.
+    ArcConflict {
+        key: OidKey,
+        numbers: Vec<(u128, Vec<String>)>,
+    },
 }
 
 impl fmt::Display for Problem {
@@ -144,6 +235,17 @@ impl fmt::Display for Problem {
                 sources.len(),
                 sources.join(", ")
             ),
+            Self::ArcConflict { key, numbers } => {
+                let listed: Vec<String> = numbers
+                    .iter()
+                    .map(|(arc, sources)| format!("{arc} in {}", sources.join(", ")))
+                    .collect();
+                write!(
+                    f,
+                    "{key} has a placeholder arc and conflicting numbers: {}",
+                    listed.join("; ")
+                )
+            }
         }
     }
 }
@@ -169,6 +271,8 @@ pub fn closure(
     let mut problems = Vec::new();
     let mut labels: HashMap<ModuleId, String> = HashMap::new();
     let mut roots: Vec<ModuleId> = Vec::new();
+    // The document of each module of a published document (not an Internet-Draft); input texts are not.
+    let mut published: HashMap<ModuleId, String> = HashMap::new();
     for input in inputs {
         let ClosureInput::Text { label, text } = input else {
             continue;
@@ -214,16 +318,62 @@ pub fn closure(
             {
                 loaded.oid.clone_from(&module.oid);
             }
+            if !module.source.is_draft() {
+                published.insert(id, module.source.document.clone());
+            }
             labels.insert(id, label.clone());
             roots.push(id);
         }
     }
     graph.resolve_all();
     redirect_to_inputs(&mut graph, &roots);
+    for module in &graph.modules {
+        if let Origin::Corpus { record } = module.origin
+            && let Some(record) = corpus.modules().get(record)
+            && !record.source.is_draft()
+        {
+            published.insert(module.id, record.source.document.clone());
+        }
+    }
 
     let walk = Walk::new(&graph, &roots);
     problems.extend(walk.missing(&graph));
     let mut warnings = Vec::new();
+    let (sites, kept) = split_published(placeholder_sites(&graph, &walk.order), &published);
+    warnings.extend(kept.into_iter().map(|((key, document), sites)| {
+        Warning::PublishedPlaceholder {
+            key,
+            document,
+            sites: sites
+                .iter()
+                .map(|(module, placeholder)| {
+                    (module_name(&graph, *module), placeholder.written.clone())
+                })
+                .collect(),
+        }
+    }));
+    let fills = if rewrites.renumber {
+        match fill_arcs(&graph, &walk.order, &labels, sites) {
+            Ok(fills) => fills,
+            Err(conflicts) => {
+                problems.extend(conflicts);
+                Vec::new()
+            }
+        }
+    } else {
+        warnings.extend(sites.into_iter().map(|(key, sites)| {
+            Warning::Placeholder {
+                key,
+                sites: sites
+                    .iter()
+                    .map(|(module, placeholder)| {
+                        (module_name(&graph, *module), placeholder.written.clone())
+                    })
+                    .collect(),
+            }
+        }));
+        Vec::new()
+    };
     if !rewrites.rename {
         problems.extend(
             same_names(&graph, &walk.order)
@@ -245,6 +395,23 @@ pub fn closure(
     // Rewrites not asked for are worked out on a copy of the edits that is then dropped, to report what they would
     // change.
     let mut dropped: HashMap<ModuleId, Vec<(TextRange, String)>> = HashMap::new();
+    let mut arcs: Vec<ArcFill> = Vec::new();
+    for fill in fills {
+        let mut sites = Vec::new();
+        for (module, placeholder) in &fill.sites {
+            edits
+                .entry(*module)
+                .or_default()
+                .push((placeholder.range, placeholder.replacement(fill.arc)));
+            sites.push((module_name(&graph, *module), placeholder.written.clone()));
+        }
+        arcs.push(ArcFill {
+            key: fill.key,
+            arc: fill.arc,
+            origin: fill.origin,
+            sites,
+        });
+    }
     let (names, module_renames) = if rewrites.rename {
         distinct_names(&graph, &walk.order, &roots, &labels)
     } else {
@@ -308,6 +475,7 @@ pub fn closure(
         modules,
         module_renames,
         renames,
+        arcs,
         cycles: walk.cycles,
         warnings,
     })
@@ -551,6 +719,228 @@ fn reference(text: &str) -> String {
         }
     }
     out.trim_end_matches('-').to_owned()
+}
+
+struct Fill {
+    key: OidKey,
+    arc: u128,
+    origin: ArcOrigin,
+    sites: Vec<(ModuleId, PlaceholderArc)>,
+}
+
+/// The `{ ... }` of an `OBJECT IDENTIFIER` value assignment.
+fn brace_group(value: &SyntaxNode) -> Option<SyntaxNode> {
+    value
+        .children()
+        .find(|c| c.kind() == SyntaxKind::BraceGroup)
+}
+
+type Sites = BTreeMap<OidKey, Vec<(ModuleId, PlaceholderArc)>>;
+
+/// Sites in modules of published documents, by key and document.
+type PublishedSites = BTreeMap<(OidKey, String), Vec<(ModuleId, PlaceholderArc)>>;
+
+/// Every placeholder arc of the closure, keyed.
+fn placeholder_sites(graph: &ModuleGraph<'_>, order: &[ModuleId]) -> Sites {
+    let evaluator = Evaluator::new(graph);
+    let mut sites = Sites::new();
+    for &id in order {
+        let Some(module) = graph.module(id) else {
+            continue;
+        };
+        if let Some(arc) = module.model.oid_group.as_ref().and_then(placeholder_arc) {
+            sites
+                .entry(OidKey::Module(module.model.name.clone()))
+                .or_default()
+                .push((id, arc));
+        }
+        for (clause, resolved) in module.model.imports.iter().zip(&module.imports) {
+            let Some((AssignedId::Oid { group }, _)) = &clause.assigned else {
+                continue;
+            };
+            if let Some(arc) = placeholder_arc(group) {
+                let name = resolved
+                    .target
+                    .map_or_else(|| clause.module_name.clone(), |t| module_name(graph, t));
+                sites
+                    .entry(OidKey::Module(name))
+                    .or_default()
+                    .push((id, arc));
+            }
+        }
+        for (index, symbol) in module.model.symbols.iter().enumerate() {
+            if !evaluator.symbol_is_oid_valued(id, index) {
+                continue;
+            }
+            if let Some(arc) = symbol
+                .value_node
+                .as_ref()
+                .and_then(brace_group)
+                .as_ref()
+                .and_then(placeholder_arc)
+            {
+                sites
+                    .entry(OidKey::Value(symbol.name.clone()))
+                    .or_default()
+                    .push((id, arc));
+            }
+        }
+    }
+    sites
+}
+
+/// `sites` without the sites in modules of published documents, and those sites by key and document.
+fn split_published(sites: Sites, published: &HashMap<ModuleId, String>) -> (Sites, PublishedSites) {
+    let mut open = Sites::new();
+    let mut kept = PublishedSites::new();
+    for (key, key_sites) in sites {
+        for (module, arc) in key_sites {
+            match published.get(&module) {
+                Some(document) => kept
+                    .entry((key.clone(), document.clone()))
+                    .or_default()
+                    .push((module, arc)),
+                None => open.entry(key.clone()).or_default().push((module, arc)),
+            }
+        }
+    }
+    (open, kept)
+}
+
+/// The number each key of `sites` gets.
+fn fill_arcs(
+    graph: &ModuleGraph<'_>,
+    order: &[ModuleId],
+    labels: &HashMap<ModuleId, String>,
+    sites: Sites,
+) -> Result<Vec<Fill>, Vec<Problem>> {
+    if sites.is_empty() {
+        return Ok(Vec::new());
+    }
+    let evaluator = Evaluator::new(graph);
+    let corpus_values = corpus_value_arcs(graph.corpus());
+    let mut fills = Vec::new();
+    let mut conflicts = Vec::new();
+    let mut next = FIRST_AUTO_ARC;
+    for (key, key_sites) in sites {
+        let numbers = known_arcs(graph, &evaluator, order, labels, &corpus_values, &key);
+        let (arc, origin) = match numbers.len() {
+            0 => {
+                let arc = next;
+                next = next.saturating_add(1);
+                (arc, ArcOrigin::AutoAssigned)
+            }
+            1 => {
+                let Some((&arc, sources)) = numbers.iter().next() else {
+                    continue;
+                };
+                let from = sources.first().cloned().unwrap_or_default();
+                (arc, ArcOrigin::Copied { from })
+            }
+            _ => {
+                conflicts.push(Problem::ArcConflict {
+                    key,
+                    numbers: numbers.into_iter().collect(),
+                });
+                continue;
+            }
+        };
+        fills.push(Fill {
+            key,
+            arc,
+            origin,
+            sites: key_sites,
+        });
+    }
+    if conflicts.is_empty() {
+        Ok(fills)
+    } else {
+        Err(conflicts)
+    }
+}
+
+/// The last arc of every value assignment in the corpus, by value name, with where it is made.
+fn corpus_value_arcs(corpus: &dyn CorpusProvider) -> HashMap<String, Vec<(u128, String)>> {
+    let mut arcs: HashMap<String, Vec<(u128, String)>> = HashMap::new();
+    for root in 0..=2 {
+        for assignment in corpus.assignments_under(&Oid::new(vec![root])) {
+            if let Some(last) = assignment.oid.last() {
+                arcs.entry(assignment.name.clone()).or_default().push((
+                    last,
+                    format!("{}#{}", assignment.document, assignment.module),
+                ));
+            }
+        }
+    }
+    arcs
+}
+
+/// Every number the set or the corpus gives `key` as its last arc, with where.
+fn known_arcs(
+    graph: &ModuleGraph<'_>,
+    evaluator: &Evaluator<'_, '_>,
+    order: &[ModuleId],
+    labels: &HashMap<ModuleId, String>,
+    corpus_values: &HashMap<String, Vec<(u128, String)>>,
+    key: &OidKey,
+) -> BTreeMap<u128, Vec<String>> {
+    let mut numbers: BTreeMap<u128, Vec<String>> = BTreeMap::new();
+    let mut add = |arc: Option<u128>, source: String| {
+        if let Some(arc) = arc {
+            let sources = numbers.entry(arc).or_default();
+            if !sources.contains(&source) {
+                sources.push(source);
+            }
+        }
+    };
+    match key {
+        OidKey::Module(name) => {
+            for &id in order {
+                let Some(module) = graph.module(id) else {
+                    continue;
+                };
+                if &module.model.name == name {
+                    add(
+                        module.oid.as_ref().and_then(Oid::last),
+                        source_label(graph, id, labels),
+                    );
+                }
+                for (clause, resolved) in module.model.imports.iter().zip(&module.imports) {
+                    let imported = resolved
+                        .target
+                        .map_or_else(|| clause.module_name.clone(), |t| module_name(graph, t));
+                    if &imported == name {
+                        add(
+                            resolved.assigned_oid.as_ref().and_then(Oid::last),
+                            format!("IMPORTS of {}", source_label(graph, id, labels)),
+                        );
+                    }
+                }
+            }
+            let corpus = graph.corpus();
+            for &record in corpus.by_name(name) {
+                if let Some(module) = corpus.modules().get(record) {
+                    add(
+                        module.oid.as_ref().and_then(Oid::last),
+                        unique_label(corpus, module),
+                    );
+                }
+            }
+        }
+        OidKey::Value(name) => {
+            for &id in order {
+                for (value, oid) in evaluator.oid_assignments(id) {
+                    if &value == name {
+                        add(oid.last(), source_label(graph, id, labels));
+                    }
+                }
+            }
+            for (arc, source) in corpus_values.get(name).into_iter().flatten() {
+                add(Some(*arc), source.clone());
+            }
+        }
+    }
+    numbers
 }
 
 /// Renames imports that resolved to a module of another name, or to a module given a new name (`names`), in the

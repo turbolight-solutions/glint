@@ -18,7 +18,9 @@ mod view;
 
 use std::collections::HashMap;
 
-pub use eval::{Evaluator, OidEval, OidLabel, OidProblem, OidProblemKind};
+pub use eval::{
+    Evaluator, OidEval, OidLabel, OidProblem, OidProblemKind, PlaceholderArc, placeholder_arc,
+};
 pub use finding::{Finding, Loc, SourceId};
 pub use graph::{
     Found, LoadedModule, Lookup, Matched, ModuleGraph, ModuleId, Origin, Peeled, QualifiedError,

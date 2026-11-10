@@ -30,14 +30,31 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 fn corpus_file(dir: &Path) -> PathBuf {
+    corpus_of(
+        dir,
+        1000,
+        "Base { 1 3 6 1 4 1 99 1 } DEFINITIONS ::= BEGIN Name ::= INTEGER END",
+    )
+}
+
+/// A corpus of one module, `text`, published in RFC `rfc`.
+fn corpus_of(dir: &Path, rfc: u32, text: &str) -> PathBuf {
+    let header = text.split('}').next().unwrap();
+    let (name, arcs) = header.split_once('{').unwrap();
     let record = ModuleRecord {
-        name: "Base".to_owned(),
-        oid: Some("1.3.6.1.4.1.99.1".parse().unwrap()),
-        source: ModuleSource::rfc(1000, None, SourceKind::Extracted),
+        name: name.trim().to_owned(),
+        oid: Some(
+            arcs.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(".")
+                .parse()
+                .unwrap(),
+        ),
+        source: ModuleSource::rfc(rfc, None, SourceKind::Extracted),
         rfc_status: None,
         obsoleted_by: Vec::new(),
         syntax_era: SyntaxEra::Neutral,
-        text: "Base { 1 3 6 1 4 1 99 1 } DEFINITIONS ::= BEGIN Name ::= INTEGER END".to_owned(),
+        text: text.to_owned(),
         exports: Exports::All,
         parse_status: ParseStatus::Clean,
         sha256: String::new(),
@@ -173,6 +190,113 @@ fn a_dependency_with_the_name_of_an_input_is_written_under_a_name_of_its_own() {
             "-- Modules renamed, since the set needs two modules of their name:\n--   rfc1000#Base: Base -> Base-rfc1000"
         ),
         "{combined}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+const PLACEHOLDER: &str = "Top { 1 3 6 1 4 1 99 TBD } DEFINITIONS ::= BEGIN
+IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 };
+Thing ::= SEQUENCE { name Name }
+END
+";
+
+#[test]
+fn renumber_gives_a_placeholder_arc_a_number() {
+    let dir = scratch("renumber");
+    let corpus = corpus_file(&dir);
+    let top = dir.join("top.asn");
+    std::fs::write(&top, PLACEHOLDER).unwrap();
+    let out = dir.join("out");
+    let output = glint()
+        .arg("closure")
+        .arg("--corpus")
+        .arg(&corpus)
+        .arg(&top)
+        .arg("--renumber")
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("OID: module Top gets arc 10000 (auto-assigned) in Top (TBD)"),
+        "{stderr}"
+    );
+    let module = std::fs::read_to_string(out.join("modules/Top.asn")).unwrap();
+    assert!(
+        module.starts_with("Top { 1 3 6 1 4 1 99 10000 }"),
+        "{module}"
+    );
+    let combined = std::fs::read_to_string(out.join("combined.asn")).unwrap();
+    assert!(
+        combined.contains("--   module Top: 10000, auto-assigned, in Top (TBD)"),
+        "{combined}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn without_renumber_a_placeholder_arc_is_left_with_a_warning() {
+    let dir = scratch("no-renumber");
+    let corpus = corpus_file(&dir);
+    let top = dir.join("top.asn");
+    std::fs::write(&top, PLACEHOLDER).unwrap();
+    let out = dir.join("out");
+    let output = glint()
+        .arg("closure")
+        .arg("--corpus")
+        .arg(&corpus)
+        .arg(&top)
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let warning = "OID: module Top has no number for its last arc in Top (TBD) (--renumber gives it a number)";
+    assert!(
+        stderr.contains(&format!("glint: warning: {warning}")),
+        "{stderr}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(out.join("modules/Top.asn")).unwrap(),
+        PLACEHOLDER
+    );
+    let combined = std::fs::read_to_string(out.join("combined.asn")).unwrap();
+    assert!(combined.contains(&format!("--   {warning}")), "{combined}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn renumber_leaves_a_placeholder_arc_of_an_rfc_with_a_warning() {
+    let dir = scratch("renumber-rfc");
+    let isis = "Isis { 1 3 6 1 4 1 99 4 } DEFINITIONS ::= BEGIN\nid-isis OBJECT IDENTIFIER ::= { 1 3 6 1 4 1 99 5 TBD }\nEND";
+    let corpus = corpus_of(&dir, 1142, isis);
+    let out = dir.join("out");
+    let output = glint()
+        .arg("closure")
+        .arg("--corpus")
+        .arg(&corpus)
+        .arg("--module")
+        .arg("rfc1142#Isis")
+        .arg("--renumber")
+        .arg("-o")
+        .arg(&out)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let warning = "OID: value id-isis has no number for its last arc in Isis (TBD), as published in rfc1142 (only a \
+                   correction of the document, such as an RFC erratum, can number it; --renumber numbers drafts and \
+                   input files only)";
+    assert!(
+        stderr.contains(&format!("glint: warning: {warning}")),
+        "{stderr}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(out.join("modules/Isis.asn")).unwrap(),
+        format!("{isis}\n")
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }

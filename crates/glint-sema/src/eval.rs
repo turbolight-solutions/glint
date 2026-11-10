@@ -242,6 +242,97 @@ fn is_upper_case_word(qualifier: Option<&str>, name: &str) -> bool {
     qualifier.is_none() && name.starts_with(|c: char| c.is_ascii_uppercase())
 }
 
+/// The last arc of an object identifier value that an author left without a number, and the text that stands for
+/// it: found by [`placeholder_arc`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceholderArc {
+    /// The text to replace with a number.
+    pub range: TextRange,
+    /// What the author wrote there (`TBDMOD`, `TBD`, `?`), or `()` for an empty `name()`.
+    pub written: String,
+    empty_parens: bool,
+}
+
+impl PlaceholderArc {
+    /// The text that replaces [`PlaceholderArc::range`] to give the arc the number `arc`.
+    pub fn replacement(&self, arc: u128) -> String {
+        if self.empty_parens {
+            format!("{arc})")
+        } else {
+            arc.to_string()
+        }
+    }
+}
+
+/// Whether the token at `range` is glued to a number before it, as the `x` of `3x`.
+fn continues_a_number(group: &SyntaxNode, range: TextRange) -> bool {
+    let toks = group_tokens(group);
+    toks.iter()
+        .position(|t| t.text_range() == range)
+        .and_then(|index| index.checked_sub(1))
+        .and_then(|index| toks.get(index))
+        .is_some_and(|previous| {
+            previous.kind() == SyntaxKind::Number && previous.text_range().end() == range.start()
+        })
+}
+
+/// The final arc of `group` when it has no number: `{ ... TBDMOD }`, `{ ... id-mod-x(TBD) }`, `{ ... name() }`,
+/// `{ ... ? }`. An identifier value of one component is a reference, not an identifier, and a malformed number
+/// (`3x`, `-3`) is left alone so that it is reported, never turned into a valid arc.
+pub fn placeholder_arc(group: &SyntaxNode) -> Option<PlaceholderArc> {
+    let parts = components(group);
+    if parts.len() < 2 {
+        return None;
+    }
+    let position = parts.len().saturating_sub(1);
+    match parts.last()? {
+        Component::Name(name, range)
+            if (is_placeholder(name, &[]) || position >= 2 || is_upper_case_word(None, name))
+                && !continues_a_number(group, *range) =>
+        {
+            Some(PlaceholderArc {
+                range: *range,
+                written: name.clone(),
+                empty_parens: false,
+            })
+        }
+        Component::NameAndNumber(_, _, NumberForm::Reference(None, reference, range))
+            if is_placeholder(reference, &[]) || is_upper_case_word(None, reference) =>
+        {
+            Some(PlaceholderArc {
+                range: *range,
+                written: reference.clone(),
+                empty_parens: false,
+            })
+        }
+        Component::Bad(range) if *range != group.text_range() => {
+            let toks = group_tokens(group);
+            let index = toks.iter().position(|t| t.text_range() == *range)?;
+            let token = toks.get(index)?;
+            let before = index.checked_sub(1).and_then(|i| toks.get(i));
+            if token.kind() == SyntaxKind::RParen
+                && before.is_some_and(|t| t.kind() == SyntaxKind::LParen)
+            {
+                return Some(PlaceholderArc {
+                    range: *range,
+                    written: "()".to_owned(),
+                    empty_parens: true,
+                });
+            }
+            let text = token.text();
+            let numeric = text
+                .trim_start_matches('-')
+                .starts_with(|c: char| c.is_ascii_digit());
+            (!numeric && token.kind() != SyntaxKind::RParen).then(|| PlaceholderArc {
+                range: *range,
+                written: text.to_owned(),
+                empty_parens: false,
+            })
+        }
+        _ => None,
+    }
+}
+
 impl<'g, 'c> Evaluator<'g, 'c> {
     pub fn new(graph: &'g ModuleGraph<'c>) -> Self {
         Self {

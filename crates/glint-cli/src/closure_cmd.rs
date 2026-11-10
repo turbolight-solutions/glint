@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Args as ClapArgs;
-use glint_check::{Closure, ClosureInput, ClosureOptions, Problem, Role, Warning, closure};
+use glint_check::{
+    ArcOrigin, Closure, ClosureInput, ClosureOptions, Problem, Role, Warning, closure,
+};
 use glint_corpus::{Corpus, CorpusProvider, Oid};
 
 use crate::common::{EXIT_ERRORS, EXIT_FAILURE, EXIT_OK, load_corpus};
@@ -30,6 +32,10 @@ pub struct Args {
     /// its OID to a module of another name to that module
     #[arg(long)]
     rename: bool,
+    /// Give an OID arc with no number (`TBD`, `TBDMOD`) in an Internet-Draft or an input file the number the set or
+    /// the corpus gives it elsewhere, or one from 10000 up; an RFC's is left as written, with a warning
+    #[arg(long)]
+    renumber: bool,
 }
 
 /// The module texts the closure starts from, or every reason one cannot be read.
@@ -137,6 +143,7 @@ pub fn run(args: &Args) -> ExitCode {
     };
     let rewrites = ClosureOptions {
         rename: args.rename,
+        renumber: args.renumber,
     };
     let result = match closure(&inputs, &corpus, &pins, rewrites) {
         Ok(result) => result,
@@ -184,10 +191,22 @@ fn check_out_dir(dir: &Path) -> Result<(), String> {
     }
 }
 
-/// The option that fixes `warning`.
+fn arc_origin(origin: &ArcOrigin) -> String {
+    match origin {
+        ArcOrigin::Copied { from } => format!("copied from {from}"),
+        ArcOrigin::AutoAssigned => "auto-assigned".to_owned(),
+    }
+}
+
+/// The option that fixes `warning`, or what does when no option does.
 fn fixed_by(warning: &Warning) -> &'static str {
     match warning {
         Warning::ImportName(_) => "--rename renames the import",
+        Warning::Placeholder { .. } => "--renumber gives it a number",
+        Warning::PublishedPlaceholder { .. } => {
+            "only a correction of the document, such as an RFC erratum, can number it; --renumber numbers drafts \
+             and input files only"
+        }
     }
 }
 
@@ -206,6 +225,20 @@ fn report(result: &Closure) {
         eprintln!(
             "glint: {}: import of {} renamed to {}, the module it resolves to",
             rename.importer, rename.from, rename.to
+        );
+    }
+    for fill in &result.arcs {
+        let sites: Vec<String> = fill
+            .sites
+            .iter()
+            .map(|(module, written)| format!("{module} ({written})"))
+            .collect();
+        eprintln!(
+            "glint: OID: {} gets arc {} ({}) in {}",
+            fill.key,
+            fill.arc,
+            arc_origin(&fill.origin),
+            sites.join(", ")
         );
     }
     for cycle in &result.cycles {
@@ -263,6 +296,24 @@ fn combined_header(result: &Closure, build: &str) -> String {
                 header,
                 "--   {}: {} -> {}",
                 rename.importer, rename.from, rename.to
+            );
+        }
+    }
+    if !result.arcs.is_empty() {
+        let _ = writeln!(header, "--\n-- Object identifier arcs that had no number:");
+        for fill in &result.arcs {
+            let sites: Vec<String> = fill
+                .sites
+                .iter()
+                .map(|(module, written)| format!("{module} ({written})"))
+                .collect();
+            let _ = writeln!(
+                header,
+                "--   {}: {}, {}, in {}",
+                fill.key,
+                fill.arc,
+                arc_origin(&fill.origin),
+                sites.join(", ")
             );
         }
     }

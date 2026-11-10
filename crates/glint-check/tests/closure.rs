@@ -5,10 +5,13 @@
     clippy::indexing_slicing
 )]
 
-use glint_check::{Closure, ClosureInput, ClosureOptions, Problem, Rename, Role, Warning, closure};
+use glint_check::{
+    ArcOrigin, Closure, ClosureInput, ClosureOptions, FIRST_AUTO_ARC, OidKey, Problem, Rename,
+    Role, Warning, closure,
+};
 use glint_corpus::{
     Corpus, CorpusData, CorpusProvider, EmptyCorpus, Exports, ModuleRecord, ModuleSource,
-    ParseStatus, SourceKind, SyntaxEra,
+    OidAssignment, ParseStatus, SourceKind, SyntaxEra,
 };
 
 fn record(rfc: u32, text: &str) -> ModuleRecord {
@@ -47,8 +50,18 @@ fn input(text: &str) -> ClosureInput {
     }
 }
 
-const AS_WRITTEN: ClosureOptions = ClosureOptions { rename: false };
-const RENAME: ClosureOptions = ClosureOptions { rename: true };
+const AS_WRITTEN: ClosureOptions = ClosureOptions {
+    rename: false,
+    renumber: false,
+};
+const RENAME: ClosureOptions = ClosureOptions {
+    rename: true,
+    ..AS_WRITTEN
+};
+const RENUMBER: ClosureOptions = ClosureOptions {
+    renumber: true,
+    ..AS_WRITTEN
+};
 
 fn run(inputs: &[ClosureInput], corpus: &dyn CorpusProvider, rewrites: ClosureOptions) -> Closure {
     closure(inputs, corpus, &[], rewrites).unwrap_or_else(|problems| panic!("{problems:?}"))
@@ -228,6 +241,280 @@ fn same_named_modules_of_one_document_are_told_apart_by_identifier() {
     let mut got = names(&result);
     got.sort_unstable();
     assert_eq!(got, ["Base-rfc4-1-2-3", "Base-rfc4-1-2-9", "Top"]);
+}
+
+#[test]
+fn a_placeholder_takes_the_number_the_corpus_gives_the_same_module() {
+    // A draft still saying TBDMOD while its RFC is published with the number.
+    let corpus = corpus(vec![
+        record(1, BASE),
+        record(10073, "Comp { 1 2 5 127 } DEFINITIONS ::= BEGIN END"),
+    ]);
+    let result = run(
+        &[input(
+            "Comp { 1 2 5 id-mod-comp(TBDMOD) } DEFINITIONS ::= BEGIN IMPORTS T FROM Base { 1 2 3 }; END",
+        )],
+        &corpus,
+        RENUMBER,
+    );
+    assert!(text_of(&result, "Comp").starts_with("Comp { 1 2 5 id-mod-comp(127) }"));
+    assert_eq!(result.arcs.len(), 1);
+    let fill = &result.arcs[0];
+    assert_eq!(fill.key, OidKey::Module("Comp".to_owned()));
+    assert_eq!(fill.arc, 127);
+    assert_eq!(
+        fill.origin,
+        ArcOrigin::Copied {
+            from: "rfc10073#Comp".to_owned()
+        }
+    );
+    assert_eq!(fill.sites, [("Comp".to_owned(), "TBDMOD".to_owned())]);
+}
+
+#[test]
+fn a_key_with_no_number_anywhere_gets_one_number_at_every_site() {
+    let inputs = [
+        input("A { 1 2 9 TBD } DEFINITIONS ::= BEGIN X ::= INTEGER END"),
+        input(
+            "B DEFINITIONS ::= BEGIN IMPORTS X FROM A { 1 2 9 TBD }; id-b OBJECT IDENTIFIER ::= { 1 2 10 TBD1 } Y ::= X END",
+        ),
+    ];
+    let result = run(&inputs, &EmptyCorpus::default(), RENUMBER);
+    assert!(text_of(&result, "A").starts_with(&format!("A {{ 1 2 9 {FIRST_AUTO_ARC} }}")));
+    let b = text_of(&result, "B");
+    assert!(
+        b.contains(&format!("FROM A {{ 1 2 9 {FIRST_AUTO_ARC} }}")),
+        "{b}"
+    );
+    let value_arc = FIRST_AUTO_ARC + 1;
+    assert!(b.contains(&format!("{{ 1 2 10 {value_arc} }}")), "{b}");
+    let keys: Vec<(&OidKey, u128, &ArcOrigin)> = result
+        .arcs
+        .iter()
+        .map(|f| (&f.key, f.arc, &f.origin))
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            (
+                &OidKey::Module("A".to_owned()),
+                FIRST_AUTO_ARC,
+                &ArcOrigin::AutoAssigned
+            ),
+            (
+                &OidKey::Value("id-b".to_owned()),
+                value_arc,
+                &ArcOrigin::AutoAssigned
+            ),
+        ]
+    );
+    assert_eq!(result.arcs[0].sites.len(), 2, "the header and the import");
+}
+
+#[test]
+fn a_value_placeholder_takes_the_number_the_corpus_assigns_that_name() {
+    let corpus = Corpus::from_data(CorpusData {
+        oid_assignments: vec![OidAssignment {
+            oid: "1.2.10.42".parse().unwrap(),
+            name: "id-b".to_owned(),
+            module: "Published".to_owned(),
+            document: "rfc7".to_owned(),
+        }],
+        ..CorpusData::default()
+    });
+    let result = run(
+        &[input(
+            "B DEFINITIONS ::= BEGIN id-b OBJECT IDENTIFIER ::= { 1 2 10 TBD } END",
+        )],
+        &corpus,
+        RENUMBER,
+    );
+    assert!(text_of(&result, "B").contains("{ 1 2 10 42 }"));
+    assert_eq!(
+        result.arcs[0].origin,
+        ArcOrigin::Copied {
+            from: "rfc7#Published".to_owned()
+        }
+    );
+}
+
+#[test]
+fn two_numbers_for_one_key_are_a_conflict() {
+    let corpus = corpus(vec![
+        record(
+            1,
+            "Comp { 1 2 5 127 } DEFINITIONS ::= BEGIN X ::= INTEGER END",
+        ),
+        record(
+            2,
+            "User DEFINITIONS ::= BEGIN IMPORTS X FROM Comp { 1 2 5 128 }; Z ::= X END",
+        ),
+    ]);
+    let problems = closure(
+        &[
+            input("Comp { 1 2 5 TBDMOD } DEFINITIONS ::= BEGIN X ::= INTEGER END"),
+            input("Top DEFINITIONS ::= BEGIN IMPORTS Z FROM User; W ::= Z END"),
+        ],
+        &corpus,
+        &[],
+        RENUMBER,
+    )
+    .unwrap_err();
+    let conflict = problems
+        .iter()
+        .find_map(|p| match p {
+            Problem::ArcConflict { key, numbers } => Some((key, numbers)),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{problems:?}"));
+    assert_eq!(conflict.0, &OidKey::Module("Comp".to_owned()));
+    let arcs: Vec<u128> = conflict.1.iter().map(|(arc, _)| *arc).collect();
+    assert_eq!(arcs, [127, 128]);
+    let line = problems
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ");
+    assert!(
+        line.contains("127 in rfc1#Comp") && line.contains("128 in"),
+        "{line}"
+    );
+}
+
+#[test]
+fn without_renumber_two_numbers_for_one_key_are_no_problem() {
+    let corpus = corpus(vec![
+        record(
+            1,
+            "Comp { 1 2 5 127 } DEFINITIONS ::= BEGIN X ::= INTEGER END",
+        ),
+        record(
+            2,
+            "User DEFINITIONS ::= BEGIN IMPORTS X FROM Comp { 1 2 5 128 }; Z ::= X END",
+        ),
+    ]);
+    let result = run(
+        &[
+            input("Comp { 1 2 5 TBDMOD } DEFINITIONS ::= BEGIN X ::= INTEGER END"),
+            input("Top DEFINITIONS ::= BEGIN IMPORTS Z FROM User; W ::= Z END"),
+        ],
+        &corpus,
+        AS_WRITTEN,
+    );
+    assert!(text_of(&result, "Comp").contains("TBDMOD"));
+    let warnings: Vec<String> = result.warnings.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        warnings,
+        ["OID: module Comp has no number for its last arc in Comp (TBDMOD)"]
+    );
+}
+
+fn draft_record(document: &str, text: &str) -> ModuleRecord {
+    ModuleRecord {
+        source: ModuleSource::draft(document, "2026-11-10", None, SourceKind::Extracted),
+        ..record(1, text)
+    }
+}
+
+const ISIS: &str = "Isis { 1 2 11 } DEFINITIONS ::= BEGIN id-isis OBJECT IDENTIFIER ::= { 1 2 12 TBD } T ::= INTEGER END";
+
+#[test]
+fn renumber_leaves_a_placeholder_in_an_rfc_as_written_with_a_warning() {
+    // Only an erratum can number an arc an RFC published without one.
+    let corpus = corpus(vec![record(1142, ISIS)]);
+    let expected = [Warning::PublishedPlaceholder {
+        key: OidKey::Value("id-isis".to_owned()),
+        document: "rfc1142".to_owned(),
+        sites: vec![("Isis".to_owned(), "TBD".to_owned())],
+    }];
+    for inputs in [
+        vec![input(
+            "User { 1 2 13 } DEFINITIONS ::= BEGIN IMPORTS T FROM Isis { 1 2 11 }; END",
+        )],
+        vec![ClosureInput::Corpus { record: 0 }],
+    ] {
+        for rewrites in [RENUMBER, AS_WRITTEN] {
+            let result = run(&inputs, &corpus, rewrites);
+            assert_eq!(text_of(&result, "Isis"), ISIS);
+            assert!(result.arcs.is_empty());
+            assert_eq!(result.warnings, expected);
+        }
+    }
+}
+
+#[test]
+fn renumber_numbers_the_draft_and_input_sites_of_a_key_and_leaves_the_rfc_site() {
+    let corpus = corpus(vec![
+        record(
+            9999,
+            "Dep { 1 2 14 TBD } DEFINITIONS ::= BEGIN T ::= INTEGER END",
+        ),
+        draft_record(
+            "draft-ietf-foo-bar-01",
+            "Draft { 1 2 15 TBD } DEFINITIONS ::= BEGIN IMPORTS T FROM Dep { 1 2 14 TBD }; END",
+        ),
+    ]);
+    let inputs = [
+        ClosureInput::Corpus { record: 1 },
+        input("User { 1 2 16 } DEFINITIONS ::= BEGIN IMPORTS T FROM Dep { 1 2 14 TBD }; END"),
+    ];
+    let result = run(&inputs, &corpus, RENUMBER);
+    assert!(text_of(&result, "Dep").starts_with("Dep { 1 2 14 TBD }"));
+    let module_arc = FIRST_AUTO_ARC;
+    let draft_arc = FIRST_AUTO_ARC + 1;
+    let draft = text_of(&result, "Draft");
+    assert!(
+        draft.starts_with(&format!("Draft {{ 1 2 15 {draft_arc} }}")),
+        "{draft}"
+    );
+    assert!(
+        draft.contains(&format!("FROM Dep {{ 1 2 14 {module_arc} }}")),
+        "{draft}"
+    );
+    assert!(text_of(&result, "User").contains(&format!("FROM Dep {{ 1 2 14 {module_arc} }}")));
+    let dep = &result.arcs[0];
+    assert_eq!(dep.key, OidKey::Module("Dep".to_owned()));
+    assert_eq!(
+        dep.sites,
+        [
+            ("User".to_owned(), "TBD".to_owned()),
+            ("Draft".to_owned(), "TBD".to_owned())
+        ]
+    );
+    assert_eq!(
+        result.warnings,
+        [Warning::PublishedPlaceholder {
+            key: OidKey::Module("Dep".to_owned()),
+            document: "rfc9999".to_owned(),
+            sites: vec![("Dep".to_owned(), "TBD".to_owned())],
+        }]
+    );
+}
+
+#[test]
+fn a_malformed_number_is_left_for_the_compiler() {
+    let result = run(
+        &[input("A { 1 2 3x } DEFINITIONS ::= BEGIN END")],
+        &EmptyCorpus::default(),
+        RENUMBER,
+    );
+    assert!(result.arcs.is_empty());
+    assert!(text_of(&result, "A").contains("3x"));
+}
+
+#[test]
+fn an_empty_number_form_gets_its_number_inside_the_parentheses() {
+    let result = run(
+        &[input("A { 1 2 id-mod-a() } DEFINITIONS ::= BEGIN END")],
+        &EmptyCorpus::default(),
+        RENUMBER,
+    );
+    let a = text_of(&result, "A");
+    assert!(
+        a.starts_with(&format!("A {{ 1 2 id-mod-a({FIRST_AUTO_ARC}) }}")),
+        "{a}"
+    );
+    assert_eq!(result.arcs[0].sites[0].1, "()");
 }
 
 #[test]

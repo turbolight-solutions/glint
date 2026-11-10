@@ -7,8 +7,8 @@ mod pipeline;
 mod source;
 
 pub use closure::{
-    Closure, ClosureInput, ClosureModule, ClosureOptions, ModuleRename, Problem, Rename, Role,
-    Warning, closure,
+    ArcFill, ArcOrigin, Closure, ClosureInput, ClosureModule, ClosureOptions, FIRST_AUTO_ARC,
+    ModuleRename, OidKey, Problem, Rename, Role, Warning, closure,
 };
 pub use config::{Config, ConfigError, SeveritySetting};
 pub use pipeline::{
