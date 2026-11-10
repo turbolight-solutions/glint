@@ -7,10 +7,10 @@
 #
 # A `[[module]]` is one downloadable module. `document` is the specification it is published in (`X.509`) and
 # `edition` its edition, as the body dates it: ITU-T's approval date as `MM/YYYY`, followed by any corrigendum or
-# amendment the file includes (`07/1994, Cor. 1 07/1995`). The module's `oid` is its definitive identifier and
-# identifies the entry: editions of a specification reuse the module name and change the OID, so list each edition
-# you want as its own entry. A module whose header gives no OID (X.680 13.1 allows that) is listed without `oid` and
-# identified by `document` and `name`; only imports that give no OID take it.
+# amendment the file includes (`07/1994, Cor. 1 07/1995`); ISO's year of publication. The module's `oid` is its
+# definitive identifier and identifies the entry: editions of a specification reuse the module name and change the
+# OID, so list each edition you want as its own entry. A module whose header gives no OID (X.680 13.1 allows that)
+# is listed without `oid` and identified by `document` and `name`; only imports that give no OID take it.
 # `url` must give the module itself (ITU-T's .asn files, not their HTML renderings): a download that is not a module
 # whose identifier is that `oid` (without `oid`: a module of that name with no OID) fails the build, as does one
 # that fails.
@@ -24,6 +24,10 @@
 [[body]]
 id = "itu-t"
 notice = "Modules from ITU-T Recommendations are the property of ITU-T and are included with credit to ITU-T."
+
+[[body]]
+id = "iso"
+notice = "Modules from ISO and ISO/IEC International Standards are the property of ISO and IEC and are included with credit to ISO and IEC, with the copyright notices they are published with."
 
 [[module]]
 body = "itu-t"
@@ -703,3 +707,35 @@ edition = "07/1994, Cor. 1 07/1995, Amd. 1 11/1995"
 name = "Remote-Operations-Realizations"
 oid = "2.4.9.0"
 url = "https://www.itu.int/wftp3/Public/t/fl/itu-t/x/x882/1994-TC1-Amd1/Remote-Operations-Realizations.asn"
+
+[[module]]
+body = "iso"
+document = "ISO 8571-4"
+edition = "1988"
+name = "ISO8571-FTAM"
+oid = "1.0.8571.1.1"
+url = "https://www.itu.int/wftp3/Public/t/fl/iso/8571-4/1988/ISO8571-FTAM.asn"
+
+[[module]]
+body = "iso"
+document = "ISO/IEC 9541-2"
+edition = "1991"
+name = "ISO-STANDARD-9541-FONT-ATTRIBUTE-SET"
+oid = "1.0.9541.2.2"
+url = "https://www.itu.int/wftp3/Public/t/fl/iso/9541-2/1991/ISO-STANDARD-9541-FONT-ATTRIBUTE-SET.asn"
+
+[[module]]
+body = "iso"
+document = "ISO/IEC 9541-2"
+edition = "1991"
+name = "ISO9541-SN"
+oid = "1.0.9541.2.3"
+url = "https://www.itu.int/wftp3/Public/t/fl/iso/9541-2/1991/ISO9541-SN.asn"
+
+[[module]]
+body = "iso"
+document = "ISO/IEC 10031-2"
+edition = "1991"
+name = "DOR-definition"
+oid = "2.4.0"
+url = "https://www.itu.int/wftp3/Public/t/fl/iso/10031-2/1991/DOR-definition.asn"

@@ -13,4 +13,13 @@ The corpus data that the Glint site publishes, and that `glint corpus update` do
     of ITU-T and are included with credit to ITU-T. Each record keeps its Recommendation number and the
     URL it was taken from.
 
+  * ASN.1 modules from ISO and ISO/IEC International Standards (ISO 8571-4, ISO/IEC 9541-2 and
+    ISO/IEC 10031-2), as ITU-T publishes them on its formal-language site, which are the property of ISO
+    and IEC and are included with credit to ISO and IEC. Each record keeps its standard's number and the
+    URL it was taken from.
+
+Standalone modules are bundled as published, comments included, so each keeps the copyright notice and
+disclaimer it carries (for an ISO/IEC module, "Copyright (c) ISO/IEC <year>. This version of this ASN.1 module
+is part of ISO/IEC <standard>; see the ISO|IEC text itself for full legal notices.").
+
 The same notices are part of every build of the data (`info.notices` of `corpus.json`).
