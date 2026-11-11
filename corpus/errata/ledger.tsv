@@ -1,0 +1,268 @@
+rfc	errata_id	decision	by	fingerprint	rule	note
+2040	513	not-applicable	claude	ffb7903a248dce74	modules	prose in section 8 (RC5-CTS description)
+2040	514	not-applicable	claude	e1c224030b437bc8	modules	prose in section 8 (RC5-CTS description)
+2040	587	not-applicable	claude	c7f0a088b178221c	modules	prose in section 8 (RC5-CTS decryption steps)
+2040	6380	not-applicable	claude	3ef0826a899e817c	modules	section 11 ASN.1 fragments are not a module (no DEFINITIONS); the asn1 filter extracts nothing from RFC 2040
+2127	1952	not-applicable	claude	6aa3818a307a3c75	modules	SNMP MIB OID; the asn1 filter extracts no module from RFC 2127
+2459	432	not-applicable	claude	0cf771a687c544a1	modules	Appendix D.3 hex dump annotation, not module text
+2630	406	not-applicable	claude	9d1f10b8590d2e3a	modules	prose in section 12.2.2 (RFC number in a reference)
+2630	658	not-applicable	claude	2cf04e8108fb86db	modules	references section
+2631	2506	not-applicable	claude	6849ae442b476d3d	modules	prose / algorithm steps in section 2; no module in RFC 2631
+2631	5480	not-applicable	claude	942ba5f7839f80d5	modules	prose / algorithm steps in section 2; no module in RFC 2631
+2631	5897	not-applicable	claude	81513271f86e00ae	modules	ASN.1 fragment in section 2.1.2, not a module; the asn1 filter extracts nothing from RFC 2631
+2631	6302	not-applicable	claude	b33ee21605b55516	modules	prose / algorithm steps in section 2; no module in RFC 2631
+2631	7761	not-applicable	claude	2b45b0d0e8fdfe27	modules	prose / algorithm steps in section 2; no module in RFC 2631
+2633	405	not-applicable	claude	e0131a8bc638715c	modules	prose typo in section 3.5
+2633	5019	not-applicable	claude	9e2cb8c8024bdaa1	modules	only adds a [sic] marker to id-aa-encrypKeyPref; the module text is unchanged
+2797	4037	patched	claude	ce84fd58837cc329	modules	dod(4) -> dod(6) in the module header OID
+2797	4038	patched	claude	15e398d68b07ecc6	modules	pkix-cmc 24 -> id-cmc 24 for id-cmc-confirmCertAcceptance
+2898	4966	not-applicable	claude	15482852c8bd5194	modules	PBKDF2 algorithm step in section 5.1 (prose)
+2985	356	not-applicable	claude	8067181f93f66ac9	modules	table of contents
+2986	8328	not-applicable	claude	44520877afa9e4d4	modules	prose describing CertificationRequestInfo, not module text
+2986	8336	not-applicable	claude	8025569ff6d386dc	modules	prose describing CertificationRequestInfo, not module text
+3029	6443	patched	claude	1b6c929fdf631c76	modules	IMPORTS DigestAlgorithmIdentifier from CryptographicMessageSyntax
+3029	6444	patched	claude	f93f33e0f02586b0	modules	IMPORTS GeneralNames from PKIX1Implicit88
+3062	340	not-applicable	claude	208ee3d031f874e0	modules	prose typo in section 1
+3062	4899	not-applicable	claude	11923d07673187dc	modules	ASN.1 fragment in section 2, not a module; the asn1 filter extracts nothing from RFC 3062
+3125	5901	patched	claude	0578dd838d3b750e	modules	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.1 (1988) module
+3125	5902	patched	claude	41cf24837c51e600	modules	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.2 (1997) module
+3126	1067	patched	claude	0c0032405f995f7d	modules	otherRevVals OPTIONAL in RevocationValues (as in ETSI TS 101 733) in section 4.3.2 and both appendix modules
+3161	1879	not-applicable	claude	558095874a60a332	modules	prose in section 3.6 (media type name)
+3161	2931	patched	claude	a4edcf9bdf06cccf	modules	comment syntax in PKIStatus (-- on continuation lines, -- before }) in section 2.4.2 and the Appendix C module
+3161	2932	patched	claude	61e2574369bfa316	modules	comment syntax (-- before }) after systemFailure in section 2.4.2 and the Appendix C module
+3183	3757	not-applicable	claude	c6dadb35800da494	modules	adds id-aa-signatureType to the section 3.1.2 prose; the DOMSECSyntax module does not define it either, but the erratum names only 3.1.2
+3279	307	not-applicable	claude	2b373ea94c201c0b	modules	prose, not module text
+3279	2048	not-applicable	claude	cb4163392b8f4583	modules	section 2.3.5 copy only; the section 3 module already has basisType(3)
+3279	4036	not-applicable	claude	15ad66ee3be571fb	modules	prose, not module text
+3279	4102	not-applicable	claude	2ea482a62434db0d	modules	prose, not module text
+3279	7296	not-applicable	claude	30f8eafe46dd0077	modules	prose, not module text
+3280	305	not-applicable	claude	ed5e9f2f89c01976	modules	path validation prose
+3280	306	not-applicable	claude	41d2756bed7bf75b	modules	references
+3281	302	patched	claude	309249bd5cdaca53	modules	Clearance without [0]/[1]/[2] tags (X.501 form) in section 4.4.6 and the Appendix B module
+3281	303	patched	claude	54e2a2b271d6ee14	modules	comma after the version component of AttributeCertificateInfo in section 4.1 and the Appendix B module
+3281	304	not-applicable	claude	6d12950a9db2ac49	modules	prose in section 7.1
+3281	710	not-applicable	claude	663dbdb694bf2b12	modules	prose typo in section 4.3.2
+3281	1479	patched	claude	c2cf19d75068759f	modules	SecurityCategory: type [0] OBJECT IDENTIFIER, value [1] EXPLICIT ANY in section 4.4.6 and the Appendix B module
+3369	290	patched	claude	46bc25ba13d9c314	modules	AttributeCertificateVersion1 module: DEFINITIONS EXPLICIT TAGS (was IMPLICIT)
+3369	291	patched	claude	0df7fa09f6880d4a	modules	inserts the content type OIDs (id-ct-contentInfo, id-data, ... id-ct-authData) before the end of the CMS module, as the erratum instructs
+3369	292	not-applicable	claude	5beb1f2bf1e6bc15	modules	references section
+3370	289	not-applicable	claude	3758b2984d91055b	modules	references section
+3416	2757	not-applicable	claude	fbdf4c5c8b047fff	modules	SNMP PDU definitions; the asn1 filter extracts no module from RFC 3416
+3447	592	not-applicable	claude	f17e486a9036cbf4	modules	prose / figure in the scheme description, not module text
+3447	593	not-applicable	claude	112c609379dd3588	modules	prose / figure in the scheme description, not module text
+3447	594	not-applicable	claude	4599b5c993ba9846	modules	prose / figure in the scheme description, not module text
+3447	595	not-applicable	claude	5e30897147cb675f	modules	prose / figure in the scheme description, not module text
+3447	596	not-applicable	claude	f86f15cb1ca86e31	modules	prose / figure in the scheme description, not module text
+3447	633	not-applicable	claude	dc55e44af05ab15c	modules	prose / figure / references, not module text
+3447	635	not-applicable	claude	d34367922835e3c4	modules	prose / figure / references, not module text
+3447	636	not-applicable	claude	141a53d43002ffc0	modules	prose / figure / references, not module text
+3447	638	not-applicable	claude	2bb35e1723919e29	modules	prose / figure / references, not module text
+3447	2176	not-applicable	claude	4d403c233e8674e0	modules	prose / figure / references, not module text
+3565	8088	patched	claude	c9884f7e15b6a877	modules	removes the stray underscore after csor(3) in the aes OID
+3739	3108	not-applicable	claude	fb1423b2d2fce379	modules	prose / example value, not module text
+3739	7589	not-applicable	claude	b595fd1a3fc10c5c	modules	prose / example value, not module text
+3739	7801	not-applicable	claude	3de87bafc8c476ca	modules	prose / example value, not module text
+3770	233	patched	claude	d7dc947004f4eeac	modules	id-aca-wlanSSID is { id-aca 7 } in the section 8 module
+3770	234	not-applicable	claude	5365e8a74ded94c1	modules	section 4 prose copy of id-aca-wlanSSID; the module copy is fixed by erratum 233
+3779	836	not-applicable	claude	c71a68dd0ae00aa9	modules	prose / Appendix B encoding example, not module text
+3779	1886	not-applicable	claude	078139e976530c40	modules	prose / Appendix B encoding example, not module text
+3779	2537	not-applicable	claude	aaeb57f444781c1f	modules	prose / Appendix B encoding example, not module text
+3779	6792	not-applicable	claude	28f5d61db3ad6ee1	modules	prose / Appendix B encoding example, not module text
+3852	222	not-applicable	claude	7335672d7729c5c4	modules	prose, not module text
+3852	1744	not-applicable	claude	d1b029fb9ba5e25f	modules	prose, not module text
+3852	1756	not-applicable	claude	e52eb27f381cfefd	modules	prose, not module text
+3855	6412	not-applicable	claude	a01961b45a6bc4b2	modules	ASN.1 fragment in section 2.3, not a module; the asn1 filter extracts nothing from RFC 3855
+4010	3865	patched	claude	c337d22df80427f6	modules	id-mod-cms-seed(24) -> (25) in the module header OID
+4043	192	patched	claude	2702c3c3e1426bd5	modules	1993 module: imports OTHER-NAME from CertificateExtensions, defines id-pkix locally, permanentIdentifier as OTHER-NAME
+4055	1468	not-applicable	claude	aec6e1db3dc85d8f	modules	prose, not module text
+4055	1676	not-applicable	claude	5357dc9f5c61a361	modules	prose, not module text
+4108	4093	patched	human	407bd256296a20ff	modules	adds id-aa-fwPkgMessageDigest and FirmwarePackageMessageDigest (section 2.2.10) after FirmwarePackageInfo, and imports AlgorithmIdentifier from PKIX1Explicit88 [PROFILE] as RFC 3852 does (a follow-up erratum for the import is being filed)
+4120	7022	not-applicable	claude	274abcfce1ecaf63	modules	prose in section 5.2.6.2; the module already says cksumtype
+4210	3949	not-applicable	claude	e217e1f8af891fc5	modules	section 5.3.4 copy; the Appendix F module already uses CMPCertificate
+4210	4078	not-applicable	claude	1f3f269ddbfddb3a	modules	section 5.3.4 copy; the Appendix F module already uses CMPCertificate
+4210	5201	not-applicable	claude	f6df702d400100bc	modules	prose / Appendix D profile table, not module text
+4210	7549	not-applicable	claude	8609a6214ab46d0f	modules	prose / Appendix D profile table, not module text
+4211	4797	not-applicable	claude	551df7760ee09d69	modules	prose, not module text
+4211	8391	not-applicable	claude	e7328fae2654c598	modules	prose, not module text
+4212	8447	not-applicable	claude	8cb05c65c815ca0a	modules	definition in section 2.1; the asn1 filter extracts no module from RFC 4212
+4212	8448	not-applicable	claude	51c5c0f0e62e6fdd	modules	definition in section 2.1; the asn1 filter extracts no module from RFC 4212
+4301	2180	not-applicable	claude	2ac5010504b509c4	modules	prose / table, not module text
+4301	2184	not-applicable	claude	610ec9ff59ee2119	modules	prose / table, not module text
+4306	2279	not-applicable	claude	f07af1dd49219b7e	modules	transform table, not module text
+4334	122	not-applicable	claude	bfb60a0965850aa9	modules	prose and references
+4357	1467	not-applicable	claude	6597f1cc5e10840a	modules	prose / references, not module text
+4357	1473	not-applicable	claude	ddcbbfef8390ef02	modules	prose / references, not module text
+4357	5927	patched	claude	c37d6b292d9ac38e	modules	GostR3410-94-PKISyntax: imports id-Gost28147-89-CryptoPro-A-ParamSet; encryptionParamSet DEFAULT id-Gost28147-89-CryptoPro-A-ParamSet (as RFC 4491)
+4357	5928	patched	claude	4d13e911a60c9f83	modules	GostR3410-2001-PKISyntax: imports id-Gost28147-89-CryptoPro-A-ParamSet; encryptionParamSet DEFAULT id-Gost28147-89-CryptoPro-A-ParamSet (as RFC 4491)
+4455	83	not-applicable	claude	e7d13ea8e4d716dc	modules	SNMP MIB comment; the asn1 filter extracts no module from RFC 4455
+4490	1463	not-applicable	claude	46edfd9f7513a308	modules	prose / references, not module text
+4490	1464	not-applicable	claude	aa945f0bcd7942a8	modules	prose / references, not module text
+4490	5089	not-applicable	claude	27197cc430eef5ea	modules	prose / references, not module text
+4511	7216	not-applicable	claude	a61532868f384c43	modules	prose typo, not module text
+4511	7217	not-applicable	claude	cad1f10eaa8379bf	modules	prose typo, not module text
+4511	7218	not-applicable	claude	55c779609bd57bf6	modules	prose typo, not module text
+4511	7219	not-applicable	claude	930d4ba1039d4459	modules	prose typo, not module text
+4511	7220	not-applicable	claude	dc625cfd355c9663	modules	prose typo, not module text
+4511	7221	not-applicable	claude	7db7a8e188c0bb6c	modules	prose typo, not module text
+4511	7222	not-applicable	claude	eb8e02e96b5db75c	modules	prose typo, not module text
+4534	940	patched	claude	ef47298a25328f6a	modules	re-inserts terse BOOLEAN into GSAKMPv1DeRegistrationInfo in the B.4 module (as in section B.3)
+4683	1047	patched	claude	8232ff27c6ce72ca	modules	Appendix A module IMPORTS id-pkip from PKIXCRMF-2005; the IMPORTS clause still lacks its closing semicolon (no erratum), so PKIXSIM still fails
+4683	2355	not-applicable	claude	62be8b568c1d9b59	modules	prose, not module text
+4683	2358	not-applicable	claude	e2cfa1edb70ee5a7	modules	section 5.1 copy of SIM; the Appendix A module copy is erratum 2362
+4683	2359	not-applicable	claude	c7c7eb905fce7566	modules	prose, not module text
+4683	2362	patched	claude	e9f44169968cbec6	modules	pEPSI comment in the Appendix A module: hash of hash of HashContent (as erratum 2358 for section 5.1)
+4985	2520	not-applicable	claude	7bd61d789d7f3429	modules	prose, not module text
+5035	2364	not-applicable	claude	f528b09101ec5139	modules	prose describing ESSCertIDv2, not module text
+5083	8356	not-applicable	claude	acb2849c5ed30f1c	modules	prose typo
+5091	2736	not-applicable	claude	75e84c521f4d8038	modules	algorithm description, not module text
+5091	2738	not-applicable	claude	c1aa03805cfd7114	modules	algorithm description, not module text
+5091	2739	not-applicable	claude	d39d81309a4ce121	modules	algorithm description, not module text
+5091	3228	not-applicable	claude	98d8e93a20fb9e94	modules	algorithm description, not module text
+5091	3229	not-applicable	claude	fdfec581b9d18c0f	modules	algorithm description, not module text
+5208	1890	not-applicable	claude	fc31b0f38a9d7efd	modules	section 5 copy; the IMPLICIT module already omits the IMPLICIT tag
+5272	2063	patched	claude	0296ed44e7306e39	modules	dod(4) -> dod(6) in the module header OID
+5272	4775	not-applicable	claude	7910872ea9735baf	modules	Appendix B example, not module text
+5272	7627	not-applicable	claude	4a8490a03e0cc962	modules	prose
+5272	7628	not-applicable	claude	9be443578d908666	modules	prose
+5272	8027	not-applicable	claude	360ef36265fb18b9	modules	Appendix B example, not module text
+5275	2069	not-applicable	claude	d876ffb6efa81a03	modules	the quoted EnrollmentMessageSyntax import is not in RFC 5275; it is in RFC 5911 SMIMESymmetricKeyDistribution-2009, which already has dod(6)
+5275	5943	not-applicable	claude	1b7306de0b4a1bbd	modules	section 3.1.1 copy; the module already says certificates
+5280	3579	not-applicable	claude	60ac0b13e3f3229a	modules	section 4.2.1.4 copy; the Appendix A.2 module is correct
+5280	5802	not-applicable	claude	fa06e3329f1b2466	modules	comments in section 4.2.1.12; the Appendix A modules do not carry them
+5280	5938	not-applicable	claude	5239001d69ec39d1	modules	prose
+5280	6414	not-applicable	claude	796b33fa9b1941b3	modules	comments in section 4.2.1.12; the Appendix A modules do not carry them
+5280	7658	not-applicable	claude	5d2bf0685bdf571e	modules	prose
+5280	7661	not-applicable	claude	615ce4e9ed69fa3f	modules	prose
+5408	5838	patched	claude	bc381453c8fed540	modules	SEQUENCE SIZE (1..MAX) OF IBEPublicParameter (SIZE was missing) in the module and its earlier copy
+5480	6670	not-applicable	claude	ef6e7e5ec4f0b363	modules	prose / table, not module text
+5480	8026	not-applicable	claude	40be0dacbb045838	modules	prose / table, not module text
+5544	6510	not-applicable	claude	c4a710281a44dbc2	modules	copyright notice
+5649	6943	not-applicable	claude	3467e22dd0456cb8	modules	prose about plaintext length
+5652	6250	not-applicable	claude	f634200f2ec76ae4	modules	prose in section 9.2
+5652	6546	patched	claude	18f711c9b79fcd63	modules	module comment: imports from Section 12.2 (not Appendix B)
+5751	2143	not-applicable	claude	ed1800f3e3a1a1ed	modules	table / example, not module text
+5751	2708	not-applicable	claude	60af66a64bb893c3	modules	table / example, not module text
+5752	3670	not-applicable	claude	dc65344e4dda00f5	modules	prose (section reference)
+5752	4444	patched	claude	4214992e98860050	modules	id-aa-multipleSignatures is pkcs9(9) smime(16) id-aa(2) 51, in section 3 and the Appendix A module
+5753	8087	patched	claude	5ae00f4e4e8b72bd	modules	comma after CCMParameters in the A.1 module IMPORTS
+5755	3731	not-applicable	claude	0bcb287ed493f121	modules	prose / profile table, not module text
+5755	4541	not-applicable	claude	bc5cc631534e83e0	modules	prose / profile table, not module text
+5755	6567	patched	claude	81dba03a42855ec4	modules	Appendix B module no longer imports the unused CRLDistributionPoint from PKIX1Implicit88
+5794	2064	patched	claude	935cbe55065b5f3c	modules	korea(400) -> korea(410) in the module header OID
+5906	3345	not-applicable	claude	45f16fc2ec54ba0a	modules	prose / table of contents; no module in RFC 5906
+5906	3346	not-applicable	claude	655c5314d6a71cd9	modules	prose / table of contents; no module in RFC 5906
+5906	3349	not-applicable	claude	755950dcead20e9e	modules	prose / table of contents; no module in RFC 5906
+5906	4026	not-applicable	claude	11d6bfd99e187b42	modules	prose / table of contents; no module in RFC 5906
+5906	6402	not-applicable	claude	0498228265e4aef5	modules	Appendix J ASN.1 fragment, not a module; the asn1 filter extracts nothing from RFC 5906
+5906	8204	not-applicable	claude	1b9f60951f4a8748	modules	prose / table of contents; no module in RFC 5906
+5911	2612	patched	human	8ecd951c4aefc8d1	modules	CONTENT-TYPE becomes the class from the erratum notes ([TYPE &Type] IDENTIFIED BY &id, &Type OPTIONAL); ct-Data loses OCTET STRING; TYPE added to the other 9 content types in CryptographicMessageSyntax-2009, CMSFirmwareWrapper-2009, ExtendedSecurityServices-2009 and CMS-AuthEnvelopedData-2009
+5911	2648	patched	claude	36ab612db25d4d6a	modules	AttributeCertificateVersion1-2009 import moved to the PKIX module arc (erratum 2665 fixes the remaining member-body(2) node)
+5911	2665	patched	claude	92f769d3975af635	modules	AttributeCertificateVersion1-2009 import OID: identified-organization(3), not member-body(2)
+5911	3128	patched	claude	7d02d4513bb6d52e	modules	section 8 module imports ContentInfo FROM CryptographicMessageSyntax-2009 (was CryptographicMessageSyntax2004)
+5912	2649	patched	human	accc1f2cfa342abd	modules	module header OID moved to the PKIX arc, identified-organization(3) dod(6) ... pkix(7) id-mod(0) id-mod-v1AttrCert-02(49), as pending erratum 9255 corrects (the verified text has member-body(2) dod(6)); matches the RFC 5911 and RFC 6268 imports
+5912	2839	patched	claude	237dde456be4baf1	modules	adds anyPolicy OBJECT IDENTIFIER ::= { id-ce-certificatePolicies 0 } to PKIX1Implicit-2009 (as in RFC 5280)
+5912	3130	patched	human	3df522bd9cf90029	modules	TYPE added to ct-encKeyWithID, the four ct-scvp-* content types, ct-PKIData and ct-PKIResponse (needs RFC 5911 erratum 2612)
+5912	3259	patched	claude	3519992986d4829d	modules	OCSP-2009 module imports CRLReason from PKIX1Implicit-2009 instead of redefining it as INTEGER
+5912	3626	patched	claude	bfc5ad7c0c45bb94	modules	ext-CRLNumber uses the CRLNumber type (was INTEGER (0..MAX)) in PKIX1Implicit-2009
+5912	3692	patched	claude	0b207fb77e84827a	modules	adds ext-AuthorityInfoAccess to crlExtensions (RFC 5280 section 5.2.7)
+5912	4244	patched	claude	438ea3e74bdb5a35	modules	at-x520StateOrProvinceName, at-x520OrganizationName, at-x520OrganizationalUnitName use their X520* types
+5912	6806	patched	claude	e47bc0103c8f154d	modules	pk-rsa: PARAMS TYPE NULL ARE required (RFC 3279 section 2.3.1)
+5913	5890	not-applicable	claude	57989ac18be743e6	modules	section 3 copy; the Appendix A module already says id-pe-clearanceConstraints
+5914	2667	patched	human	7751c50cb68bc6cf	modules	module imports CONTENT-TYPE from CryptographicMessageSyntax-2009 instead of defining PKCS7-CONTENT-TYPE; TYPE added to trust-anchor-list (needs RFC 5911 erratum 2612)
+5915	2698	not-applicable	claude	8136d343f886affe	modules	prose about PEM encoding
+5915	3962	patched	claude	d73421058f59b7ce	modules	ECPrivateKey: parameters [0] ECParameters (not parameterized) in section 3 and the Appendix A module
+5917	4537	not-applicable	claude	ab4c43f3468da981	modules	prose / references
+5917	5883	patched	claude	40a6c055c6d291db	modules	Appendix A module: adds the missing FROM before PKIX1Explicit-2009 (and id-mod-pkix1-explicit-02 in the OID text)
+5917	5884	patched	claude	bc4aa1f3e7a8aedb	modules	WITH COMPONENTS { uTF8String PRESENT } (DirectoryString's spelling) in the module and its section 3 copy
+5934	2668	patched	human	254f9c59b1bc0c09	modules	module imports CONTENT-TYPE from CryptographicMessageSyntax-2009 instead of defining it; TYPE added to the 11 TAMP content types in the module (needs RFC 5911 erratum 2612)
+5934	8191	not-applicable	claude	747e234819e420fc	modules	prose (appendix reference)
+5958	2653	patched	human	ca9ce67e02d0647c	modules	TYPE added to ct-asymmetric-key-package in section 2 and the module (needs RFC 5911 erratum 2612)
+5958	8490	patched	claude	b07bc6b656a34fdd	modules	commented-out version 2 publicKey in the module: closing parenthesis and ]] added
+5996	2707	not-applicable	claude	decc058d028ba143	modules	prose
+5996	3036	not-applicable	claude	f4947314e7928201	modules	prose
+6010	2666	patched	human	eb7671404570d21b	modules	ct-Any becomes {TYPE NULL IDENTIFIED BY id-ct-anyContentType} (needs RFC 5911 erratum 2612)
+6031	2760	patched	claude	0051b9201f7c73af	modules	PSKCAlgorithmParameters is a SEQUENCE (not CHOICE) in section 3.2.7 and the A.2 module, as in RFC 6030 erratum 2759
+6210	3866	patched	claude	c689ec8e2f7e4fe1	modules	id-mod-MD5-XOR-EXPERIMENT(999) -> (49) in the module header OID
+6277	5892	patched	claude	b4b2b2a040da8693	modules	PreferredSignatureAlgorithm.pubKeyAlgIdentifier is AlgorithmIdentifier{PUBLIC-KEY, {...}} in the A.1 module (as RFC 6960)
+6402	3860	patched	claude	11b98c953c47a8e6	modules	A.1 module header OID id-mod-enrollMsgSyntax-2011-88(75) (both modules had 76)
+6402	5931	patched	claude	25e9342fcc9f0398	modules	id-kp-cmcArchive is { id-kp 29 } in the A.1 module (as in A.2)
+6402	6571	patched	claude	48dcb91e1ae5d826	modules	A.1 module: extendedFailInfo [1] SEQUENCE (tag needed, as in A.2)
+6402	8385	not-applicable	claude	5b410e53a082df5f	modules	section 2.8 copy of ChangeSubjectName; the module copies need the tag from erratum 3943, which is not in the Verified queue
+6482	3166	not-applicable	claude	5c2b31df07a0b888	modules	prose / table of contents
+6482	5609	not-applicable	claude	fb65d30fe43f97fa	modules	prose / table of contents
+6482	5881	patched	claude	679e985e8d3d02bd	modules	adds id-ct-routeOriginAuthz (1.2.840.113549.1.9.16.1.24) to the RPKI-ROA module
+6494	3655	not-applicable	claude	84b81a4efda8bc06	modules	prose (section references)
+6960	5891	patched	claude	9a0d00462da21ba0	modules	B.2 module imports CRLReason from PKIX1Implicit-2009
+6960	6165	not-applicable	claude	ef94d647d6eecb57	modules	prose
+6960	6166	patched	claude	bac62382e3571528	modules	KeyHash comment in the B.2 module matches B.1 (hash excludes tag, length and unused-bits octet)
+6960	6167	not-applicable	claude	e663831c9cfa131e	modules	section 4.2.1 copy of KeyHash; the B.2 module copy is erratum 6166
+6960	7961	not-applicable	claude	5f792001ea26d381	modules	prose introducing Appendix B, not module text
+6960	7962	patched	claude	28fe50e4c827deaa	modules	B.2 module no longer imports the unused ATTRIBUTE
+7292	4356	not-applicable	claude	0407083d911955da	modules	algorithm description in Appendix B.2
+7292	5795	not-applicable	claude	a3409680b793156d	modules	Appendix C definition, outside the Appendix D module
+7292	7257	patched	claude	84a1205df3b5f711	modules	CRLBag component crltValue renamed crlValue in the Appendix D module
+7296	6667	not-applicable	claude	30f5cd2e3e514645	modules	prose
+7296	6940	not-applicable	claude	cdb80ba0d21cd58a	modules	prose
+7508	5875	patched	claude	748da6ec51b16db2	modules	module name Mod-SMimeSecureHeadersV1 (was mod-, so it was never extracted)
+7906	5850	patched	claude	7f62b8880338c367	modules	adds id-informativeAttributes, InformativeTag and FreeFormField (section 17.1) to the Appendix A module
+7914	5871	patched	claude	f4d4b00a2adda908	modules	section 7.1 module: name Module-scrypt-0 (was scrypt-0, never extracted), IMPORTS ALGORITHM-IDENTIFIER from PKCS5v2-0, Scrypt-params capitalised
+7914	6972	not-applicable	claude	45199bfe6402d737	modules	prose
+7958	5932	not-applicable	claude	aa5d93573289691f	modules	prose
+8017	5111	not-applicable	claude	e3e69121a77995e9	modules	prose / table, not module text
+8017	5154	not-applicable	claude	66b0baa5ea54a04d	modules	prose / table, not module text
+8017	5235	not-applicable	claude	6fef6bb41bf14019	modules	prose / table, not module text
+8017	5577	not-applicable	claude	44959fd385c95324	modules	prose / table, not module text
+8017	7405	not-applicable	claude	056b6b677cb6b932	modules	prose / table, not module text
+8018	5808	patched	claude	89fe195d87b1a7e4	modules	PBKDF2-PRFs object set: alternatives separated by | (were commas) in the Appendix C module
+8018	5809	patched	claude	5cbd097a3d06a3ec	modules	SupportingAlgorithms object set: stray comma after rc5-CBC-PAD removed in the Appendix C module
+8018	6156	not-applicable	claude	8da57aad25b98c03	modules	Appendix A.2 copy of PBKDF2-PRFs; the Appendix C module copy is erratum 5808
+8018	8318	not-applicable	claude	86e041a4f0a4c835	modules	prose
+8103	5353	not-applicable	claude	29e107ca4c8630c9	modules	prose
+8226	5610	patched	claude	9947b893f38ad839	modules	SEQUENCE SIZE (1..MAX) OF (was Of) in the Appendix A module
+8360	5638	not-applicable	claude	8f48d339a0a90caa	modules	validation algorithm prose
+8360	5870	patched	claude	6dc310a5d24555d2	modules	id-pe-autonomousSysIds-v2 (the -v2 was missing) in the 2010 module
+8410	6263	not-applicable	claude	db6b2fa49329a284	modules	prose
+8410	6738	not-applicable	claude	c20074b3dc60d25f	modules	section 7 illustration of OneAsymmetricKey, not module text
+8410	7384	patched	claude	e9b3b789771a3cfe	modules	adds the missing sa-Ed448 and pk-Ed448 objects to the section 9 module
+8410	8297	not-applicable	claude	767b891199aa59e8	modules	PEM example
+8419	5869	not-applicable	claude	3eb144392598ac87	modules	definition in section 2.3; the asn1 filter extracts no module from RFC 8419
+8520	5664	not-applicable	claude	3bf1d20168d42f57	modules	prose, not module text
+8520	5702	not-applicable	claude	1069eca3ef282168	modules	prose, not module text
+8520	6295	not-applicable	claude	783a242dd2d77714	modules	prose, not module text
+8520	7173	not-applicable	claude	041415eb172c2cf5	modules	prose, not module text
+8520	7819	not-applicable	claude	54fc5ec0873d24fd	modules	prose, not module text
+8636	8638	not-applicable	claude	dba026a891c08200	modules	test vectors / prose, not module text
+8636	8639	not-applicable	claude	aa371e7b9d24381a	modules	test vectors / prose, not module text
+8636	8642	not-applicable	claude	ba79489d293c2a00	modules	test vectors / prose, not module text
+8702	6188	not-applicable	claude	7312006f20166b98	modules	prose
+8702	7276	not-applicable	claude	198152da6983a6e9	modules	body text spelling; the module already uses id-KMACWithSHAKE128/256
+8702	7288	not-applicable	claude	d4295e5d5f025845	modules	prose
+8708	7960	patched	claude	ed27da7cae3daa1b	modules	pk-HSS-LMS-HashSig: KEY replaced by -- KEY no ASN.1 wrapping -- in the Appendix A module
+8708	7963	not-applicable	claude	d06fa12d38290972	modules	section 4 copy; the Appendix A module copy is erratum 7960
+8894	6372	not-applicable	claude	1fb31b014dcf0b41	modules	prose / definition outside any module; the asn1 filter extracts no module from RFC 8894
+8894	8210	not-applicable	claude	e69745f73d6c8f20	modules	prose / definition outside any module; the asn1 filter extracts no module from RFC 8894
+8894	8247	not-applicable	claude	5cac718ecf73f172	modules	prose / definition outside any module; the asn1 filter extracts no module from RFC 8894
+8994	7071	not-applicable	claude	8b17fe879723d801	modules	prose
+8995	6716	not-applicable	claude	d266b61cbb404061	modules	prose / non-ASN.1 notation
+8995	6736	not-applicable	claude	ebe6ccb86856d31a	modules	prose / non-ASN.1 notation
+8995	6834	not-applicable	claude	f5bd7abfa69ef264	modules	prose / non-ASN.1 notation
+8995	7576	not-applicable	claude	bd48b8bbb2fa4379	modules	prose / non-ASN.1 notation
+8995	8269	not-applicable	claude	80e83c98370dedd9	modules	prose / non-ASN.1 notation
+9286	7118	patched	claude	917adae97f7a42c9	modules	Manifest fileList is SEQUENCE SIZE (1..MAX) in the Appendix A module and its section 4.2 copy
+9399	7534	not-applicable	claude	1c7f1604e9c7af20	modules	prose / references
+9399	7535	not-applicable	claude	01c91952d1b5a918	modules	prose / references
+9399	7536	not-applicable	claude	3c5439bc43921962	modules	prose / references
+9399	8140	not-applicable	claude	16578024557365fe	modules	prose / references
+9480	7822	patched	claude	2e0ccc5028c847eb	modules	PKIHeader pvno named number cmp2021(3) (was cmp2012) in the A.2 module
+9579	7974	not-applicable	claude	c1da65095f2003cd	modules	prose (password encoding)
+9763	8750	patched	claude	51298e82a8a748e6	modules	module RequesterCertificate.locationInfo is a single UniformResourceIdentifier (IA5String), as in section 3.1
+9802	8721	not-applicable	claude	f365d56c24f6096b	modules	prose (registry name)
+9810	8682	not-applicable	claude	839d0f97ad4f52a3	modules	prose / appendix message profiles, not module text
+9810	8683	not-applicable	claude	0dd03aaf58d42893	modules	prose / appendix message profiles, not module text
+9810	8684	not-applicable	claude	11c1b10863913474	modules	prose / appendix message profiles, not module text
+9810	9044	not-applicable	claude	338337eb714216d0	modules	prose / appendix message profiles, not module text
+9881	8699	patched	claude	2e0a2b2da16dfcb4	modules	ML-DSA-87-PublicKey is OCTET STRING (SIZE (2592)) in the Appendix A module (as section 4)
+9881	8700	patched	claude	74283c7e849c6ed8	modules	arc name nistAlgorithm(4) (no trailing s) in the nistAlgorithms OID of the Appendix A module
+9883	8687	not-applicable	claude	5ce25710f563baa8	modules	prose (type name in the description)
+9999	9088	not-applicable	claude	5bdae0225d9b4669	modules	CDDL and IANA tables, not ASN.1 module text
+10031	9137	not-applicable	claude	ab874d2ea7a75e53	modules	prose example of a name constraint

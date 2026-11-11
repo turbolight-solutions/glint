@@ -1,0 +1,15 @@
+--- a/rfc9763.xml
++++ b/rfc9763.xml
+@@ -705,10 +705,10 @@
+ RequesterCertificate ::= SEQUENCE {
+   certID        IssuerAndSerialNumber,
+   requestTime   BinaryTime,
+-  locationInfo  UniformResourceIdentifiers,
++  locationInfo  UniformResourceIdentifier,
+   signature     BIT STRING }
+ 
+-UniformResourceIdentifiers ::= SEQUENCE SIZE (1..MAX) OF URI
++UniformResourceIdentifier ::= IA5String
+ 
+ URI ::= IA5String
+ 

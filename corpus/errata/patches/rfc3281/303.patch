@@ -1,0 +1,20 @@
+--- a/rfc3281.txt
++++ b/rfc3281.txt
+@@ -428,7 +428,7 @@
+             }
+ 
+             AttributeCertificateInfo ::= SEQUENCE {
+-                 version              AttCertVersion -- version is v2,
++                 version              AttCertVersion, -- version is v2,
+                  holder               Holder,
+                  issuer               AttCertIssuer,
+                  signature            AlgorithmIdentifier,
+@@ -1986,7 +1986,7 @@
+              }
+ 
+              AttributeCertificateInfo ::= SEQUENCE {
+-                version        AttCertVersion  -- version is v2,
++                version        AttCertVersion, -- version is v2,
+                 holder         Holder,
+                 issuer         AttCertIssuer,
+                 signature      AlgorithmIdentifier,

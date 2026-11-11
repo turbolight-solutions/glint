@@ -1,0 +1,11 @@
+--- a/rfc5794.txt
++++ b/rfc5794.txt
+@@ -640,7 +640,7 @@
+    [X.680][X.681][X.682][X.683].
+ 
+    AriaModesOfOperation {
+-   iso(1) member-body(2) korea(400) nsri(200046) algorithm (1)
++   iso(1) member-body(2) korea(410) nsri(200046) algorithm (1)
+    symmetric-encryption-algorithm(1) asn1-module(0) alg-oids(0) }
+ 
+    DEFINITIONS IMPLICIT TAGS ::=

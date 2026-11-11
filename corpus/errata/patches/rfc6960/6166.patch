@@ -1,0 +1,14 @@
+--- a/rfc6960.txt
++++ b/rfc6960.txt
+@@ -2009,7 +2009,10 @@
+    byKey    [2] KeyHash }
+ 
+ KeyHash ::= OCTET STRING -- SHA-1 hash of responder's public key
+-                         -- (excluding the tag and length fields)
++                         -- (i.e., the SHA-1 hash of the value of the
++                         -- BIT STRING subjectPublicKey [excluding
++                         -- the tag, length, and number of unused
++                         -- bits] in the responder's certificate)
+ 
+ 
+ 

@@ -1,0 +1,11 @@
+--- a/rfc6010.txt
++++ b/rfc6010.txt
+@@ -1951,7 +1951,7 @@
+          us(840) rsadsi(113549) pkcs(1) pkcs-9(9) smime(16)
+          ct(1) 0 }
+ 
+-   ct-Any CONTENT-TYPE ::= {NULL IDENTIFIED BY id-ct-anyContentType }
++   ct-Any CONTENT-TYPE ::= {TYPE NULL IDENTIFIED BY id-ct-anyContentType }
+ 
+ 
+ 

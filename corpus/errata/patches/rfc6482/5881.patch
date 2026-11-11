@@ -1,0 +1,11 @@
+--- a/rfc6482.txt
++++ b/rfc6482.txt
+@@ -423,6 +423,8 @@
+ 
+    IPAddress ::= BIT STRING
+ 
++   id-ct-routeOriginAuthz OBJECT IDENTIFIER ::= { 1 2 840 113549 1 9 16 1 24 }
++
+    END
+ 
+ 

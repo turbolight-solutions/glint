@@ -1,0 +1,20 @@
+--- a/rfc3161.txt
++++ b/rfc3161.txt
+@@ -370,7 +370,7 @@
+       -- the additional information requested could not be understood
+       -- or is not available
+     systemFailure       (25)
+-      -- the request cannot be handled due to system failure  }
++      -- the request cannot be handled due to system failure -- }
+ 
+    These are the only values of PKIFailureInfo that SHALL be supported.
+ 
+@@ -1281,7 +1281,7 @@
+       -- the additional information requested could not be understood
+       -- or is not available
+     systemFailure       (25)
+-      -- the request cannot be handled due to system failure  }
++      -- the request cannot be handled due to system failure -- }
+ 
+ TimeStampToken ::= ContentInfo
+ 

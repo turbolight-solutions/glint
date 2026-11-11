@@ -1,0 +1,20 @@
+--- a/rfc5408.txt
++++ b/rfc5408.txt
+@@ -637,7 +637,7 @@
+    correspond to IBE algorithms that the PKG supports.  This structure
+    is defined to be following:
+ 
+-   IBEPublicParameters ::= SEQUENCE (1..MAX) OF
++   IBEPublicParameters ::= SEQUENCE SIZE (1..MAX) OF
+      IBEPublicParameter
+ 
+    IBEPublicParameter  ::= SEQUENCE {
+@@ -1297,7 +1297,7 @@
+      notAfter      GeneralizedTime
+    }
+ 
+-   IBEPublicParameters ::= SEQUENCE (1..MAX) OF
++   IBEPublicParameters ::= SEQUENCE SIZE (1..MAX) OF
+      IBEPublicParameter
+ 
+    IBEPublicParameter  ::= SEQUENCE {

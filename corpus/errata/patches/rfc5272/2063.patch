@@ -1,0 +1,11 @@
+--- a/rfc5272.txt
++++ b/rfc5272.txt
+@@ -3591,7 +3591,7 @@
+ Appendix A.  ASN.1 Module
+ 
+  EnrollmentMessageSyntax
+- { iso(1) identified-organization(3) dod(4) internet(1)
++ { iso(1) identified-organization(3) dod(6) internet(1)
+  security(5) mechansims(5) pkix(7) id-mod(0) id-mod-cmc2002(23) }
+ 
+  DEFINITIONS IMPLICIT TAGS ::=

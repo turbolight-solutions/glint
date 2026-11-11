@@ -1,0 +1,30 @@
+--- a/rfc3281.txt
++++ b/rfc3281.txt
+@@ -1181,10 +1181,10 @@
+ 
+ 
+             Clearance  ::=  SEQUENCE {
+-                 policyId  [0] OBJECT IDENTIFIER,
+-                 classList [1] ClassList DEFAULT {unclassified},
++                 policyId  OBJECT IDENTIFIER,
++                 classList ClassList DEFAULT {unclassified},
+                  securityCategories
+-                           [2] SET OF SecurityCategory OPTIONAL
++                           SET OF SecurityCategory OPTIONAL
+             }
+ 
+             ClassList  ::=  BIT STRING {
+@@ -2103,10 +2103,10 @@
+              }
+ 
+              Clearance  ::=  SEQUENCE {
+-                   policyId       [0] OBJECT IDENTIFIER,
+-                   classList      [1] ClassList DEFAULT {unclassified},
++                   policyId       OBJECT IDENTIFIER,
++                   classList      ClassList DEFAULT {unclassified},
+                    securityCategories
+-                                  [2] SET OF SecurityCategory  OPTIONAL
++                                  SET OF SecurityCategory  OPTIONAL
+              }
+ 
+              ClassList  ::=  BIT STRING {

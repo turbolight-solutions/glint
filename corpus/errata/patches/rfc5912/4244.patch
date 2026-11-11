@@ -1,0 +1,30 @@
+--- a/rfc5912.txt
++++ b/rfc5912.txt
+@@ -5244,7 +5244,7 @@
+   id-at-stateOrProvinceName AttributeType ::= { id-at 8 }
+ 
+   at-x520StateOrProvinceName ATTRIBUTE ::=
+-      { TYPE DirectoryString {ub-state-name}
++      { TYPE X520StateOrProvinceName
+           IDENTIFIED BY id-at-stateOrProvinceName }
+   X520StateOrProvinceName ::= DirectoryString {ub-state-name}
+ 
+@@ -5253,8 +5253,7 @@
+   id-at-organizationName  AttributeType ::= { id-at 10 }
+ 
+   at-x520OrganizationName ATTRIBUTE ::=
+-      { TYPE DirectoryString {ub-organization-name}
+-          IDENTIFIED BY id-at-organizationName }
++      { TYPE X520OrganizationName IDENTIFIED BY id-at-organizationName }
+   X520OrganizationName ::= DirectoryString {ub-organization-name}
+ 
+   -- Naming attributes of type X520OrganizationalUnitName
+@@ -5269,7 +5268,7 @@
+   id-at-organizationalUnitName AttributeType ::= { id-at 11 }
+ 
+   at-x520OrganizationalUnitName ATTRIBUTE ::=
+-      { TYPE DirectoryString  {ub-organizational-unit-name}
++      { TYPE X520OrganizationalUnitName
+           IDENTIFIED BY id-at-organizationalUnitName }
+   X520OrganizationalUnitName ::= DirectoryString
+                                      {ub-organizational-unit-name}

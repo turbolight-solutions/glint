@@ -1,0 +1,20 @@
+--- a/rfc7906.txt
++++ b/rfc7906.txt
+@@ -3556,6 +3556,17 @@
+      tagName          OBJECT IDENTIFIER,
+      attributeList    SET OF SecurityAttribute }
+ 
++   id-informativeAttributes OBJECT IDENTIFIER ::=
++     { 2 16 840 1 101 2 1 8 3 3 }
++
++   InformativeTag ::= SEQUENCE {
++     tagName     OBJECT IDENTIFIER,
++     attributes  FreeFormField }
++
++   FreeFormField ::= CHOICE {
++     bitSetAttributes    BIT STRING,
++     securityAttributes  SET OF SecurityAttribute }
++
+    SecurityAttribute ::= INTEGER (0..MAX)
+ 
+    -- Split Identifier Attribute

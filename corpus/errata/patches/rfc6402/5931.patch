@@ -1,0 +1,11 @@
+--- a/rfc6402.txt
++++ b/rfc6402.txt
+@@ -1280,7 +1280,7 @@
+ 
+     id-kp-cmcCA OBJECT IDENTIFIER ::= { id-kp 27 }
+     id-kp-cmcRA OBJECT IDENTIFIER ::= { id-kp 28 }
+-    id-kp-cmcArchive OBJECT IDENTIFIER ::= { id-kp 28 }
++    id-kp-cmcArchive OBJECT IDENTIFIER ::= { id-kp 29 }
+ 
+ 
+ 

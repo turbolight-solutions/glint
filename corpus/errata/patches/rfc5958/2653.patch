@@ -1,0 +1,20 @@
+--- a/rfc5958.txt
++++ b/rfc5958.txt
+@@ -141,7 +141,7 @@
+    The asymmetric key package content type has the following syntax:
+ 
+      ct-asymmetric-key-package CONTENT-TYPE ::=
+-       { AsymmetricKeyPackage IDENTIFIED BY id-ct-KP-aKeyPackage }
++       { TYPE AsymmetricKeyPackage IDENTIFIED BY id-ct-KP-aKeyPackage }
+ 
+      id-ct-KP-aKeyPackage OBJECT IDENTIFIER ::=
+        { joint-iso-itu-t(2) country(16) us(840) organization(1)
+@@ -621,7 +621,7 @@
+ 
+ 
+    ct-asymmetric-key-package CONTENT-TYPE ::=
+-    { AsymmetricKeyPackage IDENTIFIED BY id-ct-KP-aKeyPackage }
++    { TYPE AsymmetricKeyPackage IDENTIFIED BY id-ct-KP-aKeyPackage }
+ 
+    id-ct-KP-aKeyPackage OBJECT IDENTIFIER ::=
+      { joint-iso-itu-t(2) country(16) us(840) organization(1)

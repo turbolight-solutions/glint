@@ -1,0 +1,11 @@
+--- a/rfc2797.txt
++++ b/rfc2797.txt
+@@ -2247,7 +2247,7 @@
+ Appendix A  ASN.1 Module
+ 
+ EnrollmentMessageSyntax
+-   { iso(1) identified-organization(3) dod(4) internet(1)
++   { iso(1) identified-organization(3) dod(6) internet(1)
+    security(5) mechansims(5) pkix(7) id-mod(0) id-mod-cmc(6) }
+ 
+    DEFINITIONS IMPLICIT TAGS ::=

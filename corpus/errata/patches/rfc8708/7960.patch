@@ -1,0 +1,11 @@
+--- a/rfc8708.xml
++++ b/rfc8708.xml
+@@ -895,7 +895,7 @@
+ 
+ pk-HSS-LMS-HashSig PUBLIC-KEY ::= {
+     IDENTIFIER id-alg-hss-lms-hashsig
+-    KEY HSS-LMS-HashSig-PublicKey
++    -- KEY no ASN.1 wrapping --
+     PARAMS ARE absent
+     CERT-KEY-USAGE
+         { digitalSignature, nonRepudiation, keyCertSign, cRLSign } }

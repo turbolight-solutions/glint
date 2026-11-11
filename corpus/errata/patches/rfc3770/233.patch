@@ -1,0 +1,11 @@
+--- a/rfc3770.txt
++++ b/rfc3770.txt
+@@ -407,7 +407,7 @@
+    -- Wireless LAN SSID Attribute Certificate Attribute
+    -- Uses same syntax as the certificate extension: SSIDList
+ 
+-   id-aca-wlanSSID  OBJECT IDENTIFIER ::= { id-aca 6 }
++   id-aca-wlanSSID  OBJECT IDENTIFIER ::= { id-aca 7 }
+ 
+    END
+ 

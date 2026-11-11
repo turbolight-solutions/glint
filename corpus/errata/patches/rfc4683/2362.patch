@@ -1,0 +1,14 @@
+--- a/rfc4683.txt
++++ b/rfc4683.txt
+@@ -996,8 +996,9 @@
+              authorityRandom  OCTET STRING,   -- RA-chosen random number
+                                               -- used in computation of
+                                               -- pEPSI
+-             pEPSI            OCTET STRING    -- hash of HashContent
+-                                              -- with algorithm hashAlg
++             pEPSI            OCTET STRING    -- hash of hash of
++                                              -- HashContent with
++                                              -- algorithm hashAlg
+          }
+ 
+    -- PEPSI

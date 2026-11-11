@@ -1,0 +1,11 @@
+--- a/rfc4010.txt
++++ b/rfc4010.txt
+@@ -568,7 +568,7 @@
+ 
+      SeedEncryptionAlgorithmInCMS
+          { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+-           pkcs9(9) smime(16) modules(0) id-mod-cms-seed(24) }
++           pkcs9(9) smime(16) modules(0) id-mod-cms-seed(25) }
+ 
+ 
+      DEFINITIONS IMPLICIT TAGS ::=

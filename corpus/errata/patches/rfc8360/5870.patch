@@ -1,0 +1,11 @@
+--- a/rfc8360.txt
++++ b/rfc8360.txt
+@@ -720,7 +720,7 @@
+          IDENTIFIED BY id-pe-autonomousSysIds-v2
+        }
+ 
+-       id-pe-autonomousSysIds OBJECT IDENTIFIER ::= { id-pe 29 }
++       id-pe-autonomousSysIds-v2 OBJECT IDENTIFIER ::= { id-pe 29 }
+ 
+ 
+ 

@@ -1,0 +1,13 @@
+--- a/rfc5958.txt
++++ b/rfc5958.txt
+@@ -695,8 +695,8 @@
+    --  ...,
+    --  [[2: publicKey       [1] BIT STRING (CONTAINING
+    --                             PUBLIC-KEY.&Params({PublicKeySet}
+-   --                             {@privateKeyAlgorithm.algorithm})
+-   --                             OPTIONAL,
++   --                             {@privateKeyAlgorithm.algorithm}))
++   --                             OPTIONAL ]],
+    --  ...
+    --    }
+ 

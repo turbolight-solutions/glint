@@ -1,0 +1,11 @@
+--- a/rfc5912.txt
++++ b/rfc5912.txt
+@@ -5997,7 +5997,7 @@
+ 
+ 
+    ext-CRLNumber EXTENSION ::= {SYNTAX
+-       INTEGER (0..MAX) IDENTIFIED BY id-ce-cRLNumber }
++       CRLNumber IDENTIFIED BY id-ce-cRLNumber }
+    id-ce-cRLNumber OBJECT IDENTIFIER ::= { id-ce 20 }
+ 
+    CRLNumber ::= INTEGER (0..MAX)

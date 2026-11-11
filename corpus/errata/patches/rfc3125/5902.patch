@@ -1,0 +1,11 @@
+--- a/rfc3125.txt
++++ b/rfc3125.txt
+@@ -1613,6 +1613,8 @@
+         fieldOfApplication      [0] FieldOfApplication OPTIONAL,
+         semantics               [1] DirectoryString OPTIONAL }
+ 
++CommitmentTypeIdentifier ::= OBJECT IDENTIFIER
++
+ SignerAndVerifierRules ::= SEQUENCE {
+         signerRules      SignerRules,
+         verifierRules    VerifierRules }

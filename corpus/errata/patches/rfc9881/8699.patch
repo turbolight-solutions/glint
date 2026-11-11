@@ -1,0 +1,11 @@
+--- a/rfc9881.xml
++++ b/rfc9881.xml
+@@ -1054,7 +1054,7 @@
+ 
+ ML-DSA-65-PublicKey ::= OCTET STRING (SIZE (1952))
+ 
+-ML-DSA-87-PublicKey ::= OCTET STRING (SIZE (2602))
++ML-DSA-87-PublicKey ::= OCTET STRING (SIZE (2592))
+ 
+ --
+ -- Signature Algorithms

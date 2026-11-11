@@ -1,0 +1,12 @@
+--- a/rfc5912.txt
++++ b/rfc5912.txt
+@@ -5604,7 +5604,8 @@
+ 
+            ext-AuthorityKeyIdentifier | ext-IssuerAltName |
+            ext-CRLNumber | ext-DeltaCRLIndicator |
+-           ext-IssuingDistributionPoint |  ext-FreshestCRL, ... }
++           ext-IssuingDistributionPoint |  ext-FreshestCRL |
++           ext-AuthorityInfoAccess, ... }
+ 
+    CrlEntryExtensions EXTENSION ::= {
+            ext-CRLReason | ext-CertificateIssuer |

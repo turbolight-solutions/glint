@@ -1,0 +1,107 @@
+--- a/rfc5911.txt
++++ b/rfc5911.txt
+@@ -1394,7 +1394,12 @@
+   --   Version 4 = RFC 3369
+   --   Version 5 = RFC 3852
+ 
+-  CONTENT-TYPE ::= TYPE-IDENTIFIER
++  CONTENT-TYPE ::= CLASS {
++    &id OBJECT IDENTIFIER UNIQUE,
++    &Type OPTIONAL
++  } WITH SYNTAX {
++     [TYPE &Type] IDENTIFIED BY &id
++  }
+   ContentType ::= CONTENT-TYPE.&id
+ 
+ 
+@@ -1760,31 +1765,31 @@
+   id-ct-contentInfo OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs9(9) smime(16) ct(1) 6 }
+ 
+-  ct-Data CONTENT-TYPE ::= {OCTET STRING IDENTIFIED BY id-data}
++  ct-Data CONTENT-TYPE ::= {IDENTIFIED BY id-data}
+ 
+   id-data OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs7(7) 1 }
+ 
+   ct-SignedData CONTENT-TYPE ::=
+-      { SignedData IDENTIFIED BY id-signedData}
++      { TYPE SignedData IDENTIFIED BY id-signedData}
+ 
+   id-signedData OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs7(7) 2 }
+ 
+   ct-EnvelopedData CONTENT-TYPE ::=
+-      { EnvelopedData IDENTIFIED BY id-envelopedData}
++      { TYPE EnvelopedData IDENTIFIED BY id-envelopedData}
+ 
+   id-envelopedData OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs7(7) 3 }
+ 
+   ct-DigestedData CONTENT-TYPE ::=
+-      { DigestedData IDENTIFIED BY id-digestedData}
++      { TYPE DigestedData IDENTIFIED BY id-digestedData}
+ 
+   id-digestedData OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs7(7) 5 }
+ 
+   ct-EncryptedData CONTENT-TYPE ::=
+-      { EncryptedData IDENTIFIED BY id-encryptedData}
++      { TYPE EncryptedData IDENTIFIED BY id-encryptedData}
+ 
+   id-encryptedData OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs7(7) 6 }
+@@ -1797,7 +1802,7 @@
+ 
+ 
+   ct-AuthenticatedData CONTENT-TYPE ::=
+-      { AuthenticatedData IDENTIFIED BY id-ct-authData}
++      { TYPE AuthenticatedData IDENTIFIED BY id-ct-authData}
+ 
+   id-ct-authData OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+      us(840) rsadsi(113549) pkcs(1) pkcs-9(9) smime(16) ct(1) 2 }
+@@ -1921,7 +1926,7 @@
+   -- Firmware Package Content Type and Object Identifier
+ 
+   ct-firmwarePackage CONTENT-TYPE ::=
+-          { FirmwarePkgData IDENTIFIED BY id-ct-firmwarePackage }
++          { TYPE FirmwarePkgData IDENTIFIED BY id-ct-firmwarePackage }
+ 
+   id-ct-firmwarePackage OBJECT IDENTIFIER ::= {
+       iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs9(9)
+@@ -2062,7 +2067,7 @@
+   -- Firmware Package Load Receipt Content Type and Object Identifier
+ 
+   ct-firmwareLoadReceipt CONTENT-TYPE ::=
+-      { FirmwarePackageLoadReceipt IDENTIFIED BY
++      { TYPE FirmwarePackageLoadReceipt IDENTIFIED BY
+           id-ct-firmwareLoadReceipt }
+   id-ct-firmwareLoadReceipt OBJECT IDENTIFIER ::= {
+       iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs9(9)
+@@ -2090,7 +2095,7 @@
+   -- and Object Identifier
+ 
+   ct-firmwareLoadError CONTENT-TYPE ::=
+-      { FirmwarePackageLoadError
++      { TYPE FirmwarePackageLoadError
+           IDENTIFIED BY id-ct-firmwareLoadError }
+   id-ct-firmwareLoadError OBJECT IDENTIFIER ::= {
+       iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs9(9)
+@@ -2379,7 +2384,7 @@
+       us(840) rsadsi(113549) pkcs(1) pkcs-9(9) smime(16) id-aa(2) 7}
+ 
+   ct-receipt CONTENT-TYPE ::=
+-      { Receipt IDENTIFIED BY id-ct-receipt }
++      { TYPE Receipt IDENTIFIED BY id-ct-receipt }
+   id-ct-receipt OBJECT IDENTIFIER ::=
+       { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs-9(9)
+       smime(16) id-ct(1) 1}
+@@ -2616,7 +2621,7 @@
+    ContentTypes CONTENT-TYPE ::= {ct-authEnvelopedData, ... }
+ 
+    ct-authEnvelopedData CONTENT-TYPE ::= {
+-      AuthEnvelopedData IDENTIFIED BY id-ct-authEnvelopedData
++      TYPE AuthEnvelopedData IDENTIFIED BY id-ct-authEnvelopedData
+    }
+ 
+    id-ct-authEnvelopedData OBJECT IDENTIFIER ::=

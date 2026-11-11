@@ -1,0 +1,11 @@
+--- a/rfc3029.txt
++++ b/rfc3029.txt
+@@ -1728,7 +1728,7 @@
+   mechanisms(5) pkix(7) id-mod(0)
+   id-mod-cmp(9)}
+ 
+-  ContentInfo FROM CryptographicMessageSyntax {iso(1)
++  ContentInfo, DigestAlgorithmIdentifier FROM CryptographicMessageSyntax {iso(1)
+   member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs-9(9)
+   smime(16) modules(0) cms(1)}
+ 

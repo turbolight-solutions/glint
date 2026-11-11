@@ -1,0 +1,33 @@
+--- a/rfc7914.txt
++++ b/rfc7914.txt
+@@ -459,13 +459,19 @@
+ 
+    -- scrypt ASN.1 Module
+ 
+-   scrypt-0 {1 3 6 1 4 1 11591 4 10}
++   Module-scrypt-0 {1 3 6 1 4 1 11591 4 10}
+ 
+    DEFINITIONS ::= BEGIN
+ 
++   IMPORTS
++     ALGORITHM-IDENTIFIER
++       FROM PKCS5v2-0 -- [RFC2898]
++         { iso(1) member-body(2) us(840) rsadsi(113549)
++           pkcs(1) pkcs-5(5) modules(16) pkcs5v2-0(1) } ;
++
+    id-scrypt OBJECT IDENTIFIER ::= {1 3 6 1 4 1 11591 4 11}
+ 
+-   scrypt-params ::= SEQUENCE {
++   Scrypt-params ::= SEQUENCE {
+        salt OCTET STRING,
+        costParameter INTEGER (1..MAX),
+        blockSize INTEGER (1..MAX),
+@@ -474,7 +480,7 @@
+    }
+ 
+    PBES2-KDFs ALGORITHM-IDENTIFIER ::=
+-          { {scrypt-params IDENTIFIED BY id-scrypt}, ... }
++          { {Scrypt-params IDENTIFIED BY id-scrypt}, ... }
+ 
+    END
+ 

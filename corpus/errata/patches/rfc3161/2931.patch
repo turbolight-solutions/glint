@@ -1,0 +1,47 @@
+--- a/rfc3161.txt
++++ b/rfc3161.txt
+@@ -325,10 +325,10 @@
+    PKIStatus ::= INTEGER {
+       granted                (0),
+       -- when the PKIStatus contains the value zero a TimeStampToken, as
+-         requested, is present.
++      -- requested, is present.
+       grantedWithMods        (1),
+-       -- when the PKIStatus contains the value one a TimeStampToken,
+-         with modifications, is present.
++      -- when the PKIStatus contains the value one a TimeStampToken,
++      -- with modifications, is present.
+       rejection              (2),
+       waiting                (3),
+       revocationWarning      (4),
+@@ -343,7 +343,7 @@
+        -- this message contains a warning that a revocation is
+        -- imminent
+       revocationNotification (5)
+-       -- notification that a revocation has occurred  }
++       -- notification that a revocation has occurred -- }
+ 
+    Compliant servers SHOULD NOT produce any other values. Compliant
+    clients MUST generate an error if values it does not understand are
+@@ -1247,17 +1247,17 @@
+ PKIStatus ::= INTEGER {
+     granted                (0),
+     -- when the PKIStatus contains the value zero a TimeStampToken, as
+-       requested, is present.
++    -- requested, is present.
+     grantedWithMods        (1),
+-     -- when the PKIStatus contains the value one a TimeStampToken,
+-       with modifications, is present.
++    -- when the PKIStatus contains the value one a TimeStampToken,
++    -- with modifications, is present.
+     rejection              (2),
+     waiting                (3),
+     revocationWarning      (4),
+      -- this message contains a warning that a revocation is
+      -- imminent
+     revocationNotification (5)
+-     -- notification that a revocation has occurred   }
++     -- notification that a revocation has occurred -- }
+ 
+     -- When the TimeStampToken is not present
+     -- failInfo indicates the reason why the

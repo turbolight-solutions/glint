@@ -1,0 +1,11 @@
+--- a/rfc2797.txt
++++ b/rfc2797.txt
+@@ -2539,7 +2539,7 @@
+         passphrase            OCTET STRING OPTIONAL,
+         comment               UTF8String OPTIONAL }
+ 
+-   id-cmc-confirmCertAcceptance OBJECT IDENTIFIER ::= {pkix-cmc 24}
++   id-cmc-confirmCertAcceptance OBJECT IDENTIFIER ::= {id-cmc 24}
+ 
+    CMCCertId ::= IssuerSerial
+ 

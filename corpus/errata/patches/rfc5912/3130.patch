@@ -1,0 +1,65 @@
+--- a/rfc5912.txt
++++ b/rfc5912.txt
+@@ -3157,7 +3157,7 @@
+   --
+ 
+   ct-encKeyWithID CONTENT-TYPE ::=
+-      { EncKeyWithID IDENTIFIED BY id-ct-encKeyWithID }
++      { TYPE EncKeyWithID IDENTIFIED BY id-ct-encKeyWithID }
+ 
+   id-ct-encKeyWithID OBJECT IDENTIFIER ::= {id-ct 21}
+ 
+@@ -3460,7 +3460,7 @@
+       id-smime(16) 1 }
+ 
+   ct-scvp-certValRequest CONTENT-TYPE ::=
+-      { CVRequest IDENTIFIED BY id-ct-scvp-certValRequest }
++      { TYPE CVRequest IDENTIFIED BY id-ct-scvp-certValRequest }
+ 
+   id-ct-scvp-certValRequest OBJECT IDENTIFIER ::= { id-ct 10 }
+ 
+@@ -3669,7 +3669,7 @@
+   -- SCVP Certificate Validation Response
+ 
+   ct-scvp-certValResponse CONTENT-TYPE ::=
+-      { CVResponse IDENTIFIED BY id-ct-scvp-certValResponse }
++      { TYPE CVResponse IDENTIFIED BY id-ct-scvp-certValResponse }
+ 
+   id-ct-scvp-certValResponse OBJECT IDENTIFIER ::= { id-ct 11 }
+ 
+@@ -3824,7 +3824,7 @@
+   -- SCVP Validation Policies Request
+ 
+   ct-scvp-valPolRequest CONTENT-TYPE ::=
+-      { ValPolRequest IDENTIFIED BY id-ct-scvp-valPolRequest }
++      { TYPE ValPolRequest IDENTIFIED BY id-ct-scvp-valPolRequest }
+ 
+   id-ct-scvp-valPolRequest OBJECT IDENTIFIER ::= { id-ct 12 }
+ 
+@@ -3836,7 +3836,7 @@
+   -- SCVP Validation Policies Response
+ 
+   ct-scvp-valPolResponse CONTENT-TYPE ::=
+-      { ValPolResponse IDENTIFIED BY id-ct-scvp-valPolResponse }
++      { TYPE ValPolResponse IDENTIFIED BY id-ct-scvp-valPolResponse }
+ 
+   id-ct-scvp-valPolResponse OBJECT IDENTIFIER ::= { id-ct 13 }
+   ValPolResponse ::= SEQUENCE {
+@@ -4188,7 +4188,7 @@
+   -- This is the content type for a request message in the protocol
+ 
+   ct-PKIData CONTENT-TYPE ::=
+-      { PKIData IDENTIFIED BY id-cct-PKIData }
++      { TYPE PKIData IDENTIFIED BY id-cct-PKIData }
+   id-cct-PKIData OBJECT IDENTIFIER ::= { id-cct 2 }
+ 
+   PKIData ::= SEQUENCE {
+@@ -4297,7 +4297,7 @@
+   --  This defines the response message in the protocol
+ 
+   ct-PKIResponse CONTENT-TYPE ::=
+-      { PKIResponse IDENTIFIED BY id-cct-PKIResponse }
++      { TYPE PKIResponse IDENTIFIED BY id-cct-PKIResponse }
+   id-cct-PKIResponse OBJECT IDENTIFIER ::= { id-cct 3 }
+ 
+   ResponseBody ::= PKIResponse

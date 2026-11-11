@@ -1,0 +1,11 @@
+--- a/rfc6960.txt
++++ b/rfc6960.txt
+@@ -1880,7 +1880,7 @@
+ 
+ IMPORTS
+ 
+-Extensions{}, EXTENSION, ATTRIBUTE
++Extensions{}, EXTENSION
+ FROM PKIX-CommonTypes-2009 -- From [RFC5912]
+     {iso(1) identified-organization(3) dod(6) internet(1) security(5)
+     mechanisms(5) pkix(7) id-mod(0) id-mod-pkixCommon-02(57)}

@@ -1,0 +1,10 @@
+--- a/rfc4534.txt
++++ b/rfc4534.txt
+@@ -1165,6 +1165,7 @@
+ 
+    GSAKMPv1DeRegistrationInfo ::= SEQUENCE {
+      leaveMechanisms SEQUENCE OF LeaveMechanisms,
++     terse           BOOLEAN,
+      transport       Transport
+    }
+ 

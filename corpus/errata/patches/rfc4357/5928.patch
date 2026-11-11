@@ -1,0 +1,21 @@
+--- a/rfc4357.txt
++++ b/rfc4357.txt
+@@ -1506,7 +1506,7 @@
+                { iso(1) member-body(2) ru(643) rans(2)
+                  cryptopro(2) other(1) modules(1)
+                  cryptographic-Gost-Useful-Definitions(0) 1 }
+-           Gost28147-89-ParamSet
++           id-Gost28147-89-CryptoPro-A-ParamSet, Gost28147-89-ParamSet
+            FROM Gost28147-89-EncryptionSyntax
+                 gost28147-89-EncryptionSyntax
+ 
+@@ -1575,7 +1575,8 @@
+ 
+                        id-GostR3411-94-CryptoProParamSet
+                    ),
+-               encryptionParamSet Gost28147-89-ParamSet OPTIONAL
++               encryptionParamSet Gost28147-89-ParamSet DEFAULT
++                    id-Gost28147-89-CryptoPro-A-ParamSet
+            }
+        GostR3410-2001-PublicKeyAlgorithms  ALGORITHM-IDENTIFIER ::= {
+            { GostR3410-2001-PublicKeyParameters IDENTIFIED BY

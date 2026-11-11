@@ -1,0 +1,20 @@
+--- a/rfc6031.txt
++++ b/rfc6031.txt
+@@ -551,7 +551,7 @@
+ 
+    The Algorithm Parameters attribute has the following syntax:
+ 
+-   PSKCAlgorithmParameters ::= CHOICE {
++   PSKCAlgorithmParameters ::= SEQUENCE {
+      suite                UTF8String,
+      challengeFormat  [0] ChallengeFormat,
+      responseFormat   [1] ResponseFormat,
+@@ -1439,7 +1439,7 @@
+ 
+    id-pskc-algorithmParameters OBJECT IDENTIFIER ::= { id-pskc 15 }
+ 
+-   PSKCAlgorithmParameters ::= CHOICE {
++   PSKCAlgorithmParameters ::= SEQUENCE {
+      suite                UTF8String,
+      challengeFormat  [0] ChallengeFormat,
+      responseFormat   [1] ResponseFormat,

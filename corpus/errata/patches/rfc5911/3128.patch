@@ -1,0 +1,11 @@
+--- a/rfc5911.txt
++++ b/rfc5911.txt
+@@ -2214,7 +2214,7 @@
+        id-mod-algorithmInformation-02(58)}
+ 
+    ContentInfo
+-   FROM CryptographicMessageSyntax2004
++   FROM CryptographicMessageSyntax-2009
+        { iso(1) member-body(2) us(840) rsadsi(113549)
+        pkcs(1) pkcs-9(9) smime(16) modules(0) id-mod-cms-2004-02(41) } ;
+ 

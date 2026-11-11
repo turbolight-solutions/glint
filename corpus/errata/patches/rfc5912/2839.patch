@@ -1,0 +1,11 @@
+--- a/rfc5912.txt
++++ b/rfc5912.txt
+@@ -5691,6 +5691,8 @@
+        CertificatePolicies IDENTIFIED BY id-ce-certificatePolicies}
+    id-ce-certificatePolicies OBJECT IDENTIFIER ::=  { id-ce 32 }
+ 
++   anyPolicy OBJECT IDENTIFIER ::= { id-ce-certificatePolicies 0 }
++
+    CertificatePolicies ::= SEQUENCE SIZE (1..MAX) OF PolicyInformation
+ 
+    PolicyInformation ::= SEQUENCE {

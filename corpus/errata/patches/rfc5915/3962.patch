@@ -1,0 +1,32 @@
+--- a/rfc5915.txt
++++ b/rfc5915.txt
+@@ -100,13 +100,13 @@
+    representation, EC private key information SHALL have ASN.1 type
+    ECPrivateKey:
+ 
+    ECPrivateKey ::= SEQUENCE {
+      version        INTEGER { ecPrivkeyVer1(1) } (ecPrivkeyVer1),
+      privateKey     OCTET STRING,
+-     parameters [0] ECParameters {{ NamedCurve }} OPTIONAL,
++     parameters [0] ECParameters OPTIONAL,
+      publicKey  [1] BIT STRING OPTIONAL
+    }
+ 
+ 
+ 
+ 
+@@ -312,13 +312,13 @@
+ 
+    ;
+ 
+    ECPrivateKey ::= SEQUENCE {
+      version        INTEGER { ecPrivkeyVer1(1) } (ecPrivkeyVer1),
+      privateKey     OCTET STRING,
+-     parameters [0] ECParameters {{ NamedCurve }} OPTIONAL,
++     parameters [0] ECParameters OPTIONAL,
+      publicKey  [1] BIT STRING OPTIONAL
+    }
+ 
+    END
+ 
+ Appendix B.  Differences with SECG1

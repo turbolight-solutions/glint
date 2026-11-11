@@ -1,0 +1,21 @@
+--- a/rfc8018.txt
++++ b/rfc8018.txt
+@@ -1932,12 +1932,12 @@
+    PBKDF2-SaltSources ALGORITHM-IDENTIFIER ::= { ... }
+ 
+    PBKDF2-PRFs ALGORITHM-IDENTIFIER ::= {
+-     {NULL IDENTIFIED BY id-hmacWithSHA1},
+-     {NULL IDENTIFIED BY id-hmacWithSHA224},
+-     {NULL IDENTIFIED BY id-hmacWithSHA256},
+-     {NULL IDENTIFIED BY id-hmacWithSHA384},
+-     {NULL IDENTIFIED BY id-hmacWithSHA512},
+-     {NULL IDENTIFIED BY id-hmacWithSHA512-224},
++     {NULL IDENTIFIED BY id-hmacWithSHA1}        |
++     {NULL IDENTIFIED BY id-hmacWithSHA224}      |
++     {NULL IDENTIFIED BY id-hmacWithSHA256}      |
++     {NULL IDENTIFIED BY id-hmacWithSHA384}      |
++     {NULL IDENTIFIED BY id-hmacWithSHA512}      |
++     {NULL IDENTIFIED BY id-hmacWithSHA512-224}  |
+      {NULL IDENTIFIED BY id-hmacWithSHA512-256},
+      ...
+    }

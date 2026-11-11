@@ -1,0 +1,11 @@
+--- a/rfc5912.txt
++++ b/rfc5912.txt
+@@ -1363,7 +1363,7 @@
+    pk-rsa PUBLIC-KEY ::= {
+     IDENTIFIER rsaEncryption
+     KEY RSAPublicKey
+-    PARAMS TYPE NULL ARE absent
++    PARAMS TYPE NULL ARE required
+     -- Private key format not in this module --
+     CERT-KEY-USAGE {digitalSignature, nonRepudiation,
+     keyEncipherment, dataEncipherment, keyCertSign, cRLSign}

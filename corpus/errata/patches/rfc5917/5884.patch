@@ -1,0 +1,32 @@
+--- a/rfc5917.txt
++++ b/rfc5917.txt
+@@ -124,13 +124,13 @@
+    }
+ 
+    The ASN.1 syntax for the clearance sponsor attribute is as follows:
+ 
+    at-clearanceSponsor ATTRIBUTE ::= {
+      TYPE                   DirectoryString { ub-clearance-sponsor }
+-                            ( WITH COMPONENTS { utf8String PRESENT } )
++                            ( WITH COMPONENTS { uTF8String PRESENT } )
+      EQUALITY MATCHING RULE caseIgnoreMatch
+      IDENTIFIED BY          id-clearanceSponsor
+    }
+ 
+    ub-clearance-sponsor INTEGER ::= 64
+ 
+@@ -341,13 +341,13 @@
+ 
+ 
+    }
+ 
+    at-clearanceSponsor ATTRIBUTE ::= {
+      TYPE                   DirectoryString { ub-clearance-sponsor }
+-                            ( WITH COMPONENTS { utf8String PRESENT } )
++                            ( WITH COMPONENTS { uTF8String PRESENT } )
+      EQUALITY MATCHING RULE caseIgnoreMatch
+      IDENTIFIED BY          id-clearanceSponsor
+    }
+ 
+    ub-clearance-sponsor INTEGER ::= 64
+ 

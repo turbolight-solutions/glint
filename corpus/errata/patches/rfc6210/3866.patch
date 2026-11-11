@@ -1,0 +1,11 @@
+--- a/rfc6210.txt
++++ b/rfc6210.txt
+@@ -687,7 +687,7 @@
+   MD5-HASH-EXPERIMENT
+     { iso(1) member-body(2) us(840) rsadsi(113549)
+       pkcs(1) pkcs-9(9) smime(16) modules(0)
+-      id-mod-MD5-XOR-EXPERIMENT(999) }
++      id-mod-MD5-XOR-EXPERIMENT(49) }
+   DEFINITIONS IMPLICIT TAGS ::=
+   BEGIN
+    IMPORTS

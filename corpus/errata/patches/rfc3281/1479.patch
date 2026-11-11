@@ -1,0 +1,24 @@
+--- a/rfc3281.txt
++++ b/rfc3281.txt
+@@ -1197,8 +1197,8 @@
+             }
+ 
+             SecurityCategory ::= SEQUENCE {
+-                 type      [0]  IMPLICIT OBJECT IDENTIFIER,
+-                 value     [1]  ANY DEFINED BY type
++                 type      [0]  OBJECT IDENTIFIER,
++                 value     [1]  EXPLICIT ANY DEFINED BY type
+             }
+ 
+             -- This is the same as the original syntax which was defined
+@@ -2119,8 +2119,8 @@
+              }
+ 
+              SecurityCategory ::= SEQUENCE {
+-                   type      [0]  IMPLICIT OBJECT IDENTIFIER,
+-                   value     [1]  ANY DEFINED BY type
++                   type      [0]  OBJECT IDENTIFIER,
++                   value     [1]  EXPLICIT ANY DEFINED BY type
+              }
+ 
+ 

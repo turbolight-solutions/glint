@@ -1,0 +1,29 @@
+--- a/rfc3126.txt
++++ b/rfc3126.txt
+@@ -2271,7 +2271,7 @@
+    RevocationValues ::=  SEQUENCE {
+       crlVals           [0] SEQUENCE OF CertificateList     OPTIONAL,
+       ocspVals          [1] SEQUENCE OF BasicOCSPResponse   OPTIONAL,
+-      otherRevVals      [2] OtherRevVals
++      otherRevVals      [2] OtherRevVals                    OPTIONAL
+    }
+ 
+    OtherRevVals ::= SEQUENCE {
+@@ -3121,7 +3121,7 @@
+ RevocationValues ::=  SEQUENCE {
+    crlVals          [0] SEQUENCE OF CertificateList     OPTIONAL,
+    ocspVals         [1] SEQUENCE OF BasicOCSPResponse   OPTIONAL,
+-   otherRevVals     [2] OtherRevVals
++   otherRevVals     [2] OtherRevVals                    OPTIONAL
+ }
+ 
+ OtherRevVals ::= SEQUENCE {
+@@ -3612,7 +3612,7 @@
+ RevocationValues ::=  SEQUENCE {
+    crlVals          [0] SEQUENCE OF CertificateList OPTIONAL,
+    ocspVals         [1] SEQUENCE OF BasicOCSPResponse OPTIONAL,
+-   otherRevVals      [2] OtherRevVals }
++   otherRevVals      [2] OtherRevVals OPTIONAL }
+ 
+ OtherRevVals ::= SEQUENCE {
+    otherRevValType  OTHER-REVOCATION-VAL.&id,

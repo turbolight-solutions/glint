@@ -1,0 +1,11 @@
+--- a/rfc7508.txt
++++ b/rfc7508.txt
+@@ -851,7 +851,7 @@
+    existing S/MIME specifications.  The SecureHeaderFields structure is
+    defined as follows:
+ 
+-     mod-SMimeSecureHeadersV1
++     Mod-SMimeSecureHeadersV1
+        { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
+        pkcs-9(9) smime(16) modules(0) secure-headers-v1(65) }
+ 

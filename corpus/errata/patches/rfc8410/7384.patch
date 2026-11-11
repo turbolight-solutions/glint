@@ -1,0 +1,25 @@
+--- a/rfc8410.txt
++++ b/rfc8410.txt
+@@ -523,6 +523,22 @@
+                         keyCertSign, cRLSign}
+         PRIVATE-KEY CurvePrivateKey
+     }
++
++   sa-Ed448 SIGNATURE-ALGORITHM ::= {
++      IDENTIFIER id-Ed448
++       PARAMS ARE absent
++       PUBLIC-KEYS {pk-Ed448}
++       SMIME-CAPS { IDENTIFIED BY id-Ed448 }
++   }
++
++   pk-Ed448 PUBLIC-KEY ::= {
++       IDENTIFIER id-Ed448
++       -- KEY no ASN.1 wrapping --
++       PARAMS ARE absent
++       CERT-KEY-USAGE {digitalSignature, nonRepudiation,
++                       keyCertSign, cRLSign}
++       PRIVATE-KEY CurvePrivateKey
++   }
+ 
+     kaa-X25519 KEY-AGREE ::= {
+         IDENTIFIER id-X25519

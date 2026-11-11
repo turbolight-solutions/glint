@@ -1,0 +1,11 @@
+--- a/rfc6402.txt
++++ b/rfc6402.txt
+@@ -1154,7 +1154,7 @@
+        otherInfo             CHOICE {
+          failInfo               CMCFailInfo,
+          pendInfo               PendInfo,
+-         extendedFailInfo       SEQUENCE {
++         extendedFailInfo       [1] SEQUENCE {
+             failInfoOID            OBJECT IDENTIFIER,
+             failInfoValue          AttributeValue
+          }

@@ -1,0 +1,11 @@
+--- a/rfc6277.txt
++++ b/rfc6277.txt
+@@ -497,7 +497,7 @@
+ 
+    PreferredSignatureAlgorithm ::= SEQUENCE {
+     sigIdentifier       AlgorithmIdentifier{SIGNATURE-ALGORITHM, {...}},
+-    pubKeyAlgIdentifier SMIMECapability{PUBLIC-KEY, {...}} OPTIONAL  }
++    pubKeyAlgIdentifier AlgorithmIdentifier{PUBLIC-KEY, {...}} OPTIONAL}
+ 
+  END
+ 

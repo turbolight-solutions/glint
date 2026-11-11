@@ -1,0 +1,47 @@
+--- a/rfc4043.txt
++++ b/rfc4043.txt
+@@ -539,23 +539,21 @@
+    -- EXPORTS ALL --
+ 
+    IMPORTS
+-
+-        id-pkix
+-              FROM PKIX1Explicit88 { iso(1) identified-organization(3)
+-              dod(6) internet(1) security(5) mechanisms(5) pkix(7)
+-              id-mod(0) id-pkix1-explicit(18) }
+-               -- from [RFC3280]
+-
+-        ATTRIBUTE
+-              FROM InformationFramework {joint-iso-itu-t ds(5) module(1)
+-              informationFramework(1) 4};
+-               -- from [X.501]
++        OTHER-NAME
++            FROM CertificateExtensions {joint-iso-itu-t ds(5) module(1)
++              certificateExtensions(26) 4} ;
++              -- from Module CertificateExtensions (X.509:03/2000)
+ 
+    -- Permanent identifier Object Identifiers
++
++   id-pkix  OBJECT IDENTIFIER  ::=  { iso(1)
++       identified-organization(3) dod(6) internet(1)security(5)
++       mechanisms(5) pkix(7) }
+ 
+    id-on   OBJECT IDENTIFIER ::= { id-pkix 8 }
+ 
+    id-on-permanentIdentifier   OBJECT IDENTIFIER ::= { id-on 3 }
++
+ 
+ 
+ 
+@@ -566,9 +564,8 @@
+ 
+    -- Permanent Identifier
+ 
+-   permanentIdentifier ATTRIBUTE ::= {
+-          WITH SYNTAX     PermanentIdentifier
+-          ID              id-on-permanentIdentifier }
++   permanentIdentifier OTHER-NAME ::=
++     { PermanentIdentifier IDENTIFIED BY id-on-permanentIdentifier }
+ 
+    PermanentIdentifier ::= SEQUENCE {
+         identifierValue    UTF8String             OPTIONAL,

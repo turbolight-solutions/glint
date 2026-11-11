@@ -1,0 +1,11 @@
+--- a/rfc8226.txt
++++ b/rfc8226.txt
+@@ -1201,7 +1201,7 @@
+     ( WITH COMPONENTS { ..., mustInclude PRESENT } |
+       WITH COMPONENTS { ..., permittedValues PRESENT } )
+ 
+-    JWTClaimPermittedValuesList ::= SEQUENCE SIZE (1..MAX) Of
++    JWTClaimPermittedValuesList ::= SEQUENCE SIZE (1..MAX) OF
+                                       JWTClaimPermittedValues
+ 
+     JWTClaimPermittedValues ::= SEQUENCE {
