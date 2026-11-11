@@ -692,6 +692,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "glint-errata"
+version = "0.1.0"
+dependencies = [
+ "glint-extract",
+ "proptest",
+ "regex",
+ "serde_json",
+ "sha2",
+ "similar",
+ "thiserror",
+]
+
+[[package]]
 name = "glint-extract"
 version = "0.1.0"
 dependencies = [

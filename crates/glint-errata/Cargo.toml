@@ -1,0 +1,23 @@
+[package]
+name = "glint-errata"
+version = "0.1.0"
+description = "RFC errata: the feed, the triage ledger, per-erratum patches to the RFC source, and the triage queue"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+glint-extract = { workspace = true }
+regex = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+similar = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
