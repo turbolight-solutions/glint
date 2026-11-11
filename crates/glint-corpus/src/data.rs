@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::CorpusData;
 
 /// The schema of the data this code reads. Bumped whenever the layout of any data file changes.
-pub const SCHEMA: u32 = 1;
+pub const SCHEMA: u32 = 2;
 
 /// The directory of every build of the current schema, relative to the site root.
 pub fn schema_dir() -> String {

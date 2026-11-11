@@ -14,5 +14,5 @@ curl --fail --silent --show-error --location --output cache/errata.json https://
 curl --fail --silent --show-error --location --output cache/smi-numbers.xml \
   https://www.iana.org/assignments/smi-numbers/smi-numbers.xml
 echo "now run: cargo run --release -p glint-corpus-build -- --rfc-dir corpus/cache/rfc --drafts-dir corpus/cache/drafts \\"
-echo "           --overrides corpus/overrides --sources corpus/sources.toml --errata corpus/cache/errata.json \\"
+echo "           --overrides corpus/overrides --errata-dir corpus/errata --sources corpus/sources.toml --errata corpus/cache/errata.json \\"
 echo "           --iana corpus/cache/smi-numbers.xml --out corpus/out"

@@ -44,6 +44,10 @@ pub struct ReportData<'a> {
     pub extraction_notes: &'a BTreeMap<u32, Vec<String>>,
     pub source_problems: &'a [String],
     pub overrides: &'a [Override],
+    /// The errata applied, in order, by RFC.
+    pub errata_applied: &'a BTreeMap<u32, Vec<u32>>,
+    /// The RFCs built as published because their errata did not apply, and the erratum that failed.
+    pub errata_failed: &'a BTreeMap<u32, glint_errata::SeriesFailure>,
     pub oid_assignments: usize,
     pub oid_nodes: usize,
     pub allowlist: &'a [AllowedOid],
@@ -178,7 +182,6 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         for item in data.overrides {
             let tier = match item.tier {
                 OverrideTier::Extraction => "extraction",
-                OverrideTier::ErrataVerified => "errata-verified",
                 OverrideTier::Correction => "correction",
             };
             let oid = item.oid.as_ref().map_or(String::new(), |o| format!(" {o}"));
@@ -192,6 +195,49 @@ pub fn render_report(data: &ReportData<'_>) -> String {
             );
         }
         let _ = writeln!(out);
+    }
+
+    let _ = writeln!(out, "## Errata\n");
+    let _ = writeln!(
+        out,
+        "Verified RFC errata applied to the documents before extraction (`corpus/errata`).\n"
+    );
+    if data.errata_applied.is_empty() && data.errata_failed.is_empty() {
+        let _ = writeln!(out, "None.\n");
+    } else {
+        if !data.errata_applied.is_empty() {
+            let _ = writeln!(
+                out,
+                "| RFC | Errata | Modules corrected |\n| --- | --- | --- |"
+            );
+            for (rfc, ids) in data.errata_applied {
+                let document = format!("rfc{rfc}");
+                let modules: Vec<String> = data
+                    .records
+                    .iter()
+                    .filter(|r| r.source.document == document && !r.source.errata.is_empty())
+                    .map(|r| format!("`{}`", r.name))
+                    .collect();
+                let ids: Vec<String> = ids.iter().map(u32::to_string).collect();
+                let _ = writeln!(
+                    out,
+                    "| {rfc} | {} | {} |",
+                    ids.join(", "),
+                    modules.join(", ")
+                );
+            }
+            let _ = writeln!(out);
+        }
+        for (rfc, failure) in data.errata_failed {
+            let _ = writeln!(
+                out,
+                "- RFC {rfc} is built as published: the patch of erratum {} does not apply ({})",
+                failure.errata_id, failure.reason
+            );
+        }
+        if !data.errata_failed.is_empty() {
+            let _ = writeln!(out);
+        }
     }
 
     let _ = writeln!(out, "## OID label audit\n");

@@ -3,6 +3,7 @@
 
 mod build;
 mod collect;
+mod errata;
 mod iana;
 mod index;
 mod overrides;
@@ -49,9 +50,15 @@ struct Args {
     /// Where downloaded standalone modules are cached
     #[arg(long, value_name = "DIR", default_value = "corpus/cache/files")]
     cache: PathBuf,
-    /// RFC Editor `errata.json`, used to check `errata-verified` overrides
+    /// RFC Editor `errata.json`: every erratum `--errata-dir` patches must be a Verified erratum of its RFC
     #[arg(long, value_name = "FILE")]
     errata: Option<PathBuf>,
+    /// The RFC errata to apply before extracting (`corpus/errata`): `ledger.tsv` and `patches/rfcN/<id>.patch`
+    #[arg(long, value_name = "DIR")]
+    errata_dir: Option<PathBuf>,
+    /// Build the RFCs as published: apply no errata, even with `--errata-dir`
+    #[arg(long)]
+    no_errata: bool,
     /// IANA's SMI Numbers registry, `smi-numbers.xml`: the module identifier registries the module headers are
     /// checked against (`W146`); errata it cites are resolved with `--errata`
     #[arg(long, value_name = "FILE")]
@@ -93,6 +100,8 @@ pub struct Settings {
     pub sources: Option<PathBuf>,
     pub cache: PathBuf,
     pub errata: Option<PathBuf>,
+    /// `None` with `--no-errata`.
+    pub errata_dir: Option<PathBuf>,
     pub iana: Option<PathBuf>,
 }
 
@@ -109,6 +118,7 @@ impl Settings {
             sources: args.sources,
             cache: args.cache,
             errata: args.errata,
+            errata_dir: args.errata_dir.filter(|_| !args.no_errata),
             iana: args.iana,
         }
     }

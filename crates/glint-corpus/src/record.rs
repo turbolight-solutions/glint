@@ -33,7 +33,6 @@ pub enum ParseStatus {
 #[serde(rename_all = "kebab-case")]
 pub enum OverrideTier {
     Extraction,
-    ErrataVerified,
     Correction,
 }
 
@@ -68,6 +67,10 @@ pub struct ModuleSource {
     pub url: Option<String>,
     pub section: Option<String>,
     pub kind: SourceKind,
+    /// The Verified errata whose patches changed this module's text: corpus-build applies an RFC's errata patches
+    /// (`corpus/errata`) to the document before extracting it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errata: Vec<u32>,
 }
 
 impl ModuleSource {
@@ -80,6 +83,7 @@ impl ModuleSource {
             url: None,
             section,
             kind,
+            errata: Vec::new(),
         }
     }
 
@@ -92,6 +96,7 @@ impl ModuleSource {
             url: None,
             section,
             kind,
+            errata: Vec::new(),
         }
     }
 

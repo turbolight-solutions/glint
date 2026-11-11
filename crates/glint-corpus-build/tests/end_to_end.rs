@@ -1028,3 +1028,327 @@ fn a_module_that_needs_a_skipped_smi_module_is_skipped_too() {
     assert!(!skipped.contains("KeptImporter"), "{skipped}");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// Errata patched into the fixture RFCs: 9001 corrects RFC 5280's `ub-name` (text), 9002 the inline `Certificate`
+/// of RFC 8692 (XML) and 9003 a comment in RFC 8692's module.
+struct ErrataFixture {
+    dir: PathBuf,
+    rfcs: PathBuf,
+    errata: PathBuf,
+}
+
+fn errata_fixture(tag: &str) -> ErrataFixture {
+    use glint_errata::{Decider, Decision, Row, Rule, Source, SourceFormat, make_patch, store};
+    let dir = std::env::temp_dir().join(format!("glint-e2e-errata-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    std::fs::copy(
+        fixture("text/rfc5280-appendix-a.txt"),
+        rfcs.join("rfc5280.txt"),
+    )
+    .unwrap();
+    std::fs::copy(fixture("xml/rfc8692.xml"), rfcs.join("rfc8692.xml")).unwrap();
+    let text = std::fs::read_to_string(rfcs.join("rfc5280.txt")).unwrap();
+    let xml = std::fs::read_to_string(rfcs.join("rfc8692.xml")).unwrap();
+    let errata = dir.join("errata");
+    let txt_source = Source {
+        rfc: 5280,
+        format: SourceFormat::Text,
+    };
+    let xml_source = Source {
+        rfc: 8692,
+        format: SourceFormat::Xml,
+    };
+    let p9001 = make_patch(
+        txt_source,
+        &text,
+        &text.replace("ub-name INTEGER ::= 32768", "ub-name INTEGER ::= 32769"),
+    )
+    .unwrap();
+    let inline = xml.replace(
+        "      signatureValue       BIT STRING  }",
+        "      signatureValue       BIT STRING (SIZE (1..MAX)) }",
+    );
+    let p9002 = make_patch(xml_source, &xml, &inline).unwrap();
+    let p9003 = make_patch(
+        xml_source,
+        &inline,
+        &inline.replace("-- EXPORTS ALL;", "-- EXPORTS ALL; corrected"),
+    )
+    .unwrap();
+    for (rfc, id, patch) in [
+        (5280, 9001, &p9001),
+        (8692, 9002, &p9002),
+        (8692, 9003, &p9003),
+    ] {
+        store::write_patch(&errata, rfc, id, patch).unwrap();
+    }
+    let row = |rfc, errata_id| Row {
+        rfc,
+        errata_id,
+        decision: Decision::Patched,
+        by: Decider::Claude,
+        fingerprint: "0123456789abcdef".to_owned(),
+        rule: Rule::Asn1,
+        note: "test".to_owned(),
+    };
+    store::write_ledger(
+        &errata,
+        &[row(5280, 9001), row(8692, 9002), row(8692, 9003)],
+    )
+    .unwrap();
+    ErrataFixture { dir, rfcs, errata }
+}
+
+fn corpus_build(fixture: &ErrataFixture, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&fixture.rfcs)
+        .arg("--out")
+        .arg(fixture.dir.join("out"))
+        .args(["--date", "2026-11-11"])
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+fn errata_args(fixture: &ErrataFixture) -> Vec<String> {
+    vec![
+        "--errata-dir".to_owned(),
+        fixture.errata.display().to_string(),
+    ]
+}
+
+fn documents(out: &Path) -> Documents {
+    let pointer = Pointer::from_json(&std::fs::read(out.join(latest_path())).unwrap()).unwrap();
+    Documents::read(
+        std::fs::read(out.join(build_dir(&pointer.build)).join(DOCUMENTS_FILE)).unwrap(),
+    )
+    .unwrap()
+}
+
+fn run_ok(fixture: &ErrataFixture, args: &[String]) {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = corpus_build(fixture, &args);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn errata_are_applied_to_text_and_xml_before_extraction() {
+    let fixture = errata_fixture("applied");
+    run_ok(&fixture, &errata_args(&fixture));
+    let data = load_data(&fixture.dir.join("out"));
+    let corrected: Vec<(&str, &str, Vec<u32>)> = data
+        .modules
+        .iter()
+        .filter(|m| !m.source.errata.is_empty())
+        .map(|m| {
+            (
+                m.source.document.as_str(),
+                m.name.as_str(),
+                m.source.errata.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        corrected,
+        [
+            ("rfc5280", "PKIX1Explicit88", vec![9001]),
+            ("rfc8692", "PKIXAlgsForSHAKE-2019", vec![9003])
+        ],
+        "the inline Certificate of erratum 9002 is in no module"
+    );
+    let explicit = data
+        .modules
+        .iter()
+        .find(|m| m.name == "PKIX1Explicit88")
+        .unwrap();
+    assert!(explicit.text.contains("ub-name INTEGER ::= 32769"));
+    let documents = documents(&fixture.dir.join("out"));
+    assert!(
+        documents
+            .get("rfc8692")
+            .unwrap()
+            .0
+            .contains("BIT STRING (SIZE (1..MAX)) }")
+    );
+    let report = std::fs::read_to_string(fixture.dir.join("out/report.md")).unwrap();
+    assert!(
+        report.contains("| 5280 | 9001 | `PKIX1Explicit88` |"),
+        "{report}"
+    );
+    assert!(
+        report.contains("| 8692 | 9002, 9003 | `PKIXAlgsForSHAKE-2019` |"),
+        "{report}"
+    );
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+#[test]
+fn no_errata_builds_the_rfcs_as_published() {
+    let fixture = errata_fixture("published");
+    let mut args = errata_args(&fixture);
+    args.push("--no-errata".to_owned());
+    run_ok(&fixture, &args);
+    let data = load_data(&fixture.dir.join("out"));
+    assert!(data.modules.iter().all(|m| m.source.errata.is_empty()));
+    assert!(
+        data.modules
+            .iter()
+            .any(|m| m.text.contains("ub-name INTEGER ::= 32768"))
+    );
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+#[test]
+fn a_series_that_does_not_apply_leaves_the_rfc_as_published() {
+    let fixture = errata_fixture("fails");
+    let path = glint_errata::store::patch_path(&fixture.errata, 8692, 9003);
+    let broken = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("-- EXPORTS ALL;\n", "-- EXPORT NONE;\n");
+    std::fs::write(&path, broken).unwrap();
+    run_ok(&fixture, &errata_args(&fixture));
+    let data = load_data(&fixture.dir.join("out"));
+    assert!(
+        data.modules
+            .iter()
+            .filter(|m| m.source.document == "rfc8692")
+            .all(|m| m.source.errata.is_empty())
+    );
+    let report = std::fs::read_to_string(fixture.dir.join("out/report.md")).unwrap();
+    assert!(
+        report
+            .contains("- RFC 8692 is built as published: the patch of erratum 9003 does not apply"),
+        "{report}"
+    );
+    assert!(report.contains("| 5280 | 9001 |"), "{report}");
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+#[test]
+fn a_patch_for_the_other_format_is_not_applied() {
+    let fixture = errata_fixture("format");
+    let path = glint_errata::store::patch_path(&fixture.errata, 5280, 9001);
+    let as_xml = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("rfc5280.txt", "rfc5280.xml");
+    std::fs::write(&path, as_xml).unwrap();
+    run_ok(&fixture, &errata_args(&fixture));
+    let report = std::fs::read_to_string(fixture.dir.join("out/report.md")).unwrap();
+    assert!(
+        report.contains("RFC 5280 is built as published"),
+        "{report}"
+    );
+    assert!(report.contains("not against rfc5280.txt"), "{report}");
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+/// Breaks an errata fixture in one way.
+type Damage = fn(&ErrataFixture);
+
+#[test]
+fn malformed_errata_data_fails_the_build() {
+    let cases: [(&str, Damage, &str); 3] = [
+        (
+            "orphan",
+            |f| {
+                std::fs::write(glint_errata::store::patch_path(&f.errata, 5280, 9999), "x").unwrap()
+            },
+            "without a `patched` ledger row",
+        ),
+        (
+            "ledger",
+            |f| std::fs::write(f.errata.join("ledger.tsv"), "rfc\terrata_id\n").unwrap(),
+            "the header must be",
+        ),
+        (
+            "added-line",
+            |f| {
+                let path = glint_errata::store::patch_path(&f.errata, 5280, 9001);
+                let patch = std::fs::read_to_string(&path)
+                    .unwrap()
+                    .replace("32769", "32769\u{202e}");
+                std::fs::write(path, patch).unwrap();
+            },
+            "adds a control, bidi or zero-width character",
+        ),
+    ];
+    for (tag, damage, message) in cases {
+        let fixture = errata_fixture(tag);
+        damage(&fixture);
+        let args = errata_args(&fixture);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let output = corpus_build(&fixture, &args);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success() && stderr.contains(message),
+            "{tag}: {stderr}"
+        );
+        let _ = std::fs::remove_dir_all(fixture.dir);
+    }
+}
+
+#[test]
+fn patched_errata_must_be_verified_errata_of_their_rfc() {
+    let fixture = errata_fixture("verified");
+    let feed = fixture.dir.join("errata.json");
+    std::fs::write(
+        &feed,
+        r#"[{"errata_id":"9001","doc-id":"RFC5280","errata_status_code":"Verified"},
+            {"errata_id":"9002","doc-id":"RFC8692","errata_status_code":"Reported"},
+            {"errata_id":"9003","doc-id":"RFC5280","errata_status_code":"Verified"}]"#,
+    )
+    .unwrap();
+    let mut args = errata_args(&fixture);
+    args.extend(["--errata".to_owned(), feed.display().to_string()]);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = corpus_build(&fixture, &args);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("RFC 8692 erratum 9002 has status Reported, not Verified"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("erratum 9003 is of RFC 5280, not RFC 8692"),
+        "{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+#[test]
+fn an_override_of_a_module_errata_correct_is_refused() {
+    let fixture = errata_fixture("override");
+    let over = fixture.dir.join("overrides/rfc5280");
+    std::fs::create_dir_all(&over).unwrap();
+    std::fs::write(
+        over.join("PKIX1Explicit88.asn"),
+        "PKIX1Explicit88 { 1 3 6 1 5 5 7 0 18 } DEFINITIONS ::= BEGIN END",
+    )
+    .unwrap();
+    std::fs::write(
+        over.join("meta.toml"),
+        "[[override]]\ntier = \"correction\"\ndocument = \"rfc5280\"\nmodule = \"PKIX1Explicit88\"\njustification = \"t\"\n",
+    )
+    .unwrap();
+    let mut args = errata_args(&fixture);
+    args.extend([
+        "--overrides".to_owned(),
+        fixture.dir.join("overrides").display().to_string(),
+    ]);
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = corpus_build(&fixture, &args);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("replaces a module that errata 9001 correct"),
+        "{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}

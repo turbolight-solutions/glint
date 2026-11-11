@@ -156,25 +156,10 @@ pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
                 .with_help("pin it in glint.toml once the module is published, or import the RFC");
                 ctx.report(finding);
             }
-            if let SourceKind::Overridden { tier, errata_ids } = &rec.source.kind
-                && *tier != glint_corpus::OverrideTier::Extraction
+            if let Some(message) = curated_note(rec)
                 && curated_reported.insert(rec_index)
             {
-                let tier_name = match tier {
-                    glint_corpus::OverrideTier::ErrataVerified => "errata-verified",
-                    _ => "correction",
-                };
-                let finding = Finding::new(
-                    "I105",
-                    format!(
-                        "using curated version of {} from {} ({tier_name}, errata {})",
-                        rec.name,
-                        glint_corpus::document_title(&rec.source.document),
-                        errata_ids.join(", ")
-                    ),
-                    ctx.loc(clause.module_range),
-                );
-                ctx.report(finding);
+                ctx.report(Finding::new("I105", message, ctx.loc(clause.module_range)));
             }
         }
 
@@ -318,5 +303,33 @@ fn registry_note(
         entry.registrant(),
         against.description,
         against.registrant()
+    ))
+}
+
+/// The `I105` note for a corpus module whose text is not the published one: corrected by errata patches, or replaced
+/// by a `correction` override. `None` for a module as published (or repaired by an `extraction` override).
+fn curated_note(rec: &glint_corpus::ModuleRecord) -> Option<String> {
+    let document = glint_corpus::document_title(&rec.source.document);
+    if let SourceKind::Overridden { tier, errata_ids } = &rec.source.kind
+        && *tier == glint_corpus::OverrideTier::Correction
+    {
+        let errata = if errata_ids.is_empty() {
+            String::new()
+        } else {
+            format!(", errata {}", errata_ids.join(", "))
+        };
+        return Some(format!(
+            "using curated version of {} from {document} (correction{errata})",
+            rec.name
+        ));
+    }
+    if rec.source.errata.is_empty() {
+        return None;
+    }
+    let ids: Vec<String> = rec.source.errata.iter().map(u32::to_string).collect();
+    Some(format!(
+        "using {} from {document} as corrected by errata {}",
+        rec.name,
+        ids.join(", ")
     ))
 }

@@ -12,6 +12,7 @@ publish = false
 glint-syntax = { workspace = true }
 glint-extract = { workspace = true }
 glint-corpus = { workspace = true }
+glint-errata = { workspace = true }
 glint-diag = { workspace = true }
 glint-sema = { workspace = true }
 clap = { workspace = true }

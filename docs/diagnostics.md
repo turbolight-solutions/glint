@@ -23,7 +23,7 @@ Implemented so far (M1, M2, M3, M4, M5):
 | `W102` | warning | Module matched by name, but the IMPORTS OID differs from the corpus module's; the OID is definitive | X.680 13.10, 13.11 | `tests/imports.rs` |
 | `I103` | info | Import resolved by name to one of several corpus modules | policy | `tests/imports.rs` |
 | `E104` | error | Same module imported twice (by name or OID), or a module importing itself | X.680 13.16 e | `tests/imports.rs` |
-| `I105` | info | Using a curated (`errata-verified` or `correction`) version of a corpus module | policy | `glint-corpus-build/tests/end_to_end.rs` |
+| `I105` | info | Using a version of a corpus module corrected by errata or by a `correction` override | policy | `glint-corpus-build/tests/end_to_end.rs` |
 | `I109` | info | Import resolved to a module of an Internet-Draft | policy | `tests/imports.rs` |
 | `W106` | warning | IMPORTS gives no OID for a module that has a definitive OID | X.680 13.12 | `tests/imports.rs` |
 | `E107` | error | Value reference in an `AssignedIdentifier` does not meet 13.9 | X.680 13.9 | `tests/imports.rs` |

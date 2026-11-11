@@ -3,14 +3,13 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use glint_corpus::{AllowedOid, Oid, OverrideTier, document_title, rfc_number};
+use glint_corpus::{AllowedOid, Oid, OverrideTier, document_title};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 enum TierName {
     Extraction,
-    ErrataVerified,
     Correction,
 }
 
@@ -65,19 +64,11 @@ pub fn read_overrides(dir: &Path) -> Result<Vec<Override>, String> {
         for entry in meta.overrides {
             let tier = match entry.tier {
                 TierName::Extraction => OverrideTier::Extraction,
-                TierName::ErrataVerified => OverrideTier::ErrataVerified,
                 TierName::Correction => OverrideTier::Correction,
             };
             if matches!(tier, OverrideTier::Correction) && entry.justification.is_none() {
                 return Err(format!(
                     "{}: a `correction` override of {} needs a justification",
-                    meta_path.display(),
-                    entry.module
-                ));
-            }
-            if matches!(tier, OverrideTier::ErrataVerified) && entry.errata_ids.is_empty() {
-                return Err(format!(
-                    "{}: an `errata-verified` override of {} must cite an erratum",
                     meta_path.display(),
                     entry.module
                 ));
@@ -182,7 +173,7 @@ pub fn check_extraction_tier(item: &Override, extracted: Option<&str>) -> Result
         Ok(())
     } else {
         Err(format!(
-            "extraction override of {} in {} changes tokens; use the `correction` or `errata-verified` tier",
+            "extraction override of {} in {} changes tokens; use the `correction` tier, or an errata patch (`corpus/errata`) for a Verified erratum",
             item.module,
             document_title(&item.document)
         ))
@@ -195,8 +186,6 @@ struct Erratum {
     id: serde_json::Value,
     #[serde(rename = "doc-id")]
     doc_id: String,
-    #[serde(rename = "errata_status_code")]
-    status: String,
 }
 
 impl Erratum {
@@ -218,39 +207,4 @@ pub fn errata_documents(errata_json: &Path) -> Result<HashMap<String, String>, S
         .into_iter()
         .map(|e| (e.id(), e.doc_id.to_ascii_lowercase()))
         .collect())
-}
-
-/// Checks that every erratum cited by an `errata-verified` override exists, belongs to the RFC and is Verified.
-/// Only RFCs have errata, so the tier is refused for modules of other documents.
-pub fn check_errata(items: &[Override], errata_json: &Path) -> Result<(), String> {
-    let all = read_errata(errata_json)?;
-    for item in items
-        .iter()
-        .filter(|i| matches!(i.tier, OverrideTier::ErrataVerified))
-    {
-        let Some(number) = rfc_number(&item.document) else {
-            return Err(format!(
-                "`errata-verified` override of {} in {}: only RFCs have errata",
-                item.module, item.document
-            ));
-        };
-        for cited in &item.errata_ids {
-            let found = all.iter().find(|e| {
-                e.id() == *cited && e.doc_id.eq_ignore_ascii_case(&format!("RFC{number}"))
-            });
-            match found {
-                Some(e) if e.status.eq_ignore_ascii_case("Verified") => {}
-                Some(e) => {
-                    return Err(format!(
-                        "erratum {cited} for RFC {number} has status {}, not Verified",
-                        e.status
-                    ));
-                }
-                None => {
-                    return Err(format!("erratum {cited} is not an erratum of RFC {number}"));
-                }
-            }
-        }
-    }
-    Ok(())
 }

@@ -23,7 +23,9 @@ An entry without `oid` is refused if the document defines that name with more th
 | Tier | Fixes | Review |
 | --- | --- | --- |
 | `extraction` | Page breaks, whitespace; `corpus-build` checks the tokens equal the extracted ones | any contributor, once CI is green |
-| `errata-verified` | Errata with status Verified; cite `errata_ids` (checked with `--errata errata.json`); RFCs only | one maintainer |
 | `correction` | Reported or held errata, obvious typos; `justification` required | two maintainers |
 
 Fields: `tier`, `document`, `module`, `oid` (optional), `errata_ids`, `justification`, `author`, `date`.
+
+Verified RFC errata are not overrides: they are patches to the RFC (`corpus/errata`), applied before extraction, so
+they reach inline ASN.1 as well. An override of a module that an erratum patch changes is refused.

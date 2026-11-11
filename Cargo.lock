@@ -669,6 +669,7 @@ dependencies = [
  "glint-check",
  "glint-corpus",
  "glint-diag",
+ "glint-errata",
  "glint-extract",
  "glint-sema",
  "glint-syntax",

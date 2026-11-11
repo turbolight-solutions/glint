@@ -422,10 +422,11 @@ mod tests {
         assert!(install(&bytes, Some("00ff"), None, &destination).is_err());
         assert!(install(&bytes, None, Some("2026-11-06.0123abcd"), &destination).is_err());
         assert!(install(b"not data", None, None, &destination).is_err());
-        let other_schema =
-            String::from_utf8(bytes)
-                .unwrap()
-                .replacen("\"schema\":1", "\"schema\":99", 1);
+        let other_schema = String::from_utf8(bytes).unwrap().replacen(
+            &format!("\"schema\":{}", glint_corpus::SCHEMA),
+            "\"schema\":99",
+            1,
+        );
         assert!(install(other_schema.as_bytes(), None, None, &destination).is_err());
         assert!(!destination.exists());
         let _ = std::fs::remove_dir_all(&dir);

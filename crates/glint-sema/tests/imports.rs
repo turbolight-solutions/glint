@@ -290,14 +290,36 @@ fn curated_modules_are_announced_once() {
         ..CorpusData::default()
     };
     corpus_data.modules[0].source.kind = SourceKind::Overridden {
-        tier: OverrideTier::ErrataVerified,
+        tier: OverrideTier::Correction,
         errata_ids: vec!["1234".to_owned()],
     };
     let corpus = Corpus::from_data(corpus_data);
     let text = "M DEFINITIONS ::= BEGIN IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 }; T ::= SEQUENCE { n Name } END";
     let findings = check_with(text, &corpus, &Options::default());
     assert_eq!(codes(&findings), ["I105"]);
-    assert!(findings[0].message.contains("errata 1234"));
+    assert!(findings[0].message.contains("(correction, errata 1234)"));
+}
+
+// I105
+#[test]
+fn modules_corrected_by_errata_patches_are_announced() {
+    use glint_corpus::{Corpus, CorpusData};
+    let mut corpus_data = CorpusData {
+        modules: base_corpus().into_data().modules,
+        ..CorpusData::default()
+    };
+    corpus_data.modules[0].source.errata = vec![2649, 3128];
+    let corpus = Corpus::from_data(corpus_data);
+    let text = "M DEFINITIONS ::= BEGIN IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 }; T ::= SEQUENCE { n Name } END";
+    let findings = check_with(text, &corpus, &Options::default());
+    assert_eq!(codes(&findings), ["I105"]);
+    assert!(
+        findings[0]
+            .message
+            .ends_with("as corrected by errata 2649, 3128"),
+        "{}",
+        findings[0].message
+    );
 }
 
 /// Modules named `V`: one from an obsoleted RFC, one from a current RFC, one each from two drafts, with the given

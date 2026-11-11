@@ -236,7 +236,7 @@ END
 
 ## I105
 
-A curated version of a corpus module is used. Published modules sometimes contain errors that the RFC Errata process has confirmed (`errata-verified`) or that a maintainer has corrected (`correction`). The note names the module, the RFC, the tier and the errata. Overrides that only repair text-extraction damage are silent.
+A corrected version of a corpus module is used. Published modules sometimes contain errors that the RFC Errata process has confirmed, and Glint applies those Verified errata to the RFC before extracting it (`corpus/errata`); others a maintainer has corrected by hand (a `correction` override). The note names the module, the document and the errata. Overrides that only repair text-extraction damage are silent.
 
 ## W106
 

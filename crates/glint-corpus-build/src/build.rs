@@ -20,10 +20,11 @@ use sha2::{Digest, Sha256};
 
 use crate::Settings;
 use crate::collect::{Candidate, extract_draft, extract_rfc};
+use crate::errata::{Errata, read_errata};
 use crate::iana::read_iana;
 use crate::index::{RfcMeta, read_drafts, read_index};
 use crate::overrides::{
-    Override, check_errata, check_extraction_tier, errata_documents, read_allowlist, read_overrides,
+    Override, check_extraction_tier, errata_documents, read_allowlist, read_overrides,
 };
 use crate::report::{AuditLine, FindingLine, ModuleOutcome, ReportData, render_report};
 use crate::sources::{Defined, Fetched, Manifest, Need, fetch, read_manifest, select};
@@ -42,9 +43,15 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         None => Vec::new(),
     };
 
+    let errata = match &settings.errata_dir {
+        Some(dir) => read_errata(dir, settings.errata.as_deref())?,
+        None => Errata::default(),
+    };
     let extracted: Vec<_> = numbers
         .par_iter()
-        .filter_map(|&rfc| extract_rfc(&settings.rfc_dir, rfc).map(|e| (rfc, e)))
+        .filter_map(|&rfc| {
+            extract_rfc(&settings.rfc_dir, rfc, errata.series.get(&rfc)).map(|e| (rfc, e))
+        })
         .collect();
 
     let mut candidates: Vec<Candidate> = Vec::new();
@@ -55,7 +62,15 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut rfcs_with_modules: HashSet<u32> = HashSet::new();
     // The text of every document with a module, by document id, for documents.bin.
     let mut texts_by_id: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
+    let mut errata_applied: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    let mut errata_failed: BTreeMap<u32, glint_errata::SeriesFailure> = BTreeMap::new();
     for (rfc, extraction) in extracted {
+        if !extraction.errata_applied.is_empty() {
+            errata_applied.insert(rfc, extraction.errata_applied.clone());
+        }
+        if let Some(failure) = extraction.errata_failure.clone() {
+            errata_failed.insert(rfc, failure);
+        }
         if !extraction.notes.is_empty() {
             extraction_notes.insert(rfc, extraction.notes.clone());
         }
@@ -118,9 +133,6 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         candidates.push(standalone_candidate(item));
     }
 
-    if let Some(errata) = &settings.errata {
-        check_errata(&overrides, errata)?;
-    }
     let iana_module_ids = match &settings.iana {
         Some(path) => {
             let errata = match &settings.errata {
@@ -311,6 +323,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         extraction_notes: &extraction_notes,
         source_problems: &source_problems,
         overrides: &applied,
+        errata_applied: &errata_applied,
+        errata_failed: &errata_failed,
         oid_assignments: corpus_data.oid_assignments.len(),
         oid_nodes: corpus_data.oid_nodes.len(),
         allowlist: &corpus_data.oid_allowlist,
@@ -525,6 +539,19 @@ fn apply_overrides(
 ) -> Result<(), String> {
     for item in std::mem::take(pending) {
         let replaced = replaced_by(candidates, &item)?;
+        if let Some(corrected) = replaced
+            .iter()
+            .filter_map(|&i| candidates.get(i))
+            .find(|c| !c.source.errata.is_empty())
+        {
+            let ids: Vec<String> = corrected.source.errata.iter().map(u32::to_string).collect();
+            return Err(format!(
+                "override of {} in {} replaces a module that errata {} correct; change the errata patches instead",
+                item.module,
+                glint_corpus::document_title(&item.document),
+                ids.join(", ")
+            ));
+        }
         let extracted = replaced
             .iter()
             .filter_map(|&i| candidates.get(i))

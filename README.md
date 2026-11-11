@@ -37,12 +37,12 @@ cargo run -p glint-asn1 -- extract draft.md -o modules/ --fragments
 ```sh
 corpus/fetch.sh                                  # mirror the RFCs, active drafts and errata into corpus/cache
 cargo run --release -p glint-corpus-build -- --rfc-dir corpus/cache/rfc --drafts-dir corpus/cache/drafts \
-    --overrides corpus/overrides --sources corpus/sources.toml --errata corpus/cache/errata.json \
+    --overrides corpus/overrides --errata-dir corpus/errata --sources corpus/sources.toml --errata corpus/cache/errata.json \
     --iana corpus/cache/smi-numbers.xml --out corpus/out                             # corpus/out/data/v<schema>/... + report.md
 # Modules that other standards bodies publish as files (ITU-T, ETSI, ...) are listed in corpus/sources.toml.
 
 cargo run -p glint-asn1 -- corpus update                  # download the published data into the user cache
-cargo run -p glint-asn1 -- corpus update --from corpus/out/data/v1/<build>/corpus.json   # or install a local build
+cargo run -p glint-asn1 -- corpus update --from corpus/out/data/v2/<build>/corpus.json   # or install a local build
 
 cargo run -p glint-asn1 -- check draft.xml                # extract, parse, resolve imports, run the checks
 cargo run -p glint-asn1 -- check draft.txt --format json --pin PKIX1Explicit88=rfc5280   # or --pin ERS=1.3.6.1.5.5.11.0.1.1

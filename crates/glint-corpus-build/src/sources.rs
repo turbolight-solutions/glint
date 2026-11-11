@@ -215,6 +215,7 @@ pub fn fetch(entries: &[&Entry], cache: &Path) -> (Vec<Fetched>, Vec<String>) {
                     url: Some(entry.url.clone()),
                     section: None,
                     kind: SourceKind::Standalone,
+                    errata: Vec::new(),
                 },
             }),
             Err(why) => problems.push(format!("{} from {}: {why}", entry_label(entry), entry.url)),
