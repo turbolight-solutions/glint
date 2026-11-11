@@ -4,6 +4,7 @@ mod check_cmd;
 mod closure_cmd;
 mod common;
 mod corpus_cmd;
+mod errata_cmd;
 mod explain_cmd;
 mod extract_cmd;
 mod net;
@@ -44,6 +45,13 @@ enum Command {
     Closure(closure_cmd::Args),
     /// Browse the module corpus (RFCs, active Internet-Drafts and standalone modules) and update its data
     Corpus(corpus_cmd::Args),
+    /// Triage the RFC Editor's Verified errata of RFCs with ASN.1, and keep the corpus's errata patches
+    ///
+    /// A Verified erratum that corrects ASN.1, in a module or inline, is recorded as a patch to the RFC's source
+    /// (`rfcN.xml` from RFC 8650, `rfcN.txt` before) in `corpus/errata`, which corpus-build applies before extracting.
+    /// Typical session: `queue`, then per erratum `show`, `edit` (and edit the work file), `prove`, `record`; finally
+    /// `check`.
+    Errata(errata_cmd::Args),
     /// Describe a diagnostic code, with examples
     Explain(explain_cmd::Args),
     /// Extract ASN.1 modules from an RFCXML, Markdown or plain-text document
@@ -58,6 +66,7 @@ fn main() -> ExitCode {
         Command::Check(args) => check_cmd::run(&args),
         Command::Closure(args) => closure_cmd::run(&args),
         Command::Corpus(args) => corpus_cmd::run(&args),
+        Command::Errata(args) => errata_cmd::run(&args),
         Command::Explain(args) => explain_cmd::run(&args),
         Command::Extract(args) => extract_cmd::run(&args),
         Command::Parse(args) => parse_cmd::run(&args),

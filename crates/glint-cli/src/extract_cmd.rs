@@ -207,14 +207,14 @@ fn list_blocks(blocks: &[Block], index: &LineIndex) {
 
 /// A module of a block: its name, its text trimmed as the corpus build records it, and where that text starts in
 /// the block's text.
-struct Module<'a> {
-    name: Option<String>,
-    text: &'a str,
-    start: usize,
+pub(crate) struct Module<'a> {
+    pub(crate) name: Option<String>,
+    pub(crate) text: &'a str,
+    pub(crate) start: usize,
 }
 
 /// The modules of `block`; a fragment has none, even when it quotes a module header (as corpus-build reads it).
-fn modules_of(block: &Block) -> Vec<Module<'_>> {
+pub(crate) fn modules_of(block: &Block) -> Vec<Module<'_>> {
     if block.kind == BlockKind::Fragment {
         return Vec::new();
     }
@@ -273,7 +273,7 @@ struct ModuleEntry {
 }
 
 /// The first and last line (1-based) of the byte range `range` of the original document.
-fn line_range(index: &LineIndex, range: std::ops::Range<usize>) -> (u32, u32) {
+pub(crate) fn line_range(index: &LineIndex, range: std::ops::Range<usize>) -> (u32, u32) {
     let first = index.line_col(range.start).0;
     let last = index
         .line_col(range.end.saturating_sub(1).max(range.start))

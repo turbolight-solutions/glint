@@ -432,6 +432,7 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 | `glint corpus oid <dotted-oid>` | Who assigns this OID, and its parent arcs |
 | `glint corpus update` | Download the latest published data (or `--build <id>`) to the user cache; without data, commands that need it say to run this |
 | `glint explain <code>` | Long description of a diagnostic code with examples |
+| `glint errata queue \| list N \| show N ID \| edit N ID \| prove <work file> \| record N ID --decision … \| check` | Triage the Verified errata of RFCs with ASN.1 and keep `corpus/errata` (see "RFC errata"): the queue (`new`, `changed`, `withdrawn`, `patch-fails`, `rescope`); every erratum of an RFC, whatever its status; an erratum with every place its text is in the RFC's modules, inline ASN.1 or prose; a work copy of the RFC's source; a proof that an edit adds no error or warning to any corpus module or to the RFC's inline ASN.1 (exit 1 on a loss); the decision, which writes the patch and the ledger row and rebases the RFC's higher patches; and a check of the data against the mirror. Offline; `--corpus-dir` and `--cache-dir` locate `corpus/` and `corpus/cache`. The `errata-triage` skill (`.claude/skills/`) drives a session |
 
 Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <corpus.json>`, `--pin Name=rfcNNNN|<oid>`, `--no-snippets`, `--color auto|always|never`.
 

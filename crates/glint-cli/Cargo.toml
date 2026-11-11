@@ -16,10 +16,14 @@ clap = { workspace = true }
 etcetera = { workspace = true }
 glint-check = { workspace = true }
 glint-corpus = { workspace = true }
+glint-corpus-build = { workspace = true }
+glint-errata = { workspace = true }
 glint-diag = { workspace = true }
 glint-extract = { workspace = true }
 glint-sema = { workspace = true }
 glint-syntax = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

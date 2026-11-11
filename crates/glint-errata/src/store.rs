@@ -250,6 +250,31 @@ pub fn remove_patch(dir: &Path, rfc: u32, errata_id: u32) -> Result<(), StoreErr
     Ok(())
 }
 
+/// RFCs from 8650 on are published in RFCXML v3, which Glint reads when the mirror has it; earlier ones are read as
+/// text.
+pub const FIRST_XML_RFC: u32 = 8650;
+/// The largest RFC source read (the largest RFC is about 3 MB).
+pub const MAX_SOURCE_BYTES: usize = 16 * 1024 * 1024;
+
+/// The document Glint reads RFC `rfc` from in `rfc_dir` (a mirror of `rfc<N>.txt` and `rfc<N>.xml`), and so the one
+/// its errata patch.
+pub fn rfc_source(rfc_dir: &Path, rfc: u32) -> Option<(PathBuf, SourceFormat)> {
+    let xml = rfc_dir.join(format!("rfc{rfc}.xml"));
+    let txt = rfc_dir.join(format!("rfc{rfc}.txt"));
+    if rfc >= FIRST_XML_RFC && xml.exists() {
+        Some((xml, SourceFormat::Xml))
+    } else if txt.exists() {
+        Some((txt, SourceFormat::Text))
+    } else {
+        None
+    }
+}
+
+/// An RFC source as corpus-build reads it: bytes that are not UTF-8 become U+FFFD.
+pub fn read_source(path: &Path) -> Result<String, StoreError> {
+    Ok(String::from_utf8_lossy(&read_regular_file(path, MAX_SOURCE_BYTES)?).into_owned())
+}
+
 /// The format a patch's headers name (`--- a/rfcN.xml` or `.txt`), if they name one.
 pub fn patch_format(patch: &str) -> Option<SourceFormat> {
     let first = patch.lines().next()?;

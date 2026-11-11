@@ -57,6 +57,10 @@ cd web && npm install && npm run build    # web/build-wasm.sh (needs the wasm32 
 cd web && npm run dev                     # the web UI, with the data in corpus/out served at /data
 ```
 
+RFC errata: Verified errata that correct ASN.1 are patches to the RFC sources in `corpus/errata`, applied before
+extraction. `glint errata` triages them (`queue`, `show`, `edit`, `prove`, `record`, `check`; see
+`corpus/errata/README.md`), and in Claude Code the `/errata-triage` skill drives a session.
+
 Glint carries no corpus: `glint corpus update` downloads the data, or pass `--corpus <corpus.json>` or set
 `GLINT_CORPUS`. Every result names the Glint version and the data build. Settings live in `glint.toml`
 (see the design spec).

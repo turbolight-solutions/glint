@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use glint_corpus::{ModuleSource, SourceKind};
+use glint_errata::store::rfc_source;
 use glint_errata::{SeriesFailure, SourceFormat};
 use glint_extract::{BlockKind, Format, extract, is_smi, module_slices};
 
@@ -31,30 +32,18 @@ pub struct RfcExtraction {
     pub errata_failure: Option<SeriesFailure>,
 }
 
-/// RFCs from 8650 on have an RFCXML v3 source; earlier ones are read as text.
-const FIRST_XML_RFC: u32 = 8650;
-
 /// The modules of RFC `rfc`, from its RFCXML source when it has one, else its text, with `series` (its errata
 /// patches) applied first. Each module names the errata that changed it.
 pub fn extract_rfc(dir: &Path, rfc: u32, series: Option<&Series>) -> Option<RfcExtraction> {
-    let xml = dir.join(format!("rfc{rfc}.xml"));
-    let txt = dir.join(format!("rfc{rfc}.txt"));
-    let (path, format) = if rfc >= FIRST_XML_RFC && xml.exists() {
-        (xml, Format::Xml)
-    } else if txt.exists() {
-        (txt, Format::Text)
-    } else {
-        return None;
+    let (path, patch_format) = rfc_source(dir, rfc)?;
+    let format = match patch_format {
+        SourceFormat::Xml => Format::Xml,
+        SourceFormat::Text => Format::Text,
     };
     let published = read_lossy(&path)?;
     let source = |section| ModuleSource::rfc(rfc, section, SourceKind::Extracted);
     let Some(series) = series else {
         return Some(extract_text(published, format, source));
-    };
-    let patch_format = if format == Format::Xml {
-        SourceFormat::Xml
-    } else {
-        SourceFormat::Text
     };
     match apply(rfc, patch_format, &published, series) {
         Err(failure) => {

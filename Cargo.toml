@@ -27,6 +27,7 @@ glint-corpus = { path = "crates/glint-corpus" }
 glint-sema = { path = "crates/glint-sema" }
 glint-check = { path = "crates/glint-check" }
 glint-errata = { path = "crates/glint-errata" }
+glint-corpus-build = { path = "crates/glint-corpus-build" }
 ariadne = "0.6.0"
 clap = { version = "4.6.7", features = ["derive"] }
 insta = "1.49.0"

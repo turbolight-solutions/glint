@@ -1,19 +1,11 @@
 //! `corpus-build`: builds the Glint data files (`corpus.json`, `documents.bin`, `latest.json`) and the report from a
 //! local RFC mirror.
 
-mod build;
-mod collect;
-mod errata;
-mod iana;
-mod index;
-mod overrides;
-mod report;
-mod sources;
-
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use glint_corpus_build::{Settings, run};
 
 #[derive(Parser)]
 #[command(
@@ -77,7 +69,7 @@ fn main() -> ExitCode {
     }
     // The only place that reads the clock; everything downstream reads the build id from the data.
     let date = args.date.clone().unwrap_or_else(utc_today);
-    match build::run(&Settings::new(args, date)) {
+    match run(&settings(args, date)) {
         Ok(summary) => {
             println!("{summary}");
             ExitCode::SUCCESS
@@ -89,38 +81,20 @@ fn main() -> ExitCode {
     }
 }
 
-pub struct Settings {
-    pub rfc_dir: PathBuf,
-    pub drafts_dir: Option<PathBuf>,
-    pub overrides: Option<PathBuf>,
-    pub out: PathBuf,
-    pub date: String,
-    pub only: Vec<u32>,
-    pub dump_findings: Option<PathBuf>,
-    pub sources: Option<PathBuf>,
-    pub cache: PathBuf,
-    pub errata: Option<PathBuf>,
-    /// `None` with `--no-errata`.
-    pub errata_dir: Option<PathBuf>,
-    pub iana: Option<PathBuf>,
-}
-
-impl Settings {
-    fn new(args: Args, date: String) -> Self {
-        Self {
-            rfc_dir: args.rfc_dir,
-            drafts_dir: args.drafts_dir,
-            overrides: args.overrides,
-            out: args.out,
-            date,
-            only: args.only,
-            dump_findings: args.dump_findings,
-            sources: args.sources,
-            cache: args.cache,
-            errata: args.errata,
-            errata_dir: args.errata_dir.filter(|_| !args.no_errata),
-            iana: args.iana,
-        }
+fn settings(args: Args, date: String) -> Settings {
+    Settings {
+        rfc_dir: args.rfc_dir,
+        drafts_dir: args.drafts_dir,
+        overrides: args.overrides,
+        out: args.out,
+        date,
+        only: args.only,
+        dump_findings: args.dump_findings,
+        sources: args.sources,
+        cache: args.cache,
+        errata: args.errata,
+        errata_dir: args.errata_dir.filter(|_| !args.no_errata),
+        iana: args.iana,
     }
 }
 
