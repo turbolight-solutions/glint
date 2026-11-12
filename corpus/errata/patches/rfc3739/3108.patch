@@ -1,0 +1,11 @@
+--- a/rfc3739.txt
++++ b/rfc3739.txt
+@@ -1336,7 +1336,7 @@
+        {
+            type id-pda-dateOfBirth,
+            values {
+-               GeneralizedTime : "197110141200Z"
++               GeneralizedTime : "19711014120000Z"
+            }
+        },
+        {

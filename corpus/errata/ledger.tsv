@@ -74,23 +74,31 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 3281	1479	patched	claude	c2cf19d75068759f	asn1	SecurityCategory: type [0] OBJECT IDENTIFIER, value [1] EXPLICIT ANY in the section 4.4.6 inline ASN.1 and the Appendix B module
 3369	290	patched	claude	46bc25ba13d9c314	asn1	AttributeCertificateVersion1 module: DEFINITIONS EXPLICIT TAGS (was IMPLICIT); no inline copy of the module header
 3369	291	patched	claude	0df7fa09f6880d4a	asn1	inserts the content type OIDs (id-ct-contentInfo, id-data, ... id-ct-authData) before the end of the CMS module, as the erratum instructs; the inline copies in the body already define them
-3369	292	not-applicable	claude	5beb1f2bf1e6bc15	modules	references section
-3370	289	not-applicable	claude	3758b2984d91055b	modules	references section
+3369	292	not-applicable	claude	5beb1f2bf1e6bc15	asn1	references section
+3370	289	not-applicable	claude	3758b2984d91055b	asn1	references section
+3394	3671	not-applicable	claude	011d8650a179bf16	asn1	prose typo in the IV check
+3394	5777	not-applicable	claude	7709f2d59bae6292	asn1	algorithm pseudo-code notation, not ASN.1
+3394	6942	not-applicable	claude	06475c30c97c6aef	asn1	notation definitions in prose, not ASN.1
+3412	6344	not-applicable	claude	b9d00751b19cade4	asn1	prose typo in the procedure text
+3414	278	not-applicable	claude	fcb9e701faf08555	asn1	step number in the HMAC-MD5/SHA procedure prose
+3414	7797	not-applicable	claude	bfff71bf87e9e607	asn1	grammar in prose
 3416	2757	not-applicable	claude	fbdf4c5c8b047fff	modules	SNMP PDU definitions; the asn1 filter extracts no module from RFC 3416
-3447	592	not-applicable	claude	f17e486a9036cbf4	modules	prose / figure in the scheme description, not module text
-3447	593	not-applicable	claude	112c609379dd3588	modules	prose / figure in the scheme description, not module text
-3447	594	not-applicable	claude	4599b5c993ba9846	modules	prose / figure in the scheme description, not module text
-3447	595	not-applicable	claude	5e30897147cb675f	modules	prose / figure in the scheme description, not module text
-3447	596	not-applicable	claude	f86f15cb1ca86e31	modules	prose / figure in the scheme description, not module text
-3447	633	not-applicable	claude	dc55e44af05ab15c	modules	prose / figure / references, not module text
-3447	635	not-applicable	claude	d34367922835e3c4	modules	prose / figure / references, not module text
-3447	636	not-applicable	claude	141a53d43002ffc0	modules	prose / figure / references, not module text
-3447	638	not-applicable	claude	2bb35e1723919e29	modules	prose / figure / references, not module text
-3447	2176	not-applicable	claude	4d403c233e8674e0	modules	prose / figure / references, not module text
-3565	8088	patched	claude	c9884f7e15b6a877	modules	removes the stray underscore after csor(3) in the aes OID
-3739	3108	not-applicable	claude	fb1423b2d2fce379	modules	prose / example value, not module text
-3739	7589	not-applicable	claude	b595fd1a3fc10c5c	modules	prose / example value, not module text
-3739	7801	not-applicable	claude	3de87bafc8c476ca	modules	prose / example value, not module text
+3447	592	not-applicable	claude	f17e486a9036cbf4	asn1	RSAES-OAEP decryption input condition in prose
+3447	593	not-applicable	claude	112c609379dd3588	asn1	indentation of a step in the decryption prose
+3447	594	not-applicable	claude	4599b5c993ba9846	asn1	EM' -> EM in the RSASSA-PSS verification steps (prose)
+3447	595	not-applicable	claude	5e30897147cb675f	asn1	EMSA-PSS figure labels
+3447	596	not-applicable	claude	f86f15cb1ca86e31	asn1	indentation of the SHA-512 DigestInfo hex in Note 1 of 9.2 (not ASN.1)
+3447	633	not-applicable	claude	dc55e44af05ab15c	asn1	EME-OAEP figure
+3447	635	not-applicable	claude	d34367922835e3c4	asn1	stray blank line in the maskGenAlgorithm prose
+3447	636	not-applicable	claude	141a53d43002ffc0	asn1	hash function list in B.1 prose
+3447	638	not-applicable	claude	2bb35e1723919e29	asn1	references section
+3447	2176	not-applicable	claude	4d403c233e8674e0	asn1	RSAES-OAEP decryption input description in prose
+3525	256	not-applicable	human	1baa2c007e4f4992	asn1	states no correction: it only points to the ITU-T H.248.1 Implementor's Guide, an outside document
+3537	254	not-applicable	claude	94203d5fcb8dbdfd	asn1	test vector (PAD value), not ASN.1
+3565	8088	patched	claude	c9884f7e15b6a877	asn1	removes the stray underscore after csor(3) in the aes OID in the CMSAesRsaesOaep module; the body has no inline copy of the aes OID
+3739	3108	patched	claude	fb1423b2d2fce379	asn1	dateOfBirth GeneralizedTime 197110141200Z -> 19711014120000Z (seconds added, as DER requires) in the inline certSubjDirAttrs value of Appendix C.1.1.1; the only copy
+3739	7589	not-applicable	claude	b595fd1a3fc10c5c	asn1	spelling and scope of a prose paragraph in 3.2.6.1
+3739	7801	not-applicable	claude	3de87bafc8c476ca	asn1	statementID -> statementId in prose
 3770	233	patched	claude	d7dc947004f4eeac	modules	id-aca-wlanSSID is { id-aca 7 } in the section 8 module
 3770	234	not-applicable	claude	5365e8a74ded94c1	modules	section 4 prose copy of id-aca-wlanSSID; the module copy is fixed by erratum 233
 3779	836	not-applicable	claude	c71a68dd0ae00aa9	modules	prose / Appendix B encoding example, not module text
