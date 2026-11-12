@@ -16,7 +16,6 @@ glint-diag = { workspace = true }
 glint-sema = { workspace = true }
 clap = { workspace = true }
 rayon = { workspace = true }
-regex = { workspace = true }
 reqwest = { workspace = true }
 sha2 = { workspace = true }
 quick-xml = { workspace = true }

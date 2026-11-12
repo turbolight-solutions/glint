@@ -269,7 +269,11 @@ The extractor turns any supported input into a list of `Block { text, kind, sour
 
 Classify a block as `Module` when it contains a module header, `ModuleList` when it contains several, else `Fragment`. Record `origin` as section number and title where the format provides them, so diagnostics read "Section 4.1" rather than "line 812".
 
-Extraction failures are diagnostics too (`I200` block skipped, `W201` block typed `asn.1` but does not look like ASN.1, `W202` text resembles ASN.1 but is not marked as `sourcecode type="asn.1"`).
+A `Fragment` is inline ASN.1 only when `is_inline_asn1` holds, and the extractor keeps no other: every part of Glint (`glint check`, the web UI, corpus-build, `glint errata`) sees the same inline ASN.1, and `Extraction::has_inline_asn1` says whether a document has any. Two kinds of text that write `::=` are not ASN.1:
+- **Grammars** (BNF, ABNF, Diameter command codes): most of the block's assignments are marked by what ASN.1 never writes outside braces, parentheses and brackets (alternatives with `|` or `/`, a quoted literal as an element, `?`, `+`), or anywhere (ABNF's `*`, `%x`, `#x`), a `<nonterminal>`, or a left-hand side that is not a name. Whether the block parses is never asked: broken ASN.1 is still ASN.1, and its errors are reported.
+- **SMI** (`is_smi`: an SMI macro such as `OBJECT-TYPE`, or an import from `SNMPv2-SMI` and the like), and every fragment of a document whose modules are all SMI: a MIB's snippets are SMI even when they look like plain ASN.1 (`IfEntry ::= SEQUENCE { ... }`). corpus-build skips SMI modules with the same test.
+
+Extraction failures are diagnostics too (`I200` block skipped, `W201` block typed `asn.1` but does not look like ASN.1, `I201` block typed `asn.1` but a grammar or SMI, `W202` text resembles ASN.1 but is not marked as `sourcecode type="asn.1"`).
 
 ## Snippet consistency
 

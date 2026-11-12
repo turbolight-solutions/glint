@@ -3,8 +3,8 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::block::{Block, Origin};
-use crate::classify::{block_kind, looks_like_asn1};
+use crate::block::{Block, BlockKind, Origin};
+use crate::classify::{block_kind, is_inline_asn1, looks_like_asn1};
 use crate::lines::split_lines;
 use crate::notes::ExtractNote;
 use crate::source_map::{Assembler, Mapped, SourceMap};
@@ -53,6 +53,8 @@ impl Sink {
             return;
         }
         let looks = looks_like_asn1(&text);
+        let kind = block_kind(&text);
+        let other_notation = looks && kind == BlockKind::Fragment && !is_inline_asn1(&text);
         match marking {
             Marking::Declared if !looks => {
                 self.note(
@@ -62,7 +64,15 @@ impl Sink {
                 );
                 return;
             }
-            Marking::Guessed { .. } if !looks => return,
+            Marking::Declared if other_notation => {
+                self.note(
+                    "I201",
+                    "block is typed as ASN.1 but is a grammar or SMI (check MIBs with smilint); skipped",
+                    span,
+                );
+                return;
+            }
+            Marking::Guessed { .. } if !looks || other_notation => return,
             Marking::Guessed { warn: true } => self.note(
                 "W202",
                 "text looks like ASN.1 but is not marked as `sourcecode` of type `asn.1`",
@@ -70,7 +80,6 @@ impl Sink {
             ),
             _ => {}
         }
-        let kind = block_kind(&text);
         self.blocks.push(Block {
             text,
             kind,
@@ -107,7 +116,6 @@ fn strip_marker_lines(text: String, map: SourceMap) -> (String, SourceMap) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::BlockKind;
 
     fn candidate(text: &str) -> Candidate {
         Candidate {

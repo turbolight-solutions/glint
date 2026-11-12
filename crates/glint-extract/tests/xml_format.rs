@@ -289,3 +289,19 @@ DEFINITIONS ::= BEGIN END
         "the header is not joined across sections"
     );
 }
+
+#[test]
+fn a_grammar_typed_as_asn1_is_reported_and_skipped() {
+    let source = "<rfc><middle><section><sourcecode type=\"asn.1\">\nlabel ::= INTEGER | &lt;null&gt;\nterms ::= term | terms , term\n</sourcecode></section></middle></rfc>";
+    let extraction = run(source, Format::Xml);
+    assert!(extraction.blocks.is_empty());
+    assert_eq!(codes(&extraction), ["I201"]);
+}
+
+#[test]
+fn an_untyped_grammar_is_skipped_without_a_warning() {
+    let source = "<rfc><middle><section><artwork>\naddress ::= \"(\" addr_name SPACE addr_host \")\"\naddr_host ::= nstring\n</artwork></section></middle></rfc>";
+    let extraction = run(source, Format::Xml);
+    assert!(extraction.blocks.is_empty());
+    assert!(codes(&extraction).is_empty());
+}

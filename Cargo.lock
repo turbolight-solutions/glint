@@ -674,7 +674,6 @@ dependencies = [
  "glint-syntax",
  "quick-xml",
  "rayon",
- "regex",
  "reqwest",
  "serde",
  "serde_json",

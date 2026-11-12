@@ -3,18 +3,9 @@
 use std::path::Path;
 
 use glint_corpus::{ModuleSource, SourceKind};
-use glint_extract::{BlockKind, Format, extract, module_slices};
-use regex::Regex;
+use glint_extract::{BlockKind, Format, extract, is_smi, module_slices};
 
 use crate::index::DraftEntry;
-
-/// Modules written in SMI use macros of their own and are checked by `smilint`, not by Glint.
-fn smi_pattern() -> Option<Regex> {
-    Regex::new(
-        r"\b(OBJECT-TYPE|MODULE-IDENTITY|NOTIFICATION-TYPE|OBJECT-IDENTITY|TEXTUAL-CONVENTION|MODULE-COMPLIANCE|OBJECT-GROUP|NOTIFICATION-GROUP|AGENT-CAPABILITIES|TRAP-TYPE)\b|FROM\s+(SNMPv2-SMI|RFC1155-SMI|RFC1065-SMI|SNMPv2-TC|SNMPv2-CONF|RFC-1212|RFC-1215)\b",
-    )
-    .ok()
-}
 
 #[derive(Debug, Clone)]
 pub struct Candidate {
@@ -76,7 +67,6 @@ fn extract_file(
     let bytes = std::fs::read(path).ok()?;
     let text = String::from_utf8_lossy(&bytes).into_owned();
     let extraction = extract(&text, format);
-    let smi = smi_pattern();
     let mut result = RfcExtraction {
         format: if format == Format::Xml { "xml" } else { "text" },
         ..RfcExtraction::default()
@@ -96,7 +86,7 @@ fn extract_file(
                 continue;
             };
             let body = body.trim().to_owned();
-            let smi_module = smi.as_ref().is_some_and(|re| re.is_match(&body));
+            let smi_module = is_smi(&body);
             result.candidates.push(Candidate {
                 name,
                 text: body,

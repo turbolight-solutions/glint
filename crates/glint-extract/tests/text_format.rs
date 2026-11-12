@@ -458,3 +458,76 @@ END
     assert_eq!(module_names(&found), ["KerberosV5Spec2"]);
     assert_eq!(section_label(found[0]).as_deref(), Some("Appendix A"));
 }
+
+#[test]
+fn a_grammar_is_not_extracted_but_asn1_next_to_it_is() {
+    let source = "\
+1.  Syntax
+
+   address         ::= \"(\" addr_name SPACE addr_adl SPACE addr_mailbox
+                       SPACE addr_host \")\"
+
+   addr_adl        ::= nstring
+
+2.  Signatures
+
+   Dss-Sig-Value ::= SEQUENCE {
+       r INTEGER,
+       s INTEGER }
+";
+    let extraction = run(source, Format::Text);
+    assert_eq!(extraction.blocks.len(), 1);
+    assert!(extraction.blocks[0].text.starts_with("Dss-Sig-Value"));
+    assert!(extraction.has_inline_asn1());
+}
+
+#[test]
+fn the_snippets_of_a_mib_are_not_inline_asn1() {
+    let snippet = "\
+3.  The Interfaces Table
+
+   IfEntry ::= SEQUENCE {
+       ifIndex INTEGER,
+       ifDescr OCTET STRING }
+
+";
+    let mib = "\
+4.  Definitions
+
+   IF-MIB DEFINITIONS ::= BEGIN
+   IMPORTS OBJECT-TYPE, Counter32 FROM SNMPv2-SMI;
+
+   ifInOctets OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION \"The octets received.\"
+       ::= { ifEntry 10 }
+
+   END
+";
+    assert!(run(snippet, Format::Text).has_inline_asn1());
+    let extraction = run(&format!("{snippet}{mib}"), Format::Text);
+    assert!(!extraction.has_inline_asn1());
+    assert_eq!(
+        modules(&extraction).len(),
+        1,
+        "the MIB module itself is kept"
+    );
+}
+
+#[test]
+fn the_snippets_of_an_asn1_module_are_inline_asn1() {
+    let source = "\
+3.  Types
+
+   T ::= INTEGER
+
+4.  Module
+
+   M { 1 2 3 } DEFINITIONS ::= BEGIN
+   T ::= INTEGER
+   END
+";
+    assert!(run(source, Format::Text).has_inline_asn1());
+}

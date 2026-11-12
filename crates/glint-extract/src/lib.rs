@@ -21,7 +21,7 @@ use std::ops::Range;
 use std::path::Path;
 
 pub use block::{Block, BlockKind, Origin, SectionRef};
-pub use classify::{block_kind, looks_like_asn1};
+pub use classify::{block_kind, is_inline_asn1, is_smi, looks_like_asn1};
 pub use modules::{ModuleSlice, module_slices};
 pub use notes::{ExtractNote, Severity};
 pub use source_map::{Assembler, Mapped, SourceMap};
@@ -58,11 +58,42 @@ pub fn extract(source: &str, format: Format) -> Extraction {
         Format::Text => text::extract(source, &mut sink),
         Format::Bare => extract_bare(source, &mut sink),
     }
+    let mut blocks = sink.blocks;
+    if modules_are_all_smi(&blocks) {
+        blocks.retain(|block| block.kind != BlockKind::Fragment);
+    }
     Extraction {
         format,
-        blocks: sink.blocks,
+        blocks,
         notes: sink.notes,
     }
+}
+
+impl Extraction {
+    /// Whether the document has ASN.1 outside its modules: a fragment block. [`extract`] keeps a fragment only when it
+    /// is ASN.1 that Glint checks ([`is_inline_asn1`]), in a document whose modules are not all SMI.
+    pub fn has_inline_asn1(&self) -> bool {
+        self.blocks
+            .iter()
+            .any(|block| block.kind == BlockKind::Fragment)
+    }
+}
+
+/// Whether the document has modules and every one is SMI: a MIB document, whose snippets are SMI too even when they
+/// look like plain ASN.1 (`IfEntry ::= SEQUENCE { ... }`).
+fn modules_are_all_smi(blocks: &[Block]) -> bool {
+    let modules: Vec<bool> = blocks
+        .iter()
+        .filter(|block| block.kind != BlockKind::Fragment)
+        .flat_map(|block| {
+            module_slices(block)
+                .into_iter()
+                .filter(|slice| slice.name.is_some())
+                .filter_map(|slice| block.text.get(slice.range).map(is_smi))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    !modules.is_empty() && modules.iter().all(|&smi| smi)
 }
 
 fn extract_bare(source: &str, sink: &mut Sink) {
