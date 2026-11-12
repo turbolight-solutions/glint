@@ -1,0 +1,16 @@
+--- a/rfc3855.txt
++++ b/rfc3855.txt
+@@ -205,9 +205,11 @@
+        delivery-envelope [1] OtherMessageDeliveryFields OPTIONAL,
+        mts-identifier    [2] MessageDeliveryIdentifier OPTIONAL }
+ 
+-   id-ep-content ::= {joint-iso-itu-t(2) mhs(6) ipms(1) ep(11) 17}
++   id-ep-content OBJECT IDENTIFIER ::=
++      {joint-iso-itu-t(2) mhs(6) ipms(1) ep(11) 17}
+ 
+-   id-et-content ::= {joint-iso-itu-t(2) mhs(6) ipms(1) et(4) 17}
++   id-et-content OBJECT IDENTIFIER ::=
++      {joint-iso-itu-t(2) mhs(6) ipms(1) et(4) 17}
+ 
+    The implementation MUST copy the CMS object to be forwarded into the
+    Content field of the content-body-part.  The direct-reference field

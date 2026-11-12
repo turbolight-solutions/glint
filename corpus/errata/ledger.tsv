@@ -99,49 +99,60 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 3739	3108	patched	claude	fb1423b2d2fce379	asn1	dateOfBirth GeneralizedTime 197110141200Z -> 19711014120000Z (seconds added, as DER requires) in the inline certSubjDirAttrs value of Appendix C.1.1.1; the only copy
 3739	7589	not-applicable	claude	b595fd1a3fc10c5c	asn1	spelling and scope of a prose paragraph in 3.2.6.1
 3739	7801	not-applicable	claude	3de87bafc8c476ca	asn1	statementID -> statementId in prose
-3770	233	patched	claude	d7dc947004f4eeac	modules	id-aca-wlanSSID is { id-aca 7 } in the section 8 module
-3770	234	not-applicable	claude	5365e8a74ded94c1	modules	section 4 prose copy of id-aca-wlanSSID; the module copy is fixed by erratum 233
-3779	836	not-applicable	claude	c71a68dd0ae00aa9	modules	prose / Appendix B encoding example, not module text
-3779	1886	not-applicable	claude	078139e976530c40	modules	prose / Appendix B encoding example, not module text
-3779	2537	not-applicable	claude	aaeb57f444781c1f	modules	prose / Appendix B encoding example, not module text
-3779	6792	not-applicable	claude	28f5d61db3ad6ee1	modules	prose / Appendix B encoding example, not module text
-3852	222	not-applicable	claude	7335672d7729c5c4	modules	prose, not module text
-3852	1744	not-applicable	claude	d1b029fb9ba5e25f	modules	prose, not module text
-3852	1756	not-applicable	claude	e52eb27f381cfefd	modules	prose, not module text
-3855	6412	not-applicable	claude	a01961b45a6bc4b2	modules	ASN.1 fragment in section 2.3, not a module; the asn1 filter extracts nothing from RFC 3855
-4010	3865	patched	claude	c337d22df80427f6	modules	id-mod-cms-seed(24) -> (25) in the module header OID
-4043	192	patched	claude	2702c3c3e1426bd5	modules	1993 module: imports OTHER-NAME from CertificateExtensions, defines id-pkix locally, permanentIdentifier as OTHER-NAME
-4055	1468	not-applicable	claude	aec6e1db3dc85d8f	modules	prose, not module text
-4055	1676	not-applicable	claude	5357dc9f5c61a361	modules	prose, not module text
-4108	4093	patched	human	407bd256296a20ff	modules	adds id-aa-fwPkgMessageDigest and FirmwarePackageMessageDigest (section 2.2.10) after FirmwarePackageInfo, and imports AlgorithmIdentifier from PKIX1Explicit88 [PROFILE] as RFC 3852 does (a follow-up erratum for the import is being filed)
-4120	7022	not-applicable	claude	274abcfce1ecaf63	modules	prose in section 5.2.6.2; the module already says cksumtype
-4210	3949	not-applicable	claude	e217e1f8af891fc5	modules	section 5.3.4 copy; the Appendix F module already uses CMPCertificate
-4210	4078	not-applicable	claude	1f3f269ddbfddb3a	modules	section 5.3.4 copy; the Appendix F module already uses CMPCertificate
-4210	5201	not-applicable	claude	f6df702d400100bc	modules	prose / Appendix D profile table, not module text
-4210	7549	not-applicable	claude	8609a6214ab46d0f	modules	prose / Appendix D profile table, not module text
-4211	4797	not-applicable	claude	551df7760ee09d69	modules	prose, not module text
-4211	8391	not-applicable	claude	e7328fae2654c598	modules	prose, not module text
-4212	8447	not-applicable	claude	8cb05c65c815ca0a	modules	definition in section 2.1; the asn1 filter extracts no module from RFC 4212
-4212	8448	not-applicable	claude	51c5c0f0e62e6fdd	modules	definition in section 2.1; the asn1 filter extracts no module from RFC 4212
+3770	233	patched	human	d7dc947004f4eeac	asn1	id-aca-wlanSSID is { id-aca 7 } in the section 8 module; erratum 234 corrects the section 4 inline copy, so the E300 between the two copies prove shows for this one alone is cleared by 234
+3770	234	patched	claude	5365e8a74ded94c1	asn1	id-aca-wlanSSID is { id-aca 7 } in the section 4 inline ASN.1, as erratum 233 has it in the module
+3779	836	not-applicable	claude	c71a68dd0ae00aa9	asn1	prose of section 3.2.3.1 (IDRP reference), outside the inline ASN.1
+3779	1886	not-applicable	claude	078139e976530c40	asn1	prose of section 2.1.1 (semicolon -> colon)
+3779	2537	not-applicable	claude	aaeb57f444781c1f	asn1	prose of section 2.2.3.9 (deletes an encoding rule sentence)
+3779	6792	not-applicable	claude	28f5d61db3ad6ee1	asn1	hex dump of the Appendix B example extension, not ASN.1
+3781	733	patched	claude	661d9c983ba31b9a	asn1	adds the missing ::= after Unsigned64, Float32, Float64 and Float128 in the NMRG-SMING-SNMP-MAPPING module; no inline copy
+3852	222	not-applicable	claude	7335672d7729c5c4	asn1	version assignment pseudocode in the prose of section 6.1, not ASN.1
+3852	1744	not-applicable	claude	d1b029fb9ba5e25f	asn1	prose of section 5
+3852	1756	not-applicable	claude	e52eb27f381cfefd	asn1	prose of section 10.1.2
+3855	6412	patched	human	a01961b45a6bc4b2	asn1	adds OBJECT IDENTIFIER to id-ep-content and id-et-content in the section 2.3 inline ASN.1; the lines now parse and show W301, no corpus module defines them
+3920	212	not-applicable	claude	d291d21c7aa91d9e	asn1	XML schema in Appendix C.1, not ASN.1
+3920	704	not-applicable	claude	bd3c1544b370ba35	asn1	XML protocol example in section 6.6, not ASN.1
+3920	1406	not-applicable	claude	6a3cdf40a007a26e	asn1	prose of section 6.5
+4010	3865	patched	claude	c337d22df80427f6	asn1	id-mod-cms-seed(24) -> (25) in the module header OID; no inline copy of the header
+4043	192	patched	human	2702c3c3e1426bd5	asn1	1993 module: imports OTHER-NAME from CertificateExtensions, defines id-pkix locally, permanentIdentifier as OTHER-NAME; prove swaps one W102 for another (the erratum's CertificateExtensions version 4, the corpus has 7)
+4055	1468	not-applicable	claude	aec6e1db3dc85d8f	asn1	prose of section 3
+4055	1676	not-applicable	claude	5357dc9f5c61a361	asn1	mfg1 -> mgf1 in the prose of sections 3.1 and 4.1, outside the inline ASN.1
+4056	7280	not-applicable	claude	33df8df06cd945fd	asn1	RSASAA-PSS typo in the prose of section 2.2
+4108	4093	patched	human	407bd256296a20ff	asn1	adds id-aa-fwPkgMessageDigest and FirmwarePackageMessageDigest (section 2.2.10) after FirmwarePackageInfo in the module, and imports AlgorithmIdentifier from PKIX1Explicit88 [PROFILE] as RFC 3852 does (Reported erratum 9288 files the import); the section 2.2.10 inline copies already have the text
+4120	7022	not-applicable	claude	274abcfce1ecaf63	asn1	checksumtype -> cksumtype in the prose of section 5.2.6.2; the ASN.1 already says cksumtype
+4210	3949	patched	claude	e217e1f8af891fc5	asn1	caPubs: SEQUENCE OF Certificate -> CMPCertificate in CertRepMessage, section 5.3.4 inline ASN.1, as the Appendix F module has it (the notes say the module is right)
+4210	4078	patched	claude	1f3f269ddbfddb3a	asn1	CertOrEncCert certificate: [0] Certificate -> [0] CMPCertificate, section 5.3.4 inline ASN.1, as the Appendix F module has it
+4210	5201	not-applicable	claude	f6df702d400100bc	asn1	MS_MAC_ALG -> MSG_MAC_ALG in the Appendix D.4 profile table, not ASN.1
+4210	7549	not-applicable	claude	8609a6214ab46d0f	asn1	prose of section 3.1.2
+4211	4797	not-applicable	claude	551df7760ee09d69	asn1	prose of section 4.1
+4211	8391	not-applicable	claude	e7328fae2654c598	asn1	challengeResponse -> challengeResp in the prose of section 4.2
+4212	8447	patched	claude	8cb05c65c815ca0a	asn1	tags [0] notBeforeTime and [1] notAfterTime in OptionalAttCertValidity, section 2.1 inline ASN.1; the only copy
+4212	8448	patched	claude	51c5c0f0e62e6fdd	asn1	tags [0]..[8] on the components of AttCertTemplate, section 2.1 inline ASN.1; the only copy
 4301	2180	not-applicable	claude	2ac5010504b509c4	modules	prose / table, not module text
 4301	2184	not-applicable	claude	610ec9ff59ee2119	modules	prose / table, not module text
 4306	2279	not-applicable	claude	f07af1dd49219b7e	modules	transform table, not module text
-4334	122	not-applicable	claude	bfb60a0965850aa9	modules	prose and references
-4357	1467	not-applicable	claude	6597f1cc5e10840a	modules	prose / references, not module text
-4357	1473	not-applicable	claude	ddcbbfef8390ef02	modules	prose / references, not module text
-4357	5927	patched	claude	c37d6b292d9ac38e	modules	GostR3410-94-PKISyntax: imports id-Gost28147-89-CryptoPro-A-ParamSet; encryptionParamSet DEFAULT id-Gost28147-89-CryptoPro-A-ParamSet (as RFC 4491)
-4357	5928	patched	claude	4d13e911a60c9f83	modules	GostR3410-2001-PKISyntax: imports id-Gost28147-89-CryptoPro-A-ParamSet; encryptionParamSet DEFAULT id-Gost28147-89-CryptoPro-A-ParamSet (as RFC 4491)
+4334	122	not-applicable	claude	bfb60a0965850aa9	asn1	prose of sections 1 and 5 and the references
+4346	1075	not-applicable	claude	8153d88cd251c084	asn1	prose of section 4.7 (TLS presentation language section, no ASN.1)
+4346	1896	not-applicable	claude	913370e576fc5096	asn1	prose of section 7.2.2 (alert descriptions)
+4357	1467	not-applicable	claude	6597f1cc5e10840a	asn1	reference entry in section 13.2
+4357	1473	not-applicable	claude	ddcbbfef8390ef02	asn1	prose of section 7
+4357	5927	patched	claude	c37d6b292d9ac38e	asn1	GostR3410-94-PKISyntax: imports id-Gost28147-89-CryptoPro-A-ParamSet; encryptionParamSet DEFAULT id-Gost28147-89-CryptoPro-A-ParamSet (as RFC 4491); no inline copy
+4357	5928	patched	claude	4d13e911a60c9f83	asn1	GostR3410-2001-PKISyntax: imports id-Gost28147-89-CryptoPro-A-ParamSet; encryptionParamSet DEFAULT id-Gost28147-89-CryptoPro-A-ParamSet (as RFC 4491); no inline copy
 4455	83	not-applicable	claude	e7d13ea8e4d716dc	modules	SNMP MIB comment; the asn1 filter extracts no module from RFC 4455
-4490	1463	not-applicable	claude	46edfd9f7513a308	modules	prose / references, not module text
-4490	1464	not-applicable	claude	aa945f0bcd7942a8	modules	prose / references, not module text
-4490	5089	not-applicable	claude	27197cc430eef5ea	modules	prose / references, not module text
-4511	7216	not-applicable	claude	a61532868f384c43	modules	prose typo, not module text
-4511	7217	not-applicable	claude	cad1f10eaa8379bf	modules	prose typo, not module text
-4511	7218	not-applicable	claude	55c779609bd57bf6	modules	prose typo, not module text
-4511	7219	not-applicable	claude	930d4ba1039d4459	modules	prose typo, not module text
-4511	7220	not-applicable	claude	dc625cfd355c9663	modules	prose typo, not module text
-4511	7221	not-applicable	claude	7db7a8e188c0bb6c	modules	prose typo, not module text
-4511	7222	not-applicable	claude	eb8e02e96b5db75c	modules	prose typo, not module text
+4490	1463	not-applicable	claude	46edfd9f7513a308	asn1	prose of section 4.1.1 (secret -> private key)
+4490	1464	not-applicable	claude	aa945f0bcd7942a8	asn1	prose of section 4.2.1 (secret -> private key)
+4490	5089	not-applicable	claude	27197cc430eef5ea	asn1	reference entry in section 12.1
+4492	2389	not-applicable	claude	d77a11b48f4ec10f	asn1	TLS presentation language enum ECBasisType in section 5.4, not ASN.1
+4492	3652	not-applicable	claude	c92697aea4a7576c	asn1	TLS presentation language select in section 5.4, not ASN.1
+4492	4783	not-applicable	claude	3e86ab00da0b8cbf	asn1	prose of section 5.7
+4511	7216	not-applicable	claude	a61532868f384c43	asn1	prose typo in section 4.1.6, after the inline ASN.1
+4511	7217	not-applicable	claude	cad1f10eaa8379bf	asn1	prose of section 4.1.11
+4511	7218	not-applicable	claude	55c779609bd57bf6	asn1	prose of section 4.4
+4511	7219	not-applicable	claude	930d4ba1039d4459	asn1	prose of section 4.4
+4511	7220	not-applicable	claude	dc625cfd355c9663	asn1	reference entry in section 8
+4511	7221	not-applicable	claude	7db7a8e188c0bb6c	asn1	prose of Appendix A.2 (result codes)
+4511	7222	not-applicable	claude	eb8e02e96b5db75c	asn1	prose of Appendix C.1.17
+4514	7229	not-applicable	claude	bda6b70cd69cfba2	asn1	prose of section 2.4
 4534	940	patched	claude	ef47298a25328f6a	modules	re-inserts terse BOOLEAN into GSAKMPv1DeRegistrationInfo in the B.4 module (as in section B.3)
 4683	1047	patched	claude	8232ff27c6ce72ca	modules	Appendix A module IMPORTS id-pkip from PKIXCRMF-2005; the IMPORTS clause still lacks its closing semicolon (no erratum), so PKIXSIM still fails
 4683	2355	not-applicable	claude	62be8b568c1d9b59	modules	prose, not module text

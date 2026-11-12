@@ -1,0 +1,27 @@
+--- a/rfc4212.txt
++++ b/rfc4212.txt
+@@ -180,15 +180,15 @@
+    Value:
+ 
+       AttCertTemplate ::= SEQUENCE {
+-         version                 AttCertVersion            OPTIONAL,
+-         holder                  Holder                    OPTIONAL,
+-         issuer                  AttCertIssuer             OPTIONAL,
+-         signature               AlgorithmIdentifier       OPTIONAL,
+-         serialNumber            CertificateSerialNumber   OPTIONAL,
+-         attrCertValidityPeriod  OptionalAttCertValidity   OPTIONAL,
+-         attributes              SEQUENCE OF Attribute     OPTIONAL,
+-         issuerUniqueID          UniqueIdentifier          OPTIONAL,
+-         extensions              Extensions                OPTIONAL
++         version                 [0] AttCertVersion            OPTIONAL,
++         holder                  [1] Holder                    OPTIONAL,
++         issuer                  [2] AttCertIssuer             OPTIONAL,
++         signature               [3] AlgorithmIdentifier       OPTIONAL,
++         serialNumber            [4] CertificateSerialNumber   OPTIONAL,
++         attrCertValidityPeriod  [5] OptionalAttCertValidity   OPTIONAL,
++         attributes              [6] SEQUENCE OF Attribute     OPTIONAL,
++         issuerUniqueID          [7] UniqueIdentifier          OPTIONAL,
++         extensions              [8] Extensions                OPTIONAL
+       }
+       OptionalAttCertValidity  ::= SEQUENCE {
+          notBeforeTime  [0] GeneralizedTime  OPTIONAL,

@@ -1,0 +1,11 @@
+--- a/rfc3770.txt
++++ b/rfc3770.txt
+@@ -204,7 +204,7 @@
+      id-aca  OBJECT IDENTIFIER  ::=  { iso(1) identified-organization(3)
+        dod(6) internet(1) security(5) mechanisms(5) pkix(7) 10 }
+ 
+-     id-aca-wlanSSID  OBJECT IDENTIFIER ::= { id-aca 6 }
++     id-aca-wlanSSID  OBJECT IDENTIFIER ::= { id-aca 7 }
+ 
+    The syntax for the WLAN SSID attribute certificate attribute is
+    exactly the same as the WLAN SSID extension:

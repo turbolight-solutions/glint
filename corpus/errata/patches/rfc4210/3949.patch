@@ -1,0 +1,11 @@
+--- a/rfc4210.txt
++++ b/rfc4210.txt
+@@ -2169,7 +2169,7 @@
+    information, a subject certificate, and an encrypted private key.
+ 
+      CertRepMessage ::= SEQUENCE {
+-         caPubs          [1] SEQUENCE SIZE (1..MAX) OF Certificate
++         caPubs          [1] SEQUENCE SIZE (1..MAX) OF CMPCertificate
+                              OPTIONAL,
+          response            SEQUENCE OF CertResponse
+      }

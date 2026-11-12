@@ -1,0 +1,26 @@
+--- a/rfc3781.txt
++++ b/rfc3781.txt
+@@ -477,19 +477,19 @@
+        [APPLICATION 10]
+            IMPLICIT INTEGER (-9223372036854775808..9223372036854775807)
+ 
+-   Unsigned64
++   Unsigned64 ::=
+        [APPLICATION 11]
+            IMPLICIT INTEGER (0..18446744073709551615)
+ 
+-   Float32
++   Float32 ::=
+        [APPLICATION 12]
+            IMPLICIT OCTET STRING (SIZE (4))
+ 
+-   Float64
++   Float64 ::=
+        [APPLICATION 13]
+            IMPLICIT OCTET STRING (SIZE (8))
+ 
+-   Float128
++   Float128 ::=
+        [APPLICATION 14]
+            IMPLICIT OCTET STRING (SIZE (16))
+ 

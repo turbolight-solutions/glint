@@ -1,0 +1,13 @@
+--- a/rfc4212.txt
++++ b/rfc4212.txt
+@@ -191,8 +191,8 @@
+          extensions              Extensions                OPTIONAL
+       }
+       OptionalAttCertValidity  ::= SEQUENCE {
+-         notBeforeTime  GeneralizedTime  OPTIONAL,
+-         notAfterTime   GeneralizedTime  OPTIONAL
++         notBeforeTime  [0] GeneralizedTime  OPTIONAL,
++         notAfterTime   [1] GeneralizedTime  OPTIONAL
+       } -- at least one must be present
+ 
+ 2.2.  OpenPGP Certificate CertTemplate
