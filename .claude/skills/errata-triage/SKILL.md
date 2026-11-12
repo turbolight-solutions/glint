@@ -8,6 +8,7 @@ allowed-tools:
   - Read(corpus/cache/errata-work/**)
   - Edit(corpus/cache/errata-work/**)
   - Read(corpus/errata/**)
+  - Edit(corpus/errata/to-file.md)
   - Glob
   - Grep
 ---
@@ -18,7 +19,8 @@ You work through the queue of Verified RFC errata. For each one you record one d
 corrects ASN.1, in a module or inline, becomes a patch to the document Glint reads for that RFC: `rfcN.xml` for RFCs
 published in RFCXML (8650 on), `rfcN.txt` before. corpus-build applies the patches before it extracts, so the corpus
 holds the corrected modules and each names its errata. The data is `corpus/errata/` (`ledger.tsv` and
-`patches/rfcN/<id>.patch`); the design is in the spec, "RFC errata", and `corpus/errata/README.md`.
+`patches/rfcN/<id>.patch`), and `to-file.md` lists defects still to report; the design is in the spec, "RFC errata",
+and `corpus/errata/README.md`.
 
 `glint errata` below stands for `cargo run -q --release -p glint-asn1 -- errata`. It reads the mirror `corpus/fetch.sh`
 keeps (`corpus/cache`); run with `--corpus-dir`/`--cache-dir` when they are elsewhere. `queue` needs corpus data
@@ -36,7 +38,8 @@ Arguments: `$ARGUMENTS` (passed to `queue`: `--rfc N` limits the session to one 
   commits.
 - Never copy a person's name or an email address into a note; `record` refuses notes that hold the submitter's or
   verifier's name, but other people named in `notes` (an AD, a chair) are printed as written, so leave them out.
-- Edit only the work file `corpus/cache/errata-work/rfcN-ID.{txt,xml}`, and only the lines the erratum is about.
+- Edit only the work file `corpus/cache/errata-work/rfcN-ID.{txt,xml}`, and only the lines the erratum is about, and
+  `corpus/errata/to-file.md` as "Errata to file" says.
 
 ## Procedure
 
@@ -137,7 +140,26 @@ glint errata record N ID --decision superseded --note "RFC NNNN replaces ..."
 glint errata record N ID --decision needs-human --note "..."
 ```
 
-### 4. Finish the session
+### 4. Errata to file
+
+`corpus/errata/to-file.md` lists defects in RFC ASN.1 that no erratum reports yet. An entry leaves the list once its
+defect is reported, whatever the erratum's status: errata that are not Verified never reach the queue, so check each
+listed RFC, also when this session's `--rfc` is another one:
+
+```bash
+glint errata list N             # every erratum of the RFC, whatever its status
+```
+
+For each id not in the entry's **Known errata**, `glint errata show N ID --no-excerpt`, and compare it with the entry:
+- it reports the defect: delete the entry; when it reports only part of it, delete that part and add the id to Known
+  errata;
+- it does not: add the id to Known errata.
+
+A Verified erratum you decide in this session that fixes a listed defect counts the same way. Edit nothing else in
+the file: when the session shows a defect no erratum covers (an erratum that is wrong itself, an error `prove` still
+reports after a patch), name it in the summary as a candidate for the list.
+
+### 5. Finish the session
 
 1. `glint errata check`: it must say `OK`.
 2. `cargo test --workspace`.
@@ -146,5 +168,6 @@ glint errata record N ID --decision needs-human --note "..."
    - the RFCs whose patches changed, and the modules and inline blocks they correct;
    - gains from `prove` (losses are always zero for recorded patches);
    - every `FLAG:` and rebase warning;
-   - the `needs-human` errata with their reasons, and the skipped feed entries, for a person.
+   - the `needs-human` errata with their reasons, and the skipped feed entries, for a person;
+   - the entries removed from `to-file.md` (RFC, defect, the erratum that reports it) and candidates for it.
 4. Suggest that the user commit `corpus/errata/` in one pull request.
