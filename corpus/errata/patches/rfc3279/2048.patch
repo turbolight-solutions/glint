@@ -1,0 +1,11 @@
+--- a/rfc3279.txt
++++ b/rfc3279.txt
+@@ -864,7 +864,7 @@
+    characteristic-two finite fields.  It has the following value:
+ 
+       id-characteristic-two-basis OBJECT IDENTIFIER ::= {
+-           characteristic-two-field basisType(1) }
++           characteristic-two-field basisType(3) }
+ 
+    The object identifiers gnBasis, tpBasis and ppBasis name the three
+    kinds of basis for characteristic-two finite fields defined by

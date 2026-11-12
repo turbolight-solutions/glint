@@ -1,0 +1,21 @@
+--- a/rfc3281.txt
++++ b/rfc3281.txt
+@@ -1382,9 +1382,15 @@
+    signed, the attributes are encrypted for a set of predetermined
+    recipients.
+ 
+-   The AC then contains the ciphertext inside its signed data.  The
+-   EnvelopedData (id-envelopedData) ContentType is used, and the content
+-   field will contain the EnvelopedData type.
++   Within EnvelopedData, the encapuslatedContentInfo identifies the
++   content type carried withing the ciphertext.  In this case, the
++   contentType field of encapsulatedContentInfo MUST contain
++   id-ct-attrCertEncAttrs, which has the following value:
++
++      attrCertEncAttrs OBJECT IDENTIFIER ::=
++            { iso(1) member-body(2) us(840) rsadsi(113549) pkcs(1)
++              pkcs9(9)
++              id-smime(16) id-ct(1) 14 }
+ 
+    The ciphertext is included in the AC as the value of an encAttrs
+    attribute.  Only one encAttrs attribute can be present in an AC;

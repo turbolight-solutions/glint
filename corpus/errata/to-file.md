@@ -93,7 +93,10 @@ Known errata: 6443, 6444, 6445.
 
 ## RFC 3183, DOMSECSyntax
 
-A comment wraps: `identifier` on the next line falls outside the `--` comment. Glint `E001`.
+A comment wraps: `identifier` on the next line falls outside the `--` comment. Glint `E001`. Also, Section 3.1.2:
+erratum 3757 adds `id-aa-signatureType` as `{ ... pkcs(1) pkcs9(9) 2 28 }`, without `smime(16)`; IANA's S/MIME
+Attributes registry has it at `1.2.840.113549.1.9.16.2.28`, citing that erratum (3757 is `needs-human` for this).
+Fix: a corrected erratum with `pkcs9(9) smime(16) 2 28`.
 Known errata: 3757.
 
 ## RFC 3125, ETS-ElectronicSignaturePolicies-88syntax and -97Syntax
@@ -133,6 +136,12 @@ X.208 value notation throughout: `SEQUENCE` values without component names (`{ i
 `{ id-mgf1, sha1Identifier }`, nested `{ id-RSAES-OAEP, {...} }` for an `ANY` parameter). RFC 4055's module is the
 maintained form, so a note pointing there may be the better erratum. erlc (internal crash).
 Known errata: none.
+
+## RFC 3062, Section 2
+
+`passwdModifyOID OBJECT IDENTIFIER ::= 1.3.6.1.4.1.4203.1.11.1`: the value is written dotted, which is not ASN.1.
+Fix: `{ 1 3 6 1 4 1 4203 1 11 1 }`. Glint `E001`.
+Known errata: 340, 4899.
 
 ## RFC 1214, Top-Syntax
 

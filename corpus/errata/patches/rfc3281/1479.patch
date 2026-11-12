@@ -11,7 +11,7 @@
              }
  
              -- This is the same as the original syntax which was defined
-@@ -2119,8 +2119,8 @@
+@@ -2125,8 +2125,8 @@
               }
  
               SecurityCategory ::= SEQUENCE {

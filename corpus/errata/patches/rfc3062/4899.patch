@@ -1,0 +1,13 @@
+--- a/rfc3062.txt
++++ b/rfc3062.txt
+@@ -93,8 +93,8 @@
+    passwdModifyOID OBJECT IDENTIFIER ::= 1.3.6.1.4.1.4203.1.11.1
+ 
+    PasswdModifyRequestValue ::= SEQUENCE {
+-     userIdentity    [0]  OCTET STRING OPTIONAL
+-     oldPasswd       [1]  OCTET STRING OPTIONAL
++     userIdentity    [0]  OCTET STRING OPTIONAL,
++     oldPasswd       [1]  OCTET STRING OPTIONAL,
+      newPasswd       [2]  OCTET STRING OPTIONAL }
+ 
+    PasswdModifyResponseValue ::= SEQUENCE {

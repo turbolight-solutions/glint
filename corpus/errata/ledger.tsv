@@ -50,29 +50,30 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 3015	353	not-applicable	claude	81e8b5da59b83a28	asn1	ABNF grammar in Annex B, not ASN.1
 3029	6443	patched	claude	1b6c929fdf631c76	asn1	IMPORTS DigestAlgorithmIdentifier from CryptographicMessageSyntax; no inline copy of IMPORTS
 3029	6444	patched	claude	f93f33e0f02586b0	asn1	IMPORTS GeneralNames from PKIX1Implicit88; no inline copy of IMPORTS
-3062	340	not-applicable	claude	208ee3d031f874e0	modules	prose typo in section 1
-3062	4899	not-applicable	claude	11923d07673187dc	modules	ASN.1 fragment in section 2, not a module; the asn1 filter extracts nothing from RFC 3062
-3125	5901	patched	claude	0578dd838d3b750e	modules	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.1 (1988) module
-3125	5902	patched	claude	41cf24837c51e600	modules	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.2 (1997) module
-3126	1067	patched	claude	0c0032405f995f7d	modules	otherRevVals OPTIONAL in RevocationValues (as in ETSI TS 101 733) in section 4.3.2 and both appendix modules
-3161	1879	not-applicable	claude	558095874a60a332	modules	prose in section 3.6 (media type name)
-3161	2931	patched	claude	a4edcf9bdf06cccf	modules	comment syntax in PKIStatus (-- on continuation lines, -- before }) in section 2.4.2 and the Appendix C module
-3161	2932	patched	claude	61e2574369bfa316	modules	comment syntax (-- before }) after systemFailure in section 2.4.2 and the Appendix C module
-3183	3757	not-applicable	claude	c6dadb35800da494	modules	adds id-aa-signatureType to the section 3.1.2 prose; the DOMSECSyntax module does not define it either, but the erratum names only 3.1.2
-3279	307	not-applicable	claude	2b373ea94c201c0b	modules	prose, not module text
-3279	2048	not-applicable	claude	cb4163392b8f4583	modules	section 2.3.5 copy only; the section 3 module already has basisType(3)
-3279	4036	not-applicable	claude	15ad66ee3be571fb	modules	prose, not module text
-3279	4102	not-applicable	claude	2ea482a62434db0d	modules	prose, not module text
-3279	7296	not-applicable	claude	30f8eafe46dd0077	modules	prose, not module text
-3280	305	not-applicable	claude	ed5e9f2f89c01976	modules	path validation prose
-3280	306	not-applicable	claude	41d2756bed7bf75b	modules	references
-3281	302	patched	claude	309249bd5cdaca53	modules	Clearance without [0]/[1]/[2] tags (X.501 form) in section 4.4.6 and the Appendix B module
-3281	303	patched	claude	54e2a2b271d6ee14	modules	comma after the version component of AttributeCertificateInfo in section 4.1 and the Appendix B module
-3281	304	not-applicable	claude	6d12950a9db2ac49	modules	prose in section 7.1
-3281	710	not-applicable	claude	663dbdb694bf2b12	modules	prose typo in section 4.3.2
-3281	1479	patched	claude	c2cf19d75068759f	modules	SecurityCategory: type [0] OBJECT IDENTIFIER, value [1] EXPLICIT ANY in section 4.4.6 and the Appendix B module
-3369	290	patched	claude	46bc25ba13d9c314	modules	AttributeCertificateVersion1 module: DEFINITIONS EXPLICIT TAGS (was IMPLICIT)
-3369	291	patched	claude	0df7fa09f6880d4a	modules	inserts the content type OIDs (id-ct-contentInfo, id-data, ... id-ct-authData) before the end of the CMS module, as the erratum instructs
+3062	340	not-applicable	claude	208ee3d031f874e0	asn1	prose typo in section 1
+3062	4899	patched	human	11923d07673187dc	asn1	adds the missing commas in PasswdModifyRequestValue (section 2 inline ASN.1); the block now parses and shows W301 PasswdModifyRequestValue, which no corpus module defines
+3125	5901	patched	claude	0578dd838d3b750e	asn1	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.1 (1988) module; the section 3.4 inline copy only uses it
+3125	5902	patched	claude	41cf24837c51e600	asn1	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.2 (1997) module; the section 3.4 inline copy only uses it
+3126	1067	patched	claude	0c0032405f995f7d	asn1	otherRevVals OPTIONAL in RevocationValues (as in ETSI TS 101 733) in the section 4.3.2 inline ASN.1 and both appendix modules
+3161	1879	not-applicable	claude	558095874a60a332	asn1	prose in section 3.6 (media type name)
+3161	2931	patched	claude	a4edcf9bdf06cccf	asn1	comment syntax in PKIStatus (-- on continuation lines, -- before }) in the section 2.4.2 inline ASN.1 and the Appendix C module
+3161	2932	patched	claude	61e2574369bfa316	asn1	comment syntax (-- before }) after systemFailure in the section 2.4.2 inline ASN.1 and the Appendix C module
+3183	3757	needs-human	claude	c6dadb35800da494	asn1	adds id-aa-signatureType inline in section 3.1.2, but its OID { ... pkcs(1) pkcs9(9) 2 28 } lacks smime(16): the IANA S/MIME Attributes registry has id-aa-signatureType at 1.2.840.113549.1.9.16.2.28 (citing this erratum); the erratum looks wrong itself
+3217	639	not-applicable	claude	5048855f53d0f5cf	asn1	test vectors and prose in section 4.4
+3279	307	not-applicable	claude	2b373ea94c201c0b	asn1	prose and reference label (X.660 -> X.690)
+3279	2048	patched	claude	cb4163392b8f4583	asn1	basisType(1) -> basisType(3) in id-characteristic-two-basis, section 2.3.5 inline ASN.1 (the section 3 module already has it)
+3279	4036	not-applicable	claude	15ad66ee3be571fb	asn1	prose in section 2.3.3 (order g -> order q)
+3279	4102	not-applicable	claude	2ea482a62434db0d	asn1	prose typo in section 1
+3279	7296	not-applicable	claude	30f8eafe46dd0077	asn1	prose typo in section 2.3.5
+3280	305	not-applicable	claude	ed5e9f2f89c01976	asn1	path validation prose in section 6.3.3
+3280	306	not-applicable	claude	41d2756bed7bf75b	asn1	references section
+3281	302	patched	claude	309249bd5cdaca53	asn1	Clearance without [0]/[1]/[2] tags (X.501 form, as the notes say) in the section 4.4.6 inline ASN.1 and the Appendix B module
+3281	303	patched	claude	54e2a2b271d6ee14	asn1	comma after the version component of AttributeCertificateInfo in the section 4.1 inline ASN.1 and the Appendix B module
+3281	304	patched	human	6d12950a9db2ac49	asn1	rewrites the section 7.1 prose and adds attrCertEncAttrs OBJECT IDENTIFIER ::= { ... id-smime(16) id-ct(1) 14 } (IANA id-ct-attrCertEncAttrs), applied as written: the name differs from the prose's id-ct-attrCertEncAttrs; the tab is spaces; W301, no module defines it
+3281	710	not-applicable	claude	663dbdb694bf2b12	asn1	prose typo in section 4.3.2
+3281	1479	patched	claude	c2cf19d75068759f	asn1	SecurityCategory: type [0] OBJECT IDENTIFIER, value [1] EXPLICIT ANY in the section 4.4.6 inline ASN.1 and the Appendix B module
+3369	290	patched	claude	46bc25ba13d9c314	asn1	AttributeCertificateVersion1 module: DEFINITIONS EXPLICIT TAGS (was IMPLICIT); no inline copy of the module header
+3369	291	patched	claude	0df7fa09f6880d4a	asn1	inserts the content type OIDs (id-ct-contentInfo, id-data, ... id-ct-authData) before the end of the CMS module, as the erratum instructs; the inline copies in the body already define them
 3369	292	not-applicable	claude	5beb1f2bf1e6bc15	modules	references section
 3370	289	not-applicable	claude	3758b2984d91055b	modules	references section
 3416	2757	not-applicable	claude	fbdf4c5c8b047fff	modules	SNMP PDU definitions; the asn1 filter extracts no module from RFC 3416
