@@ -1,0 +1,11 @@
+--- a/rfc2631.txt
++++ b/rfc2631.txt
+@@ -176,7 +176,7 @@
+ 
+      KeySpecificInfo ::= SEQUENCE {
+        algorithm OBJECT IDENTIFIER,
+-       counter OCTET STRING SIZE (4..4) }
++       counter OCTET STRING (SIZE (4..4)) }
+ 
+    Note that these ASN.1 definitions use EXPLICIT tagging. (In ASN.1,
+    EXPLICIT tagging is implicit unless IMPLICIT is explicitly

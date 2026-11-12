@@ -1,0 +1,20 @@
+--- a/rfc2560.txt
++++ b/rfc2560.txt
+@@ -499,7 +499,7 @@
+        revocationTime              GeneralizedTime,
+        revocationReason    [0]     EXPLICIT CRLReason OPTIONAL }
+ 
+-   UnknownInfo ::= NULL -- this can be replaced with an enumeration
++   UnknownInfo ::= NULL
+ 
+ 
+ 
+@@ -1080,7 +1080,7 @@
+     revocationTime              GeneralizedTime,
+     revocationReason    [0]     EXPLICIT CRLReason OPTIONAL }
+ 
+-UnknownInfo ::= NULL -- this can be replaced with an enumeration
++UnknownInfo ::= NULL
+ 
+ ArchiveCutoff ::= GeneralizedTime
+ 

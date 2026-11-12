@@ -24,23 +24,32 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 2254	466	not-applicable	claude	47aaf390067f6de1	asn1	string representation grammar in section 4, not ASN.1
 2268	465	patched	claude	6a369c5f026915a8	asn1	RC2Version comment range 1-1024 -> 0-1024 in section 6 inline ASN.1, and the same range in the prose below it
 2459	432	not-applicable	claude	0cf771a687c544a1	asn1	Appendix D.3 hex dump annotation, not ASN.1
-2630	406	not-applicable	claude	9d1f10b8590d2e3a	modules	prose in section 12.2.2 (RFC number in a reference)
-2630	658	not-applicable	claude	2cf04e8108fb86db	modules	references section
-2631	2506	not-applicable	claude	6849ae442b476d3d	modules	prose / algorithm steps in section 2; no module in RFC 2631
-2631	5480	not-applicable	claude	942ba5f7839f80d5	modules	prose / algorithm steps in section 2; no module in RFC 2631
-2631	5897	not-applicable	claude	81513271f86e00ae	modules	ASN.1 fragment in section 2.1.2, not a module; the asn1 filter extracts nothing from RFC 2631
-2631	6302	not-applicable	claude	b33ee21605b55516	modules	prose / algorithm steps in section 2; no module in RFC 2631
-2631	7761	not-applicable	claude	2b45b0d0e8fdfe27	modules	prose / algorithm steps in section 2; no module in RFC 2631
+2560	2253	patched	claude	ec35cce46fe8b36c	asn1	drop the comment after UnknownInfo ::= NULL in the module OCSP and in the inline copy of section 4.2.1
+2560	2329	not-applicable	claude	921a1fdce0023e88	asn1	typo in prose of section 4.2.2.2.1
+2560	3417	not-applicable	claude	12bac5dddbbddb10	asn1	id-ad-ocspSigning -> id-kp-OCSPSigning in prose of section 4.2.2.2
+2608	4290	not-applicable	claude	3e65177484d4739e	asn1	section reference in prose of section 4.1
+2630	406	not-applicable	claude	9d1f10b8590d2e3a	asn1	RFC number in prose of section 12.2.2
+2630	658	not-applicable	claude	2cf04e8108fb86db	asn1	references section
+2631	2506	not-applicable	claude	6849ae442b476d3d	asn1	algorithm step in section 2.2.1.1 (prose)
+2631	5480	not-applicable	claude	942ba5f7839f80d5	asn1	formula in prose of section 2.1.1
+2631	5897	patched	human	81513271f86e00ae	asn1	corrects inline ASN.1 in section 2.1.2 (SIZE (4..4) -> (SIZE (4..4))); the block now parses and shows W301 KeySpecificInfo, which no corpus module defines
+2631	6302	not-applicable	claude	b33ee21605b55516	asn1	algorithm step in section 2.2.1.1 (prose)
+2631	7761	not-applicable	claude	2b45b0d0e8fdfe27	asn1	algorithm step numbering in section 2.2.1.1 (prose)
 2633	405	not-applicable	claude	e0131a8bc638715c	modules	prose typo in section 3.5
 2633	5019	not-applicable	claude	9e2cb8c8024bdaa1	modules	only adds a [sic] marker to id-aa-encrypKeyPref; the module text is unchanged
-2797	4037	patched	claude	ce84fd58837cc329	modules	dod(4) -> dod(6) in the module header OID
-2797	4038	patched	claude	15e398d68b07ecc6	modules	pkix-cmc 24 -> id-cmc 24 for id-cmc-confirmCertAcceptance
-2898	4966	not-applicable	claude	15482852c8bd5194	modules	PBKDF2 algorithm step in section 5.1 (prose)
-2985	356	not-applicable	claude	8067181f93f66ac9	modules	table of contents
-2986	8328	not-applicable	claude	44520877afa9e4d4	modules	prose describing CertificationRequestInfo, not module text
-2986	8336	not-applicable	claude	8025569ff6d386dc	modules	prose describing CertificationRequestInfo, not module text
-3029	6443	patched	claude	1b6c929fdf631c76	modules	IMPORTS DigestAlgorithmIdentifier from CryptographicMessageSyntax
-3029	6444	patched	claude	f93f33e0f02586b0	modules	IMPORTS GeneralNames from PKIX1Implicit88
+2655	403	not-applicable	claude	40d188b159e5b4a6	asn1	references section
+2696	7292	not-applicable	claude	331599a33683b70f	asn1	cooking -> cookie in the protocol example of section 4, not ASN.1
+2743	4151	not-applicable	claude	2482a3bd87d3a923	asn1	GSS_S_FAILURE description in prose of section 2.2.4
+2797	4037	patched	claude	ce84fd58837cc329	asn1	dod(4) -> dod(6) in the module header OID; no inline copy
+2797	4038	patched	claude	15e398d68b07ecc6	asn1	pkix-cmc 24 -> id-cmc 24 for id-cmc-confirmCertAcceptance; no inline copy
+2876	1839	not-applicable	claude	dba1ed2802c1d9aa	asn1	DER hex string of the SKIPJACK SMIMECapability in section 7, not ASN.1 notation
+2898	4966	not-applicable	claude	15482852c8bd5194	asn1	PBKDF1 algorithm step in section 5.1 (prose)
+2985	356	not-applicable	claude	8067181f93f66ac9	asn1	table of contents
+2986	8328	not-applicable	claude	44520877afa9e4d4	asn1	component name in prose of section 4.1, outside the inline ASN.1
+2986	8336	not-applicable	claude	8025569ff6d386dc	asn1	component name in prose of section 4.2, outside the inline ASN.1
+3015	353	not-applicable	claude	81e8b5da59b83a28	asn1	ABNF grammar in Annex B, not ASN.1
+3029	6443	patched	claude	1b6c929fdf631c76	asn1	IMPORTS DigestAlgorithmIdentifier from CryptographicMessageSyntax; no inline copy of IMPORTS
+3029	6444	patched	claude	f93f33e0f02586b0	asn1	IMPORTS GeneralNames from PKIX1Implicit88; no inline copy of IMPORTS
 3062	340	not-applicable	claude	208ee3d031f874e0	modules	prose typo in section 1
 3062	4899	not-applicable	claude	11923d07673187dc	modules	ASN.1 fragment in section 2, not a module; the asn1 filter extracts nothing from RFC 3062
 3125	5901	patched	claude	0578dd838d3b750e	modules	defines CommitmentTypeIdentifier ::= OBJECT IDENTIFIER in the A.1 (1988) module
