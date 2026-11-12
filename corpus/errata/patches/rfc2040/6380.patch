@@ -1,0 +1,35 @@
+--- a/rfc2040.txt
++++ b/rfc2040.txt
+@@ -1530,23 +1530,23 @@
+ 
+   The values for the algorithm field are:
+ 
+-  RC5_CBC  OBJECT IDENTIFIER ::=
+-    { iso (1) member-body (2) US (840) rsadsi (113549)
+-      encryptionAlgorithm (3) RC5CBC (8) }
++  rC5-CBC  OBJECT IDENTIFIER ::=
++    { iso (1) member-body (2) us (840) rsadsi (113549)
++      encryptionAlgorithm (3) rC5CBC (8) }
+ 
+-  RC5_CBC_Pad OBJECT IDENTIFIER ::=
+-  { iso (1) member-body (2) US (840) rsadsi (113549)
+-    encryptionAlgorithm (3) RC5CBCPAD (9) }
++  rC5-CBC-Pad OBJECT IDENTIFIER ::=
++  { iso (1) member-body (2) us (840) rsadsi (113549)
++    encryptionAlgorithm (3) rC5CBCPAD (9) }
+ 
+    The structure of the parameters field for these algorithms is given
+    below.  NOTE: if the iv field is not included, then the
+    initialization vector defaults to a block of zeros whose size depends
+    on the blockSizeInBits field.
+ 
+-  RC5_CBC_Parameters ::= SEQUENCE {
+-    version           INTEGER (v1_0(16)),
++  RC5-CBC-Parameters ::= SEQUENCE {
++    version           INTEGER {v1-0(16)},
+     rounds            INTEGER (8..127),
+-    blockSizeInBits   INTEGER (64, 128),
++    blockSizeInBits   INTEGER (64 | 128),
+     iv                OCTET STRING OPTIONAL
+   }
+ 

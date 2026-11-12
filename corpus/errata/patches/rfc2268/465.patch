@@ -1,0 +1,15 @@
+--- a/rfc2268.txt
++++ b/rfc2268.txt
+@@ -476,10 +476,10 @@
+    where
+ 
+    IV ::= OCTET STRING -- 8 octets
+-   RC2Version ::= INTEGER -- 1-1024
++   RC2Version ::= INTEGER -- 0-1024
+ 
+    RC2 in CBC mode has two parameters: an 8-byte initialization vector
+-   (IV) and a version number in the range 1-1024 which specifies in a
++   (IV) and a version number in the range 0-1024 which specifies in a
+    roundabout manner the number of effective key bits to be used for the
+    RC2 encryption/decryption.
+ 

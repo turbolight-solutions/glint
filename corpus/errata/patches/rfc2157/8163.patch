@@ -1,0 +1,11 @@
+--- a/rfc2157.txt
++++ b/rfc2157.txt
+@@ -1106,7 +1106,7 @@
+ 
+    MIMEType ::= SEQUENCE {
+            type IA5String,         -- type (e.g., application/ms-word)
+-           encoding [1] IA5String OPTIONAl -- e.g. quoted-printable
++           encoding [1] IA5String OPTIONAL -- e.g. quoted-printable
+            parameters [2] IA5String OPTIONAL }     -- MIME Parameters
+ 
+    The heading extension includes all requested conversions, with

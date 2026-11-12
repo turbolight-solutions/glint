@@ -1,10 +1,29 @@
 rfc	errata_id	decision	by	fingerprint	rule	note
-2040	513	not-applicable	claude	ffb7903a248dce74	modules	prose in section 8 (RC5-CTS description)
-2040	514	not-applicable	claude	e1c224030b437bc8	modules	prose in section 8 (RC5-CTS description)
-2040	587	not-applicable	claude	c7f0a088b178221c	modules	prose in section 8 (RC5-CTS decryption steps)
-2040	6380	not-applicable	claude	3ef0826a899e817c	modules	section 11 ASN.1 fragments are not a module (no DEFINITIONS); the asn1 filter extracts nothing from RFC 2040
+1319	554	not-applicable	claude	9f79ad792f35aea8	asn1	prose in section 3.1 (padding description)
+1319	555	not-applicable	claude	8f8fc75d19d0cd2b	asn1	MD2 pseudocode and prose in section 3.2
+1319	3575	not-applicable	claude	2c7971c43ca40d4d	asn1	comment in MD2 pseudocode, section 3.2
+1319	3576	not-applicable	claude	805820e1c7a27872	asn1	comment in MD2 pseudocode, section 3.4
+1320	2163	not-applicable	claude	f3cc9e27c6c01a40	asn1	C code in Appendix A.4
+1320	2164	not-applicable	claude	6fa3c80bc45c0612	asn1	C code in Appendix A.4
+1320	6998	not-applicable	claude	5ba9aa5838458e6a	asn1	C comment in Appendix A.3
+1321	550	not-applicable	claude	a14f9f03da69ff58	asn1	C code in Appendix A.4
+1321	551	not-applicable	claude	84d0aa357fadf274	asn1	MD5 algorithm description in section 3.4
+1321	552	not-applicable	claude	ac9c7887aff1b5bc	asn1	prose in section 3.4
+1321	553	not-applicable	claude	cf1edf2f2c5c4afd	asn1	C code in Appendix A.4
+1321	585	not-applicable	claude	cdc6ed5d114499e6	asn1	MD5 algorithm description in section 3.4
+1436	7551	not-applicable	claude	11aab063a4947de7	asn1	typo in prose, section 3.1
+1777	8837	not-applicable	claude	4a2179091415382b	asn1	section heading number, not ASN.1
+2040	513	not-applicable	claude	ffb7903a248dce74	asn1	prose in section 8 (RC5-CTS description)
+2040	514	not-applicable	claude	e1c224030b437bc8	asn1	prose in section 8 (RC5-CTS description)
+2040	587	not-applicable	claude	c7f0a088b178221c	asn1	prose in section 8 (RC5-CTS decryption steps)
+2040	6380	patched	human	3ef0826a899e817c	asn1	section 11 inline ASN.1: underscores -> hyphens, lower-case OID names, INTEGER {v1-0(16)}, (64 | 128); as written, so version lacks the (v1-0) constraint RFC 8018 has (E300), and rC5-CBC, rC5-CBC-Pad are in no module (W301)
 2127	1952	not-applicable	claude	6aa3818a307a3c75	modules	SNMP MIB OID; the asn1 filter extracts no module from RFC 2127
-2459	432	not-applicable	claude	0cf771a687c544a1	modules	Appendix D.3 hex dump annotation, not module text
+2157	8163	patched	claude	87575fe85bb8b181	asn1	OPTIONAl -> OPTIONAL in MIMEType, section 4.2 inline ASN.1
+2251	8844	not-applicable	claude	28be6ea39b22ab12	asn1	typos in prose, section 4.2.3
+2251	8845	not-applicable	claude	09ac4f23b00d2d90	asn1	typo in prose, section 4.11
+2254	466	not-applicable	claude	47aaf390067f6de1	asn1	string representation grammar in section 4, not ASN.1
+2268	465	patched	claude	6a369c5f026915a8	asn1	RC2Version comment range 1-1024 -> 0-1024 in section 6 inline ASN.1, and the same range in the prose below it
+2459	432	not-applicable	claude	0cf771a687c544a1	asn1	Appendix D.3 hex dump annotation, not ASN.1
 2630	406	not-applicable	claude	9d1f10b8590d2e3a	modules	prose in section 12.2.2 (RFC number in a reference)
 2630	658	not-applicable	claude	2cf04e8108fb86db	modules	references section
 2631	2506	not-applicable	claude	6849ae442b476d3d	modules	prose / algorithm steps in section 2; no module in RFC 2631
