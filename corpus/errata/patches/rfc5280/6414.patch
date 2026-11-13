@@ -1,0 +1,13 @@
+--- a/rfc5280.txt
++++ b/rfc5280.txt
+@@ -2483,8 +2483,8 @@
+ 
+    id-kp-serverAuth             OBJECT IDENTIFIER ::= { id-kp 1 }
+    -- TLS server authentication
+-   -- Key usage bits that may be consistent: digitalSignature,
+-   -- keyEncipherment or keyAgreement
++   -- Key usage bits that may be consistent: digitalSignature
++   -- and/or (keyEncipherment or keyAgreement)
+ 
+    id-kp-clientAuth             OBJECT IDENTIFIER ::= { id-kp 2 }
+    -- TLS client authentication

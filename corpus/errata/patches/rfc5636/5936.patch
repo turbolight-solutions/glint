@@ -1,0 +1,10 @@
+--- a/rfc5636.txt
++++ b/rfc5636.txt
+@@ -1294,6 +1294,7 @@
+ 
+ Appendix A.  Traceable Anonymous Certificate ASN.1 Modules
+ 
++RFC5636Module
+ DEFINITIONS IMPLICIT TAGS ::=
+ 
+ --

@@ -1,0 +1,11 @@
+--- a/rfc5275.txt
++++ b/rfc5275.txt
+@@ -551,7 +551,7 @@
+    GLOwnerInfo ::= SEQUENCE {
+      glOwnerName     GeneralName,
+      glOwnerAddress  GeneralName,
+-     certificate     Certificates OPTIONAL }
++     certificates    Certificates OPTIONAL }
+ 
+ 
+ 

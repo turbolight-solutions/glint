@@ -153,38 +153,61 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 4511	7221	not-applicable	claude	7db7a8e188c0bb6c	asn1	prose of Appendix A.2 (result codes)
 4511	7222	not-applicable	claude	eb8e02e96b5db75c	asn1	prose of Appendix C.1.17
 4514	7229	not-applicable	claude	bda6b70cd69cfba2	asn1	prose of section 2.4
-4534	940	patched	claude	ef47298a25328f6a	modules	re-inserts terse BOOLEAN into GSAKMPv1DeRegistrationInfo in the B.4 module (as in section B.3)
-4683	1047	patched	claude	8232ff27c6ce72ca	modules	Appendix A module IMPORTS id-pkip from PKIXCRMF-2005; the IMPORTS clause still lacks its closing semicolon (no erratum), so PKIXSIM still fails
-4683	2355	not-applicable	claude	62be8b568c1d9b59	modules	prose, not module text
-4683	2358	not-applicable	claude	e2cfa1edb70ee5a7	modules	section 5.1 copy of SIM; the Appendix A module copy is erratum 2362
-4683	2359	not-applicable	claude	c7c7eb905fce7566	modules	prose, not module text
-4683	2362	patched	claude	e9f44169968cbec6	modules	pEPSI comment in the Appendix A module: hash of hash of HashContent (as erratum 2358 for section 5.1)
-4985	2520	not-applicable	claude	7bd61d789d7f3429	modules	prose, not module text
-5035	2364	not-applicable	claude	f528b09101ec5139	modules	prose describing ESSCertIDv2, not module text
-5083	8356	not-applicable	claude	acb2849c5ed30f1c	modules	prose typo
+4517	4653	not-applicable	claude	9862ed2d484b5905	asn1	list of matching rules in the prose of section 4.2
+4517	7917	not-applicable	claude	d2f5450db8f99570	asn1	ABNF of the Enhanced Guide syntax in section 3.3.10, not ASN.1
+4534	940	patched	claude	ef47298a25328f6a	asn1	re-inserts terse BOOLEAN into GSAKMPv1DeRegistrationInfo in the B.4 module, as the section B.3 inline copy already has it
+4683	1047	patched	human	8232ff27c6ce72ca	asn1	adds id-pkip FROM PKIXCRMF-2005 to the PKIXSIM IMPORTS; prove loss W112 (id-pkip never used) is a false positive: the IMPORTS clause still has no closing semicolon, which no erratum reports (to-file.md)
+4683	2355	not-applicable	claude	62be8b568c1d9b59	asn1	prose of section 4.4
+4683	2358	patched	claude	e2cfa1edb70ee5a7	asn1	pEPSI comment in the section 5.1 inline SIM: hash of hash of HashContent; erratum 2362 makes the same change in the Appendix A module
+4683	2359	not-applicable	claude	c7c7eb905fce7566	asn1	adds a prose note after the section 5.3 inline ASN.1 naming where id-pkip is defined; the module import is erratum 1047
+4683	2362	patched	claude	e9f44169968cbec6	asn1	pEPSI comment in the Appendix A module SIM: hash of hash of HashContent, as erratum 2358 for section 5.1
+4985	2520	not-applicable	claude	7bd61d789d7f3429	asn1	prose describing the Name component in section 2
+5008	1729	not-applicable	claude	33ee824008b6439f	asn1	prose of section 4.1 (id-ecPublicKey parameters)
+5008	1902	not-applicable	claude	75b01f01da95c21e	asn1	prose of section 4.3 (key wrap parameters absent), outside the inline ASN.1
+5008	2060	not-applicable	claude	3239d02c3b5ed4f1	asn1	section 2 title
+5008	4477	not-applicable	claude	d307e768d2a8efc7	asn1	section 2 title
+5035	2364	not-applicable	claude	f528b09101ec5139	asn1	prose describing certHash after the section 4 inline ASN.1
+5083	8356	not-applicable	claude	acb2849c5ed30f1c	asn1	prose typo in section 3
 5091	2736	not-applicable	claude	75e84c521f4d8038	modules	algorithm description, not module text
 5091	2738	not-applicable	claude	c1aa03805cfd7114	modules	algorithm description, not module text
 5091	2739	not-applicable	claude	d39d81309a4ce121	modules	algorithm description, not module text
 5091	3228	not-applicable	claude	98d8e93a20fb9e94	modules	algorithm description, not module text
 5091	3229	not-applicable	claude	fdfec581b9d18c0f	modules	algorithm description, not module text
-5208	1890	not-applicable	claude	fc31b0f38a9d7efd	modules	section 5 copy; the IMPLICIT module already omits the IMPLICIT tag
-5272	2063	patched	claude	0296ed44e7306e39	modules	dod(4) -> dod(6) in the module header OID
-5272	4775	not-applicable	claude	7910872ea9735baf	modules	Appendix B example, not module text
-5272	7627	not-applicable	claude	4a8490a03e0cc962	modules	prose
-5272	7628	not-applicable	claude	9be443578d908666	modules	prose
-5272	8027	not-applicable	claude	360ef36265fb18b9	modules	Appendix B example, not module text
-5275	2069	not-applicable	claude	d876ffb6efa81a03	modules	the quoted EnrollmentMessageSyntax import is not in RFC 5275; it is in RFC 5911 SMIMESymmetricKeyDistribution-2009, which already has dod(6)
-5275	5943	not-applicable	claude	1b7306de0b4a1bbd	modules	section 3.1.1 copy; the module already says certificates
-5280	3579	not-applicable	claude	60ac0b13e3f3229a	modules	section 4.2.1.4 copy; the Appendix A.2 module is correct
-5280	5802	not-applicable	claude	fa06e3329f1b2466	modules	comments in section 4.2.1.12; the Appendix A modules do not carry them
-5280	5938	not-applicable	claude	5239001d69ec39d1	modules	prose
-5280	6414	not-applicable	claude	796b33fa9b1941b3	modules	comments in section 4.2.1.12; the Appendix A modules do not carry them
-5280	7658	not-applicable	claude	5d2bf0685bdf571e	modules	prose
-5280	7661	not-applicable	claude	615ce4e9ed69fa3f	modules	prose
-5408	5838	patched	claude	bc381453c8fed540	modules	SEQUENCE SIZE (1..MAX) OF IBEPublicParameter (SIZE was missing) in the module and its earlier copy
-5480	6670	not-applicable	claude	ef6e7e5ec4f0b363	modules	prose / table, not module text
-5480	8026	not-applicable	claude	40be0dacbb045838	modules	prose / table, not module text
-5544	6510	not-applicable	claude	c4a710281a44dbc2	modules	copyright notice
+5208	1890	patched	claude	fc31b0f38a9d7efd	asn1	drops IMPLICIT from attributes [0] in the section 5 inline PrivateKeyInfo, as the IMPLICIT TAGS PKCS-8 module has it
+5246	1585	not-applicable	claude	48c59196151df9ff	asn1	TLS presentation language struct CertificateRequest in A.4.2, not ASN.1
+5246	2643	not-applicable	claude	2bd7057930630d84	asn1	prose of section E.3
+5246	2864	not-applicable	claude	ca213d63d4f64f42	asn1	TLS presentation language struct CertificateRequest, not ASN.1
+5246	2865	not-applicable	claude	9ecb18c6fe9cf627	asn1	TLS presentation language struct CertificateRequest in 7.4.4, not ASN.1
+5246	3122	not-applicable	claude	3e6357b620924ac9	asn1	TLS presentation language enum HandshakeType in A.4, not ASN.1
+5246	3123	not-applicable	claude	3ce20cfeb7fa9386	asn1	TLS presentation language struct ServerKeyExchange in A.4.2, not ASN.1
+5246	4109	not-applicable	claude	0785b95be8f10f20	asn1	TLS presentation language opaque ASN.1Cert vector in A.4.2, not ASN.1
+5246	4507	not-applicable	claude	17f895f0ba495d0e	asn1	prose of section 7.4.1.2
+5246	4750	not-applicable	claude	d67a2a43f2cfc8d0	asn1	prose of section 4.3 (vectors)
+5246	4912	not-applicable	claude	f49ca892f308a93d	asn1	TLS presentation language vector in A.4.1, not ASN.1
+5272	2063	patched	claude	0296ed44e7306e39	asn1	dod(4) -> dod(6) in the Appendix A module header OID; the body has no inline copy of the header
+5272	4775	not-applicable	claude	7910872ea9735baf	asn1	Appendix B example notation (eContentType = id-ct-PKIData), not ASN.1
+5272	7627	not-applicable	claude	4a8490a03e0cc962	asn1	prose of section 6.7 (section reference)
+5272	7628	not-applicable	claude	9be443578d908666	asn1	prose of section 3.2.1.3.1
+5272	8027	not-applicable	claude	360ef36265fb18b9	asn1	Appendix B example notation (issuerSerialNumber = <NULL, 201>), not ASN.1
+5275	2069	not-applicable	claude	d876ffb6efa81a03	asn1	the quoted EnrollmentMessageSyntax import is not in RFC 5275 (its module imports nothing from that module); it is in RFC 5911 SMIMESymmetricKeyDistribution-2009, which already has dod(6)
+5275	5943	patched	claude	1b7306de0b4a1bbd	asn1	GLOwnerInfo component certificate -> certificates in the section 3.1.1 inline ASN.1, as the Appendix A module has it
+5280	3579	patched	claude	60ac0b13e3f3229a	asn1	certificatePolicies -> CertificatePolicies (type reference) in the section 4.2.1.4 inline ASN.1; the Appendix A.2 module already has it right
+5280	5802	patched	claude	fa06e3329f1b2466	asn1	comments on id-kp-serverAuth and id-kp-clientAuth in the section 4.2.1.12 inline ASN.1: TLS WWW server/client authentication -> TLS server/client authentication; the Appendix A modules carry no such comments
+5280	5938	not-applicable	claude	5239001d69ec39d1	asn1	prose of section 6.1
+5280	6414	patched	claude	796b33fa9b1941b3	asn1	key usage comment on id-kp-serverAuth in the section 4.2.1.12 inline ASN.1: digitalSignature and/or (keyEncipherment or keyAgreement); on top of erratum 5802's TLS server authentication line
+5280	7658	not-applicable	claude	5d2bf0685bdf571e	asn1	hyperlink in the prose of section 7.1
+5280	7661	not-applicable	claude	615ce4e9ed69fa3f	asn1	prose of section 3.5
+5408	5838	patched	claude	bc381453c8fed540	asn1	SEQUENCE SIZE (1..MAX) OF IBEPublicParameter (SIZE was missing) in the IBEARCH-module and in the section 4.2 inline copy
+5415	1832	not-applicable	claude	a6102c73de7ff346	asn1	prose of section 4.6.40 (Board Data)
+5415	3187	not-applicable	claude	0e66f9016950101c	asn1	state machine figure in section 2.3, not ASN.1
+5480	6670	not-applicable	claude	ef6e7e5ec4f0b363	asn1	key usage list in the prose of section 3
+5480	8026	not-applicable	claude	40be0dacbb045838	asn1	curve table in section 4, not ASN.1
+5544	6510	not-applicable	claude	c4a710281a44dbc2	asn1	copyright notice
+5636	5935	patched	claude	b620a8062de76304	asn1	Appendix A module IMPORTS: drops the unused PKIX1Explicit88 imports, imports ContentInfo, ContentType (not SignedData) from CryptographicMessageSyntax2004, closes IMPORTS with a semicolon; the module has no name until erratum 5936
+5636	5936	patched	claude	2d566405a6e0e491	asn1	names the Appendix A module RFC5636Module (it had no module name), so it is extracted; with erratum 5935 it has no findings and the section 5.1 inline types are now found in it
+5639	2071	not-applicable	claude	224fa737ec68be01	asn1	test vector p_320 in Appendix A.1, not ASN.1
+5639	2082	not-applicable	claude	dfa39e521f995c2a	asn1	parameter generation algorithm steps in Appendix A.2, not ASN.1
+5639	2083	not-applicable	claude	ffccce0559df33c2	asn1	prose of section 1.1
 5649	6943	not-applicable	claude	3467e22dd0456cb8	modules	prose about plaintext length
 5652	6250	not-applicable	claude	f634200f2ec76ae4	modules	prose in section 9.2
 5652	6546	patched	claude	18f711c9b79fcd63	modules	module comment: imports from Section 12.2 (not Appendix B)

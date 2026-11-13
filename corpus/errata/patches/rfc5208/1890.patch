@@ -1,0 +1,11 @@
+--- a/rfc5208.txt
++++ b/rfc5208.txt
+@@ -126,7 +126,7 @@
+         version                   Version,
+         privateKeyAlgorithm       PrivateKeyAlgorithmIdentifier,
+         privateKey                PrivateKey,
+-        attributes           [0]  IMPLICIT Attributes OPTIONAL }
++        attributes           [0]  Attributes OPTIONAL }
+ 
+       Version ::= INTEGER
+ 

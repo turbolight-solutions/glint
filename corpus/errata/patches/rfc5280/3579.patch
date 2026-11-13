@@ -1,0 +1,11 @@
+--- a/rfc5280.txt
++++ b/rfc5280.txt
+@@ -1856,7 +1856,7 @@
+ 
+    anyPolicy OBJECT IDENTIFIER ::= { id-ce-certificatePolicies 0 }
+ 
+-   certificatePolicies ::= SEQUENCE SIZE (1..MAX) OF PolicyInformation
++   CertificatePolicies ::= SEQUENCE SIZE (1..MAX) OF PolicyInformation
+ 
+    PolicyInformation ::= SEQUENCE {
+         policyIdentifier   CertPolicyId,
