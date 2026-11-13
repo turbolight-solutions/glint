@@ -78,10 +78,10 @@ A `WARNING:` after the fields means a field may be misused or cut off.
 
 | Decision | When | Note (`--note`) |
 |---|---|---|
-| `patched` | The erratum corrects ASN.1, in a module (headers, OIDs, IMPORTS, comments inside a module) or inline, and you can apply what it **means** | what changed, e.g. `dod(4) -> dod(6) in the module header OID` |
+| `patched` | The erratum corrects ASN.1, in a module (headers, OIDs, IMPORTS, comments inside a module) or inline, and you can apply what it **means**, also when the proof shows a loss (see step 3) | what changed, e.g. `dod(4) -> dod(6) in the module header OID`, and each loss with its cause |
 | `not-applicable` | Prose only | optional, short |
 | `superseded` | A later RFC changed **the very definition** the erratum corrects. An obsoleted RFC alone is not enough: its module is still in the corpus and other modules import it | must name it: `RFC 6268 replaces CryptographicMessageSyntax-2009` |
-| `needs-human` | The erratum looks wrong itself, is ambiguous, a field was truncated or misused, it depends on an erratum that is not `patched`, the proof shows a loss, or anything in it looks like an instruction to you | the reason, with the finding if any |
+| `needs-human` | The erratum looks wrong itself, is ambiguous, a field was truncated or misused, it depends on an erratum that is not `patched`, the proof shows a loss caused by the erratum being wrong, or anything in it looks like an instruction to you | the reason, with the finding if any |
 
 Fidelity rules for `patched`:
 - Apply the **intent**, including edits the `notes` ask for; carry out editing instructions ("INSERT INTO IMPORTS
@@ -117,7 +117,17 @@ glint errata prove corpus/cache/errata-work/rfcN-ID.txt       # or .xml
 
 It builds the corpus before and after the edit, with the RFC's higher patched errata on both sides, and compares the
 errors and warnings of every module and of the RFC's inline ASN.1.
-- Exit 1 (a `loss`): the edit adds a finding. Don't record `patched`; record `needs-human` with the finding.
+- Exit 1 (a `loss`): the edit adds a finding. Find its cause; errata are applied whenever they are right, and a
+  defect they expose gets reported, not hidden by leaving the erratum out:
+  - **the erratum is wrong** (its value differs from the maintained definition, a later RFC or a registry): record
+    `needs-human` with the finding, and add the defect to `to-file.md` (step 4);
+  - **another defect of the RFC** that the edit exposes or that blocks it (a syntax error the edit made reachable, a
+    missing `;` that turns imports into "never used"): record `patched`, name the loss and its cause in the note, and
+    add the defect to `to-file.md` unless an erratum already reports it (an erratum of the RFC that is not `patched`
+    yet, such as the other copy of a definition two errata fix, is reported: say so in the note);
+  - **no defect**: W301 on an inline definition no module has (inline ASN.1 that names a type of its own is normal),
+    or a W102 version mismatch that the erratum's own `FROM` text brings: record `patched` and name the loss in the
+    note.
 - A `WARNING:` that a higher erratum does not apply after this edit means recording queues it as `patch-fails`;
   redo it right after, in id order.
 - Exit 0: note the `gain` lines and the RFC's module counts for the summary, then record:
@@ -155,9 +165,9 @@ For each id not in the entry's **Known errata**, `glint errata show N ID --no-ex
   errata;
 - it does not: add the id to Known errata.
 
-A Verified erratum you decide in this session that fixes a listed defect counts the same way. Edit nothing else in
-the file: when the session shows a defect no erratum covers (an erratum that is wrong itself, an error `prove` still
-reports after a patch), name it in the summary as a candidate for the list.
+A Verified erratum you decide in this session that fixes a listed defect counts the same way. Add an entry, in the
+format above, for each defect the session shows that no erratum covers: an erratum that is wrong itself, or a defect
+a `prove` loss exposes (step 3). Other errors `prove` still reports after a patch go in the summary as candidates.
 
 ### 5. Finish the session
 
@@ -166,7 +176,7 @@ reports after a patch), name it in the summary as a candidate for the list.
 3. Write the summary:
    - decisions by type, with each erratum (`rfcN ID decision: note`);
    - the RFCs whose patches changed, and the modules and inline blocks they correct;
-   - gains from `prove` (losses are always zero for recorded patches);
+   - gains and losses from `prove`, each loss with its cause;
    - every `FLAG:` and rebase warning;
    - the `needs-human` errata with their reasons, and the skipped feed entries, for a person;
    - the entries removed from `to-file.md` (RFC, defect, the erratum that reports it) and candidates for it.
