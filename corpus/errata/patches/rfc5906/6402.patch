@@ -1,0 +1,18 @@
+--- a/rfc5906.txt
++++ b/rfc5906.txt
+@@ -3107,12 +3107,11 @@
+    sign the certificate.  It must be identical to the
+    signatureAlgorithm.
+ 
+-   CertificateSerialNumber
+-   SET { ::= INTEGER
+-           Validity ::= SEQUENCE {
++   CertificateSerialNumber ::= INTEGER
++
++   Validity ::= SEQUENCE {
+                    notBefore              UTCTime,
+                    notAfter               UTCTime
+-           }
+    }
+ 
+    The notBefore and notAfter define the period of validity as defined

@@ -1,6 +1,108 @@
 --- a/rfc5934.txt
 +++ b/rfc5934.txt
-@@ -3423,7 +3423,13 @@
+@@ -1193,10 +1193,8 @@
+ 
+    The TAMP Status Query content type has the following syntax:
+ 
+-    CONTENT-TYPE  ::= TYPE-IDENTIFIER
+-
+     tamp-status-query CONTENT-TYPE  ::=
+-       { TAMPStatusQuery IDENTIFIED BY id-ct-TAMP-statusQuery }
++       { TYPE TAMPStatusQuery IDENTIFIED BY id-ct-TAMP-statusQuery }
+ 
+     id-ct-TAMP-statusQuery OBJECT IDENTIFIER ::= { id-tamp 1 }
+ 
+@@ -1351,7 +1349,7 @@
+    The TAMP Status Response content type has the following syntax:
+ 
+     tamp-status-response CONTENT-TYPE  ::=
+-       { TAMPStatusResponse IDENTIFIED BY id-ct-TAMP-statusResponse }
++       { TYPE TAMPStatusResponse IDENTIFIED BY id-ct-TAMP-statusResponse }
+ 
+     id-ct-TAMP-statusResponse OBJECT IDENTIFIER ::= { id-tamp 2 }
+ 
+@@ -1485,7 +1483,7 @@
+    The Trust Anchor Update content type has the following syntax:
+ 
+     tamp-update CONTENT-TYPE  ::=
+-       { TAMPUpdate IDENTIFIED BY id-ct-TAMP-update }
++       { TYPE TAMPUpdate IDENTIFIED BY id-ct-TAMP-update }
+ 
+     id-ct-TAMP-update OBJECT IDENTIFIER ::= { id-tamp 3 }
+ 
+@@ -1762,7 +1760,7 @@
+    syntax:
+ 
+     tamp-update-confirm CONTENT-TYPE  ::=
+-       { TAMPUpdateConfirm IDENTIFIED BY id-ct-TAMP-updateConfirm }
++       { TYPE TAMPUpdateConfirm IDENTIFIED BY id-ct-TAMP-updateConfirm }
+ 
+     id-ct-TAMP-updateConfirm OBJECT IDENTIFIER ::= { id-tamp 4 }
+ 
+@@ -1931,7 +1929,7 @@
+    The Apex Trust Anchor Update content type has the following syntax:
+ 
+     tamp-apex-update CONTENT-TYPE  ::=
+-       { TAMPApexUpdate IDENTIFIED BY id-ct-TAMP-apexUpdate }
++       { TYPE TAMPApexUpdate IDENTIFIED BY id-ct-TAMP-apexUpdate }
+ 
+     id-ct-TAMP-apexUpdate OBJECT IDENTIFIER ::= { id-tamp 5 }
+ 
+@@ -2024,7 +2022,7 @@
+    syntax:
+ 
+     tamp-apex-update-confirm CONTENT-TYPE  ::=
+-       { TAMPApexUpdateConfirm IDENTIFIED BY
++       { TYPE TAMPApexUpdateConfirm IDENTIFIED BY
+          id-ct-TAMP-apexUpdateConfirm }
+ 
+     id-ct-TAMP-apexUpdateConfirm OBJECT IDENTIFIER ::= { id-tamp 6 }
+@@ -2150,7 +2148,7 @@
+    The Community Update content type has the following syntax:
+ 
+     tamp-community-update CONTENT-TYPE  ::=
+-       { TAMPCommunityUpdate IDENTIFIED BY id-ct-TAMP-communityUpdate }
++       { TYPE TAMPCommunityUpdate IDENTIFIED BY id-ct-TAMP-communityUpdate }
+ 
+     id-ct-TAMP-communityUpdate OBJECT IDENTIFIER ::= { id-tamp 7 }
+ 
+@@ -2247,7 +2245,7 @@
+    The Community Update Confirm content type has the following syntax:
+ 
+     tamp-community-update-confirm CONTENT-TYPE  ::=
+-       { TAMPCommunityUpdateConfirm IDENTIFIED BY
++       { TYPE TAMPCommunityUpdateConfirm IDENTIFIED BY
+          id-ct-TAMP-communityUpdateConfirm }
+ 
+     id-ct-TAMP-communityUpdateConfirm OBJECT IDENTIFIER ::=
+@@ -2359,7 +2357,7 @@
+    The Sequence Number Adjust content type has the following syntax:
+ 
+     tamp-sequence-number-adjust CONTENT-TYPE  ::=
+-       { SequenceNumberAdjust IDENTIFIED BY id-ct-TAMP-seqNumAdjust }
++       { TYPE SequenceNumberAdjust IDENTIFIED BY id-ct-TAMP-seqNumAdjust }
+ 
+     id-ct-TAMP-seqNumAdjust OBJECT IDENTIFIER ::= { id-tamp 10 }
+ 
+@@ -2416,7 +2414,7 @@
+    syntax:
+ 
+     tamp-sequence-number-adjust-confirm CONTENT-TYPE  ::=
+-       { SequenceNumberAdjustConfirm IDENTIFIED BY
++       { TYPE SequenceNumberAdjustConfirm IDENTIFIED BY
+          id-ct-TAMP-seqNumAdjustConfirm }
+ 
+     id-ct-TAMP-seqNumAdjustConfirm OBJECT IDENTIFIER ::=
+@@ -2471,7 +2469,7 @@
+    The TAMP Error message content type has the following syntax:
+ 
+     tamp-error CONTENT-TYPE  ::=
+-       { TAMPError IDENTIFIED BY id-ct-TAMP-error }
++       { TYPE TAMPError IDENTIFIED BY id-ct-TAMP-error }
+ 
+     id-ct-TAMP-error OBJECT IDENTIFIER ::= { id-tamp 9 }
+ 
+@@ -3423,7 +3421,13 @@
     FROM PKIX-CommonTypes-2009 -- from [RFC5912]
        { iso(1) identified-organization(3) dod(6) internet(1)
        security(5) mechanisms(5) pkix(7) id-mod(0)
@@ -15,7 +117,7 @@
  
     -- Object Identifier Arc for TAMP Message Content Types
  
-@@ -3443,8 +3449,6 @@
+@@ -3443,8 +3447,6 @@
  
     -- CMS Content Types
  
@@ -24,7 +126,7 @@
     TAMPContentTypes CONTENT-TYPE  ::= {
       tamp-status-query |
       tamp-status-response |
-@@ -3462,7 +3466,7 @@
+@@ -3462,7 +3464,7 @@
  
     -- TAMP Status Query Message
     tamp-status-query CONTENT-TYPE  ::=
@@ -33,7 +135,7 @@
  
     id-ct-TAMP-statusQuery OBJECT IDENTIFIER ::= { id-tamp 1 }
  
-@@ -3519,7 +3523,7 @@
+@@ -3519,7 +3521,7 @@
     -- TAMP Status Response Message
  
     tamp-status-response CONTENT-TYPE  ::=
@@ -42,7 +144,7 @@
  
     id-ct-TAMP-statusResponse OBJECT IDENTIFIER ::= { id-tamp 2 }
  
-@@ -3567,7 +3571,7 @@
+@@ -3567,7 +3569,7 @@
     -- Trust Anchor Update Message
  
     tamp-update CONTENT-TYPE  ::=
@@ -51,7 +153,7 @@
  
     id-ct-TAMP-update OBJECT IDENTIFIER ::= { id-tamp 3 }
  
-@@ -3617,7 +3621,7 @@
+@@ -3617,7 +3619,7 @@
     -- Trust Anchor Update Confirm Message
  
     tamp-update-confirm CONTENT-TYPE  ::=
@@ -60,7 +162,7 @@
  
     id-ct-TAMP-updateConfirm OBJECT IDENTIFIER ::= { id-tamp 4 }
  
-@@ -3653,7 +3657,7 @@
+@@ -3653,7 +3655,7 @@
     -- Apex Trust Anchor Update Message
  
     tamp-apex-update CONTENT-TYPE  ::=
@@ -69,7 +171,7 @@
  
     id-ct-TAMP-apexUpdate OBJECT IDENTIFIER ::= { id-tamp 5 }
  
-@@ -3669,7 +3673,7 @@
+@@ -3669,7 +3671,7 @@
     -- Apex Trust Anchor Update Confirm Message
  
     tamp-apex-update-confirm CONTENT-TYPE  ::=
@@ -78,7 +180,7 @@
           id-ct-TAMP-apexUpdateConfirm }
  
     id-ct-TAMP-apexUpdateConfirm OBJECT IDENTIFIER ::= { id-tamp 6 }
-@@ -3703,7 +3707,7 @@
+@@ -3703,7 +3705,7 @@
     -- Community Update Message
  
     tamp-community-update CONTENT-TYPE  ::=
@@ -87,7 +189,7 @@
  
     id-ct-TAMP-communityUpdate OBJECT IDENTIFIER ::= { id-tamp 7 }
  
-@@ -3721,7 +3725,7 @@
+@@ -3721,7 +3723,7 @@
     -- Community Update Confirm Message
  
     tamp-community-update-confirm CONTENT-TYPE  ::=
@@ -96,7 +198,7 @@
         id-ct-TAMP-communityUpdateConfirm }
  
     id-ct-TAMP-communityUpdateConfirm OBJECT IDENTIFIER ::=
-@@ -3745,7 +3749,7 @@
+@@ -3745,7 +3747,7 @@
     -- Sequence Number Adjust Message
  
     tamp-sequence-number-adjust CONTENT-TYPE  ::=
@@ -105,7 +207,7 @@
  
     id-ct-TAMP-seqNumAdjust OBJECT IDENTIFIER ::= { id-tamp 10 }
  
-@@ -3764,7 +3768,7 @@
+@@ -3764,7 +3766,7 @@
     -- Sequence Number Adjust Confirm Message
  
     tamp-sequence-number-adjust-confirm CONTENT-TYPE  ::=
@@ -114,7 +216,7 @@
         id-ct-TAMP-seqNumAdjustConfirm }
  
     id-ct-TAMP-seqNumAdjustConfirm OBJECT IDENTIFIER ::= { id-tamp 11 }
-@@ -3777,7 +3781,7 @@
+@@ -3777,7 +3779,7 @@
     -- TAMP Error Message
  
     tamp-error CONTENT-TYPE  ::=

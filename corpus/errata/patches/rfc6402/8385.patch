@@ -1,0 +1,15 @@
+--- a/rfc6402.txt
++++ b/rfc6402.txt
+@@ -462,10 +462,10 @@
+ 
+       ChangeSubjectName ::= SEQUENCE {
+           subject             Name OPTIONAL,
+-          subjectAlt          SubjectAltName OPTIONAL
++          subjectAlt          [1] SubjectAltName OPTIONAL
+       }
+       (WITH COMPONENTS {..., subject PRESENT} |
+-            COMPONENTS {..., subjectAlt PRESENT} )
++       WITH COMPONENTS {..., subjectAlt PRESENT} )
+ 
+    The attribute is designed to be used as an ATTRIBUTE object.  As
+    such, the attribute is placed in one of the following two places:

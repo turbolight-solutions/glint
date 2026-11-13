@@ -63,6 +63,13 @@ A `;` after the `PKIX1Explicit88` import ends `IMPORTS` early, so `SMIMECapabili
 drop that `;`. Glint `E001`.
 Known errata: 5892.
 
+## RFC 6277, OCSP-AGILITY-2009
+
+Erratum 5892 (patched) changes `pubKeyAlgIdentifier` to `AlgorithmIdentifier{PUBLIC-KEY, {...}}`, the only use of
+`SMIMECapability`, but the module still imports `SMIMECapability` from `AlgorithmInformation-2009`. Fix: remove it from
+the `IMPORTS`. Glint `W112`.
+Known errata: 5892.
+
 ## RFC 5275, SMIMESymmetricKeyDistribution
 
 `DEFAULT { id-aes128-wrap }` is a `SEQUENCE` value without its component name. Fix:
@@ -76,6 +83,12 @@ with `...16.0.37` (`CryptographicMessageSyntaxAlgorithms-2009`) and `EnrollmentM
 (`EnrollmentMessageSyntax-2009`). Glint resolves them by identifier; tools that look modules up by name do not. Fix:
 the `-2009` names. Glint `W144`.
 Known errata: 2612, 2648, 2665, 3128, 9285.
+
+## RFC 5915, ECPrivateKey
+
+Erratum 3962 (patched) drops the `{{ NamedCurve }}` actual parameter from `ECPrivateKey.parameters`, its only use, but
+the module still imports `NamedCurve` from `PKIXAlgs-2009`. Fix: remove `NamedCurve` from the `IMPORTS`. Glint `W112`.
+Known errata: 2698, 3962, 5008.
 
 ## RFC 4073, ContentCollectionModule
 

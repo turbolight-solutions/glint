@@ -208,28 +208,33 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 5639	2071	not-applicable	claude	224fa737ec68be01	asn1	test vector p_320 in Appendix A.1, not ASN.1
 5639	2082	not-applicable	claude	dfa39e521f995c2a	asn1	parameter generation algorithm steps in Appendix A.2, not ASN.1
 5639	2083	not-applicable	claude	ffccce0559df33c2	asn1	prose of section 1.1
-5649	6943	not-applicable	claude	3467e22dd0456cb8	modules	prose about plaintext length
-5652	6250	not-applicable	claude	f634200f2ec76ae4	modules	prose in section 9.2
-5652	6546	patched	claude	18f711c9b79fcd63	modules	module comment: imports from Section 12.2 (not Appendix B)
+5639	2084	not-applicable	claude	2310d27a8d7cecd3	asn1	prose of section 2 (GF(p) -> F_p)
+5639	4701	not-applicable	claude	db264ac6fa996078	asn1	seed label in the Appendix A.2 prose list, not ASN.1
+5639	5075	not-applicable	claude	5ae895980352666a	asn1	author name in the prose of section 2.2 and reference [BJ]
+5649	6943	not-applicable	claude	3467e22dd0456cb8	asn1	prose about the plaintext length range
+5652	6250	not-applicable	claude	f634200f2ec76ae4	asn1	prose in section 9.2 (MAC calculation, not message digest)
+5652	6546	patched	claude	18f711c9b79fcd63	asn1	module comment: imports from Section 12.2 (not Appendix B) in CryptographicMessageSyntax2004; no inline copy of the IMPORTS
 5751	2143	not-applicable	claude	ed1800f3e3a1a1ed	modules	table / example, not module text
 5751	2708	not-applicable	claude	60af66a64bb893c3	modules	table / example, not module text
-5752	3670	not-applicable	claude	dc65344e4dda00f5	modules	prose (section reference)
-5752	4444	patched	claude	4214992e98860050	modules	id-aa-multipleSignatures is pkcs9(9) smime(16) id-aa(2) 51, in section 3 and the Appendix A module
-5753	8087	patched	claude	5ae00f4e4e8b72bd	modules	comma after CCMParameters in the A.1 module IMPORTS
-5755	3731	not-applicable	claude	0bcb287ed493f121	modules	prose / profile table, not module text
-5755	4541	not-applicable	claude	bc5cc631534e83e0	modules	prose / profile table, not module text
-5755	6567	patched	claude	81dba03a42855ec4	modules	Appendix B module no longer imports the unused CRLDistributionPoint from PKIX1Implicit88
+5752	3670	not-applicable	claude	dc65344e4dda00f5	asn1	section reference in the prose of section 4.3
+5752	4444	patched	claude	4214992e98860050	asn1	id-aa-multipleSignatures is pkcs9(9) smime(16) id-aa(2) 51 in the section 3 inline ASN.1 and the Appendix A module MultipleSignatures-2008 (the notes name both)
+5753	8087	patched	claude	5ae00f4e4e8b72bd	asn1	comma after CCMParameters in the CMSECCAlgs-2009-88 IMPORTS (no other copy; the -02 module imports other names); clears E001; loss: 8 W112 for the CCM/GCM imports, which the module cites only in comments, as it does every other import (no defect)
+5754	2693	not-applicable	claude	ed56861191d7a34c	asn1	OID name pattern in the prose of section 3.3
+5754	4846	not-applicable	claude	e644781ebf5e0505	asn1	DSA -> RSA in the prose of section 3.2
+5755	3731	not-applicable	claude	0bcb287ed493f121	asn1	encapsulatedContentInfo -> encryptedContentInfo in the prose of section 7.1
+5755	4541	not-applicable	claude	bc5cc631534e83e0	asn1	extension name in the section 4.3.4 profile table, not ASN.1
+5755	6567	patched	claude	81dba03a42855ec4	asn1	PKIXAttributeCertificate-2008 (Appendix B module) no longer imports the unused CRLDistributionPoint from PKIX1Implicit88; no inline copy of the IMPORTS
 5794	2064	patched	claude	935cbe55065b5f3c	modules	korea(400) -> korea(410) in the module header OID
-5906	3345	not-applicable	claude	45f16fc2ec54ba0a	modules	prose / table of contents; no module in RFC 5906
-5906	3346	not-applicable	claude	655c5314d6a71cd9	modules	prose / table of contents; no module in RFC 5906
-5906	3349	not-applicable	claude	755950dcead20e9e	modules	prose / table of contents; no module in RFC 5906
-5906	4026	not-applicable	claude	11d6bfd99e187b42	modules	prose / table of contents; no module in RFC 5906
-5906	6402	not-applicable	claude	0498228265e4aef5	modules	Appendix J ASN.1 fragment, not a module; the asn1 filter extracts nothing from RFC 5906
-5906	8204	not-applicable	claude	1b9f60951f4a8748	modules	prose / table of contents; no module in RFC 5906
-5911	2612	patched	human	8ecd951c4aefc8d1	modules	CONTENT-TYPE becomes the class from the erratum notes ([TYPE &Type] IDENTIFIED BY &id, &Type OPTIONAL); ct-Data loses OCTET STRING; TYPE added to the other 9 content types in CryptographicMessageSyntax-2009, CMSFirmwareWrapper-2009, ExtendedSecurityServices-2009 and CMS-AuthEnvelopedData-2009
-5911	2648	patched	claude	36ab612db25d4d6a	modules	AttributeCertificateVersion1-2009 import moved to the PKIX module arc (erratum 2665 fixes the remaining member-body(2) node)
-5911	2665	patched	claude	92f769d3975af635	modules	AttributeCertificateVersion1-2009 import OID: identified-organization(3), not member-body(2)
-5911	3128	patched	claude	7d02d4513bb6d52e	modules	section 8 module imports ContentInfo FROM CryptographicMessageSyntax-2009 (was CryptographicMessageSyntax2004)
+5906	3345	not-applicable	claude	45f16fc2ec54ba0a	asn1	VAL -> CERT bit in the prose of section 5
+5906	3346	not-applicable	claude	655c5314d6a71cd9	asn1	IFF -> VRFY bit in the prose of section 5
+5906	3349	not-applicable	claude	755950dcead20e9e	asn1	LPT -> LEAP bit in the prose of section 5
+5906	4026	not-applicable	claude	11d6bfd99e187b42	asn1	MAC length 22 -> 24 in the prose of section 10
+5906	6402	patched	claude	0498228265e4aef5	asn1	Appendix J inline ASN.1: CertificateSerialNumber ::= INTEGER and Validity ::= SEQUENCE as two definitions (the SET { } wrapper removed); the only copy
+5906	8204	not-applicable	claude	1b9f60951f4a8748	asn1	table of contents numbering
+5911	2612	patched	human	8ecd951c4aefc8d1	asn1	CONTENT-TYPE becomes the class from the notes ([TYPE &Type] IDENTIFIED BY &id, &Type OPTIONAL); ct-Data loses OCTET STRING; TYPE added to the other 9 content types in CryptographicMessageSyntax-2009, CMSFirmwareWrapper-2009, ExtendedSecurityServices-2009, CMS-AuthEnvelopedData-2009; no inline copy. Loss: 2 E152 in RFC 9939 PrivateKeyInfoContentTypes (old syntax, reported by erratum 9287) and 2 in a draft's AsymmetricKeyPackageModuleV1-2026 (old syntax)
+5911	2648	patched	claude	36ab612db25d4d6a	asn1	AttributeCertificateVersion1-2009 import in CryptographicMessageSyntax-2009 moved to the PKIX module arc; no inline copy. Loss: W102 for the member-body(2) node the erratum keeps, which erratum 2665 reports and corrects
+5911	2665	patched	claude	92f769d3975af635	asn1	AttributeCertificateVersion1-2009 import OID in CryptographicMessageSyntax-2009: identified-organization(3), not member-body(2) (on top of erratum 2648); no inline copy
+5911	3128	patched	claude	7d02d4513bb6d52e	asn1	ERS module (section 8) imports ContentInfo FROM CryptographicMessageSyntax-2009 (was CryptographicMessageSyntax2004); no inline copy
 5912	2649	patched	human	accc1f2cfa342abd	modules	module header OID moved to the PKIX arc, identified-organization(3) dod(6) ... pkix(7) id-mod(0) id-mod-v1AttrCert-02(49), as pending erratum 9255 corrects (the verified text has member-body(2) dod(6)); matches the RFC 5911 and RFC 6268 imports
 5912	2839	patched	claude	237dde456be4baf1	modules	adds anyPolicy OBJECT IDENTIFIER ::= { id-ce-certificatePolicies 0 } to PKIX1Implicit-2009 (as in RFC 5280)
 5912	3130	patched	human	3df522bd9cf90029	modules	TYPE added to ct-encKeyWithID, the four ct-scvp-* content types, ct-PKIData and ct-PKIResponse (needs RFC 5911 erratum 2612)
@@ -238,30 +243,34 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 5912	3692	patched	claude	0b207fb77e84827a	modules	adds ext-AuthorityInfoAccess to crlExtensions (RFC 5280 section 5.2.7)
 5912	4244	patched	claude	438ea3e74bdb5a35	modules	at-x520StateOrProvinceName, at-x520OrganizationName, at-x520OrganizationalUnitName use their X520* types
 5912	6806	patched	claude	e47bc0103c8f154d	modules	pk-rsa: PARAMS TYPE NULL ARE required (RFC 3279 section 2.3.1)
-5913	5890	not-applicable	claude	57989ac18be743e6	modules	section 3 copy; the Appendix A module already says id-pe-clearanceConstraints
-5914	2667	patched	human	7751c50cb68bc6cf	modules	module imports CONTENT-TYPE from CryptographicMessageSyntax-2009 instead of defining PKCS7-CONTENT-TYPE; TYPE added to trust-anchor-list (needs RFC 5911 erratum 2612)
-5915	2698	not-applicable	claude	8136d343f886affe	modules	prose about PEM encoding
-5915	3962	patched	claude	d73421058f59b7ce	modules	ECPrivateKey: parameters [0] ECParameters (not parameterized) in section 3 and the Appendix A module
-5917	4537	not-applicable	claude	ab4c43f3468da981	modules	prose / references
-5917	5883	patched	claude	40a6c055c6d291db	modules	Appendix A module: adds the missing FROM before PKIX1Explicit-2009 (and id-mod-pkix1-explicit-02 in the OID text)
-5917	5884	patched	claude	bc4aa1f3e7a8aedb	modules	WITH COMPONENTS { uTF8String PRESENT } (DirectoryString's spelling) in the module and its section 3 copy
-5934	2668	patched	human	254f9c59b1bc0c09	modules	module imports CONTENT-TYPE from CryptographicMessageSyntax-2009 instead of defining it; TYPE added to the 11 TAMP content types in the module (needs RFC 5911 erratum 2612)
-5934	8191	not-applicable	claude	747e234819e420fc	modules	prose (appendix reference)
-5958	2653	patched	human	ca9ce67e02d0647c	modules	TYPE added to ct-asymmetric-key-package in section 2 and the module (needs RFC 5911 erratum 2612)
-5958	8490	patched	claude	b07bc6b656a34fdd	modules	commented-out version 2 publicKey in the module: closing parenthesis and ]] added
+5913	5890	patched	claude	57989ac18be743e6	asn1	id-pe-authorityClearanceConstraints -> id-pe-clearanceConstraints in the section 3 inline ASN.1, as the Appendix A module ClearanceConstraints names it
+5914	2667	patched	human	7751c50cb68bc6cf	asn1	TrustAnchorInfoModule imports CONTENT-TYPE from CryptographicMessageSyntax-2009 instead of defining PKCS7-CONTENT-TYPE; trust-anchor-list is CONTENT-TYPE with TYPE, in the module and in the section 3 inline copy (the notes say the definition must use the CMS class); needs RFC 5911 erratum 2612, patched
+5915	2698	not-applicable	claude	8136d343f886affe	asn1	PEM encoding prose in section 4
+5915	3962	patched	claude	d73421058f59b7ce	asn1	ECPrivateKey: parameters [0] ECParameters (not parameterized) in the section 3 inline ASN.1 and the Appendix A module; clears E160. Loss: W112, NamedCurve is still imported from PKIXAlgs-2009 but no longer used (no erratum reports it; to-file.md)
+5917	4537	not-applicable	claude	ab4c43f3468da981	asn1	reference in the introduction prose and the references section
+5917	5883	patched	claude	40a6c055c6d291db	asn1	ClearanceSponsorAttribute-2008 IMPORTS: adds the missing FROM before PKIX1Explicit-2009 and id-mod-pkix1-explicit-02 in the OID text; no inline copy; clears E001, E110. Loss: W102, the now-parsed SelectedAttributeTypes import names X.520 edition 4 (the corpus has 7), a version mismatch, not a defect
+5917	5884	patched	claude	bc4aa1f3e7a8aedb	asn1	WITH COMPONENTS { uTF8String PRESENT } (DirectoryString's spelling) in the Appendix A module and, a name typo, in the section 2 inline copy
+5934	2668	patched	human	254f9c59b1bc0c09	asn1	TAMP-Protocol-v2 imports CONTENT-TYPE from CryptographicMessageSyntax-2009 instead of defining it; TYPE added to the 11 TAMP content types in the module and in their section 4.1-4.11 inline copies, and the section 4.1 inline CONTENT-TYPE ::= TYPE-IDENTIFIER removed (the notes: all CONTENT-TYPE objects need TYPE, and the CMS class itself must be used); needs RFC 5911 erratum 2612, patched
+5934	8191	not-applicable	claude	747e234819e420fc	asn1	appendix reference in the prose of section 1
+5958	2653	patched	human	ca9ce67e02d0647c	asn1	TYPE added to ct-asymmetric-key-package in the section 2 inline ASN.1 and the Appendix A module AsymmetricKeyPackageModuleV1 (both named by the erratum); needs RFC 5911 erratum 2612, patched; clears 2 E152
+5958	8490	patched	claude	b07bc6b656a34fdd	asn1	commented-out version 2 publicKey in the Appendix A module: closing parenthesis and ]] added; the section 2 inline copy has no such comment
 5996	2707	not-applicable	claude	decc058d028ba143	modules	prose
 5996	3036	not-applicable	claude	f4947314e7928201	modules	prose
-6010	2666	patched	human	eb7671404570d21b	modules	ct-Any becomes {TYPE NULL IDENTIFIED BY id-ct-anyContentType} (needs RFC 5911 erratum 2612)
-6031	2760	patched	claude	0051b9201f7c73af	modules	PSKCAlgorithmParameters is a SEQUENCE (not CHOICE) in section 3.2.7 and the A.2 module, as in RFC 6030 erratum 2759
-6210	3866	patched	claude	c689ec8e2f7e4fe1	modules	id-mod-MD5-XOR-EXPERIMENT(999) -> (49) in the module header OID
-6277	5892	patched	claude	b4b2b2a040da8693	modules	PreferredSignatureAlgorithm.pubKeyAlgIdentifier is AlgorithmIdentifier{PUBLIC-KEY, {...}} in the A.1 module (as RFC 6960)
-6402	3860	patched	claude	11b98c953c47a8e6	modules	A.1 module header OID id-mod-enrollMsgSyntax-2011-88(75) (both modules had 76)
-6402	5931	patched	claude	25e9342fcc9f0398	modules	id-kp-cmcArchive is { id-kp 29 } in the A.1 module (as in A.2)
-6402	6571	patched	claude	48dcb91e1ae5d826	modules	A.1 module: extendedFailInfo [1] SEQUENCE (tag needed, as in A.2)
-6402	8385	not-applicable	claude	5b410e53a082df5f	modules	section 2.8 copy of ChangeSubjectName; the module copies need the tag from erratum 3943, which is not in the Verified queue
-6482	3166	not-applicable	claude	5c2b31df07a0b888	modules	prose / table of contents
-6482	5609	not-applicable	claude	fb65d30fe43f97fa	modules	prose / table of contents
-6482	5881	patched	claude	679e985e8d3d02bd	modules	adds id-ct-routeOriginAuthz (1.2.840.113549.1.9.16.1.24) to the RPKI-ROA module
+6010	2666	patched	human	eb7671404570d21b	asn1	ct-Any becomes {TYPE NULL IDENTIFIED BY id-ct-anyContentType} in the CMSContentConstraintsCertExtn module; no inline copy; needs RFC 5911 erratum 2612, patched; clears 2 E152
+6031	2760	patched	claude	0051b9201f7c73af	asn1	PSKCAlgorithmParameters is a SEQUENCE (not CHOICE) in the section 3.2.7 inline ASN.1 and the A.2 module PSKCAttributesModule (both named), as in RFC 6030 erratum 2759
+6066	3283	not-applicable	claude	fe306f4cc6b1eb80	asn1	prose of Appendix A (ServerNameList cardinality)
+6066	4817	not-applicable	claude	64b92f4c67034270	asn1	ResponderIDs in the prose of section 8
+6112	3743	not-applicable	claude	c7a53aec3e36e1b9	asn1	pepper2 string in the prose of section 7, not ASN.1
+6210	3866	patched	claude	c689ec8e2f7e4fe1	asn1	id-mod-MD5-XOR-EXPERIMENT(999) -> (49) in the MD5-HASH-EXPERIMENT module header OID; no inline copy of the header
+6234	5179	not-applicable	claude	0dd673aa126f1690	asn1	comment in the C test driver of section 8.5
+6277	5892	patched	claude	b4b2b2a040da8693	asn1	PreferredSignatureAlgorithm.pubKeyAlgIdentifier is AlgorithmIdentifier{PUBLIC-KEY, {...}} in the A.1 module OCSP-AGILITY-2009 (as RFC 6960); clears E160; the section 4 inline and 88 copies use the valid 1988 SMIMECapability form. Loss: W112, SMIMECapability is still imported but no longer used (no erratum reports it; to-file.md)
+6402	3860	patched	claude	11b98c953c47a8e6	asn1	A.1 module EnrollmentMessageSyntax-2011-v88 header OID id-mod-enrollMsgSyntax-2011-88(75) (both modules had 76); no inline copy of the header
+6402	5931	patched	claude	25e9342fcc9f0398	asn1	id-kp-cmcArchive is { id-kp 29 } in the A.1 module (as in A.2); the section 2.10 inline copy already has 29
+6402	6571	patched	claude	48dcb91e1ae5d826	asn1	A.1 module EnrollmentMessageSyntax-2011-v88: extendedFailInfo [1] SEQUENCE (tag needed, as in A.2); clears E120; no inline copy
+6402	8385	patched	claude	5b410e53a082df5f	asn1	section 2.8 inline ChangeSubjectName: WITH added before the second COMPONENTS, and subjectAlt [1] tag, as written. Loss: E300 against the A.1 module copy, whose subjectAlt GeneralNames has no tag (nor do A.2's): the missing tag is the defect Held erratum 3943 reports
+6482	3166	not-applicable	claude	5c2b31df07a0b888	asn1	prose of section 4 (no inherit in ROA EE certificates)
+6482	5609	not-applicable	claude	fb65d30fe43f97fa	asn1	table of contents
+6482	5881	patched	claude	679e985e8d3d02bd	asn1	adds id-ct-routeOriginAuthz (1.2.840.113549.1.9.16.1.24) to the RPKI-ROA module, as the erratum instructs; the section 3 inline ASN.1 has no OID to correct
 6494	3655	not-applicable	claude	84b81a4efda8bc06	modules	prose (section references)
 6960	5891	patched	claude	9a0d00462da21ba0	modules	B.2 module imports CRLReason from PKIX1Implicit-2009
 6960	6165	not-applicable	claude	ef94d647d6eecb57	modules	prose
