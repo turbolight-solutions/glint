@@ -271,10 +271,28 @@ fn occurrences(lines: &[&str], needle: &[String]) -> Vec<usize> {
 
 /// Applies `patch` to `text`; see the module documentation for the rules. The error names the hunk that fails.
 pub fn apply_patch(text: &str, patch: &str, source: Source) -> Result<String, PatchError> {
+    apply_hunks(text, &parse_patch(patch, source)?).map(|(text, _)| text)
+}
+
+/// Where one hunk of a patch landed: it replaced `old_lines` lines of the text it was applied to, from the 0-based line
+/// `start`, with `new_lines` lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Placement {
+    pub start: usize,
+    pub old_lines: usize,
+    pub new_lines: usize,
+}
+
+/// [`apply_patch`], also saying where each hunk landed, in hunk order.
+pub fn apply_patch_placed(
+    text: &str,
+    patch: &str,
+    source: Source,
+) -> Result<(String, Vec<Placement>), PatchError> {
     apply_hunks(text, &parse_patch(patch, source)?)
 }
 
-fn apply_hunks(text: &str, hunks: &[Hunk]) -> Result<String, PatchError> {
+fn apply_hunks(text: &str, hunks: &[Hunk]) -> Result<(String, Vec<Placement>), PatchError> {
     let lines = split_lines(text);
     let mut spans: Vec<(usize, usize, &Hunk)> = Vec::new();
     for hunk in hunks {
@@ -333,7 +351,74 @@ fn apply_hunks(text: &str, hunks: &[Hunk]) -> Result<String, PatchError> {
         position = *end;
     }
     out.extend(lines.get(position..).unwrap_or_default().iter().copied());
-    Ok(out)
+    let placements = spans
+        .iter()
+        .map(|(start, end, hunk)| Placement {
+            start: *start,
+            old_lines: end.saturating_sub(*start),
+            new_lines: hunk.new.len(),
+        })
+        .collect();
+    Ok((out, placements))
+}
+
+/// Lines `start..=end` of a text, 1-based. `end == start - 1` is the empty place before line `start` (after the last
+/// line when `start` is one past it): where a hunk with no new lines removed its lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Where line boundary `p` (before the 0-based line `p`) of the text a patch was applied to is in the text it made. A
+/// boundary inside the lines a hunk replaced maps to the start of the hunk's new lines, or with `end` to their end, so
+/// a range that overlaps a hunk widens to cover the hunk's new lines.
+fn map_boundary(p: usize, step: &[Placement], end: bool) -> usize {
+    // The same boundary in the old and the new text, after the hunks seen so far.
+    let (mut old_at, mut new_at) = (0usize, 0usize);
+    for hunk in step {
+        let new_start = new_at.saturating_add(hunk.start.saturating_sub(old_at));
+        if p <= hunk.start {
+            return new_at.saturating_add(p.saturating_sub(old_at));
+        }
+        let new_end = new_start.saturating_add(hunk.new_lines);
+        if p < hunk.start.saturating_add(hunk.old_lines) {
+            return if end { new_end } else { new_start };
+        }
+        old_at = hunk.start.saturating_add(hunk.old_lines);
+        new_at = new_end;
+    }
+    new_at.saturating_add(p.saturating_sub(old_at))
+}
+
+/// For a series of patches applied in order, where `steps` are the [`Placement`]s of each, the lines each hunk's new
+/// side (context and added lines) occupies in the text after the last patch. A later hunk that changes lines before a
+/// range shifts it; one that replaces lines inside it (or around an empty range) widens it to cover that hunk's new
+/// lines; one that replaces all of it leaves it the later hunk's new lines.
+pub fn final_hunk_lines(steps: &[Vec<Placement>]) -> Vec<Vec<LineRange>> {
+    steps
+        .iter()
+        .enumerate()
+        .map(|(k, step)| {
+            let later = steps.get(k.saturating_add(1)..).unwrap_or_default();
+            let (mut old_at, mut new_at) = (0usize, 0usize);
+            step.iter()
+                .map(|hunk| {
+                    let start = new_at.saturating_add(hunk.start.saturating_sub(old_at));
+                    let end = start.saturating_add(hunk.new_lines);
+                    old_at = hunk.start.saturating_add(hunk.old_lines);
+                    new_at = end;
+                    let (start, end) = later.iter().fold((start, end), |(s, e), next| {
+                        (map_boundary(s, next, false), map_boundary(e, next, true))
+                    });
+                    LineRange {
+                        start: start.saturating_add(1),
+                        end,
+                    }
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// The 1-based line of `text` where each hunk of `patch` first changes it: its first removed line, or for a pure
@@ -723,6 +808,82 @@ mod tests {
         let base = numbered(10);
         let patch = make(&base, &base.replace("line 6\n", "six\n"));
         assert_eq!(changed_lines(&patch, SOURCE, &base), Ok(vec![6]));
+    }
+
+    /// The text after applying `patches` in order, and the placements of each.
+    fn placed(base: &str, patches: &[&str]) -> (String, Vec<Vec<Placement>>) {
+        let mut text = base.to_owned();
+        let mut steps = Vec::new();
+        for patch in patches {
+            let (next, placements) = apply_patch_placed(&text, patch, SOURCE).unwrap();
+            assert_eq!(apply(&text, patch), Ok(next.clone()));
+            text = next;
+            steps.push(placements);
+        }
+        (text, steps)
+    }
+
+    fn lines_of(text: &str, range: LineRange) -> Vec<String> {
+        split_lines(text)
+            .get(range.start.saturating_sub(1)..range.end)
+            .unwrap()
+            .iter()
+            .map(|line| (*line).to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn hunk_lines_follow_later_patches_of_the_series() {
+        let base = numbered(30);
+        let t1 = base.replace("line 20\n", "twenty\n");
+        let p1 = make(&base, &t1);
+        let t2 = t1.replace("line 5\n", "line 5\nnew a\nnew b\n");
+        let p2 = make(&t1, &t2);
+        // A pure deletion without context: line 12 of the base, line 14 after p2.
+        let p3 = "--- a/rfc100.txt\n+++ b/rfc100.txt\n@@ -14 +13,0 @@\n-line 12\n";
+        let (text, steps) = placed(&base, &[&p1, &p2, p3]);
+        assert_eq!(text, t2.replace("line 12\n", ""));
+        let ranges = final_hunk_lines(&steps);
+        let line = |start, end| LineRange { start, end };
+        // p1's lines 17-23 move down 2 for p2's insertion and up 1 for p3's deletion.
+        assert_eq!(
+            ranges,
+            [vec![line(18, 24)], vec![line(3, 10)], vec![line(14, 13)]]
+        );
+        for (patch, hunks) in [&p1, &p2].iter().zip(&ranges) {
+            let parsed = parse_patch(patch, SOURCE).unwrap();
+            for (hunk, range) in parsed.iter().zip(hunks) {
+                assert_eq!(lines_of(&text, *range), hunk.new);
+            }
+        }
+        assert!(lines_of(&text, ranges[2][0]).is_empty());
+        assert_eq!(lines_of(&text, line(14, 14)), ["line 13\n"]);
+    }
+
+    #[test]
+    fn a_later_hunk_overlapping_a_range_widens_it() {
+        let base = numbered(20);
+        let t1 = base.replace("line 10\n", "ten\n");
+        let t2 = t1.replace("line 14\n", "fourteen\n");
+        let (p1, p2) = (make(&base, &t1), make(&t1, &t2));
+        let (_, steps) = placed(&base, &[&p1, &p2]);
+        // p2's hunk replaces lines 11-17, the end of p1's lines 7-13: p1's range now ends where p2's does.
+        assert_eq!(
+            final_hunk_lines(&steps),
+            [
+                vec![LineRange { start: 7, end: 17 }],
+                vec![LineRange { start: 11, end: 17 }]
+            ]
+        );
+        // A later hunk around an empty range widens it to the hunk's new lines.
+        let cut = "--- a/rfc100.txt\n+++ b/rfc100.txt\n@@ -5 +4,0 @@\n-line 5\n";
+        let without = base.replace("line 5\n", "");
+        let six = make(&without, &without.replace("line 6\n", "six\n"));
+        let (_, steps) = placed(&base, &[cut, &six]);
+        assert_eq!(
+            final_hunk_lines(&steps).first(),
+            Some(&vec![LineRange { start: 2, end: 8 }])
+        );
     }
 
     #[test]

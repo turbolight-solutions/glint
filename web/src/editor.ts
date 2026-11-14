@@ -71,6 +71,8 @@ export interface EditorHandle {
   setHighlighting(enabled: boolean): void;
   setMarkers(markers: LintDiagnostic[]): void;
   reveal(from: number, to: number): void;
+  /** Selects lines `start..end` (1-based, inclusive); with `end < start`, puts the cursor at the start of line `start`. */
+  revealLines(start: number, end: number): void;
   /** A fresh state with this editor's extensions, for a document that is not on screen yet. */
   newState(doc?: string): EditorState;
   /** Shows another state in the same view; `scroll` is a value from `scrollSnapshot`. */
@@ -149,6 +151,13 @@ export function createEditor(parent: HTMLElement, options: EditorOptions = {}): 
   }
   const newState = (doc = "") => EditorState.create({ doc, extensions });
   const view = new EditorView({ parent, state: newState(options.doc) });
+  const reveal = (from: number, to: number) => {
+    const length = view.state.doc.length;
+    const start = Math.min(Math.max(0, from), length);
+    const end = Math.min(Math.max(start, to), length);
+    view.dispatch({ selection: { anchor: start, head: end }, effects: EditorView.scrollIntoView(start, { y: "center" }) });
+    view.focus();
+  };
   return {
     view,
     text: () => view.state.doc.toString(),
@@ -161,12 +170,12 @@ export function createEditor(parent: HTMLElement, options: EditorOptions = {}): 
     setMarkers(markers) {
       view.dispatch(markersSpec(view.state, markers));
     },
-    reveal(from, to) {
-      const length = view.state.doc.length;
-      const start = Math.min(Math.max(0, from), length);
-      const end = Math.min(Math.max(start, to), length);
-      view.dispatch({ selection: { anchor: start, head: end }, effects: EditorView.scrollIntoView(start, { y: "center" }) });
-      view.focus();
+    reveal,
+    revealLines(start, end) {
+      const doc = view.state.doc;
+      const line = (n: number) => doc.line(Math.min(Math.max(1, n), doc.lines));
+      const from = start > doc.lines ? doc.length : line(start).from;
+      reveal(from, end < start ? from : line(end).to);
     },
     newState,
     swap(state, scroll) {

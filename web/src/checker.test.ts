@@ -423,3 +423,104 @@ describe("module panels and module links", () => {
     expect(panels(root)[1]?.open).toBe(false);
   });
 });
+
+describe("applied errata", () => {
+  // Erratum 7 changed line 2 (hunk at lines 1-3), erratum 9 removed the comment that was before line 5.
+  const TEXT = "one\nTWO\nthree\nfour\nsix\n";
+  const ERRATA = [
+    {
+      id: 7,
+      by: "human",
+      note: "Line two is upper case",
+      patch: "--- a/rfc1000.txt\n+++ b/rfc1000.txt\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n",
+      hunks: [{ start_line: 1, end_line: 3 }],
+    },
+    {
+      id: 9,
+      by: "claude",
+      note: "Line five goes",
+      patch: "--- a/rfc1000.txt\n+++ b/rfc1000.txt\n@@ -5 +4,0 @@\n--- five\n",
+      hunks: [{ start_line: 5, end_line: 4 }],
+    },
+  ];
+  const withErrata = (document: Partial<CheckResponse["document"]>): CheckResponse => ({
+    ...RESPONSE,
+    diagnostics: [],
+    document: { name: "rfc1000", format: "text", content: TEXT, errata: ERRATA, ...document },
+  });
+  const pane = (root: HTMLElement) => root.querySelector("#pane-errata") as HTMLElement;
+  const badge = (root: HTMLElement) => root.querySelector("#pane-errata-tab .badge") as HTMLElement;
+
+  async function openRfc(response: CheckResponse): Promise<HTMLElement> {
+    answerWith(response);
+    const root = mount();
+    createChecker(root).show({ view: "checker", rfc: 1000 });
+    await vi.waitFor(() => expect(root.textContent).toContain("No findings."));
+    return root;
+  }
+
+  it("lists each erratum with its link, decider, note and coloured diff", async () => {
+    const root = await openRfc(withErrata({}));
+    expect(root.querySelector("#pane-errata-tab")?.textContent).toContain("Applied Errata");
+    expect(badge(root).textContent).toBe("2");
+    expect(badge(root).classList.contains("d-none")).toBe(false);
+    const link = pane(root).querySelector<HTMLAnchorElement>('a[href="https://www.rfc-editor.org/errata/eid7"]');
+    expect(link?.textContent).toBe("Erratum 7");
+    expect(link?.target).toBe("_blank");
+    expect(link?.rel).toBe("noopener");
+    expect(pane(root).textContent).toContain("decided by human");
+    expect(pane(root).textContent).toContain("Line two is upper case");
+    expect(pane(root).textContent).toContain("decided by claude");
+    const text = (selector: string) => [...pane(root).querySelectorAll(selector)].map((e) => e.textContent);
+    expect(text(".diff-del")).toEqual(["-two", "--- five"]);
+    expect(text(".diff-add")).toEqual(["+TWO"]);
+    expect(text(".diff-ctx")).toEqual([" one", " three"]);
+    expect(text(".errata-hunk")).toEqual(["lines 1–3", "removed before line 5"]);
+    expect(pane(root).textContent).not.toContain("@@");
+    expect(pane(root).textContent).not.toContain("+++");
+  });
+
+  it("selects a hunk's lines in the editor when the hunk or one of its lines is clicked", async () => {
+    const root = await openRfc(withErrata({}));
+    const view = mainView(root);
+    const [first, removal] = [...pane(root).querySelectorAll<HTMLAnchorElement>("a.errata-hunk")];
+    first?.click();
+    expect(view.state.selection.main.from).toBe(0);
+    expect(view.state.selection.main.to).toBe("one\nTWO\nthree".length);
+    removal?.click();
+    const sixth = TEXT.indexOf("six");
+    expect([view.state.selection.main.from, view.state.selection.main.to]).toEqual([sixth, sixth]);
+    pane(root).querySelector<HTMLElement>(".diff-add")?.click();
+    expect(view.state.selection.main.to).toBe("one\nTWO\nthree".length);
+  });
+
+  it("stops jumping once the text is edited", async () => {
+    const root = await openRfc(withErrata({}));
+    const view = mainView(root);
+    view.dispatch({ changes: { from: 0, insert: "zero\n" } });
+    view.dispatch({ selection: { anchor: 2 } });
+    pane(root).querySelector<HTMLAnchorElement>("a.errata-hunk")?.click();
+    expect(view.state.selection.main.from).toBe(2);
+    expect(pane(root).textContent).toContain("The text was changed after it was opened");
+    expect(pane(root).querySelector("a.errata-hunk")).toBeNull();
+  });
+
+  it("says when no errata were applied, and when an RFC's errata failed", async () => {
+    const root = await openRfc(withErrata({ errata: [] }));
+    expect(pane(root).textContent).toBe("No errata applied.");
+    expect(badge(root).classList.contains("d-none")).toBe(true);
+
+    const failed = await openRfc(withErrata({ errata: [], errata_failure: { errata_id: 9, reason: "hunk 1: not in the text" } }));
+    expect(pane(failed).textContent).toContain("could not be applied (erratum 9: hunk 1: not in the text)");
+    expect(pane(failed).textContent).toContain("No errata applied.");
+  });
+
+  it("shows no errata for pasted text", async () => {
+    answerWith(RESPONSE);
+    const root = mount();
+    createChecker(root);
+    checkButton(root)?.click();
+    await vi.waitFor(() => expect(root.textContent).toContain("differs from its definition"));
+    expect(pane(root).textContent).toBe("No errata applied.");
+  });
+});

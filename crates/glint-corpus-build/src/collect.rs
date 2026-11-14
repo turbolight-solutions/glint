@@ -4,10 +4,10 @@ use std::path::Path;
 
 use glint_corpus::{ModuleSource, SourceKind};
 use glint_errata::store::rfc_source;
-use glint_errata::{SeriesFailure, SourceFormat};
+use glint_errata::{LineRange, SeriesFailure, SourceFormat, final_hunk_lines};
 use glint_extract::{BlockKind, Format, extract, is_smi, module_slices};
 
-use crate::errata::{Series, apply};
+use crate::errata::{Series, Step, apply};
 use crate::index::DraftEntry;
 
 #[derive(Debug, Clone)]
@@ -26,8 +26,8 @@ pub struct RfcExtraction {
     pub text: String,
     /// `xml` or `text`.
     pub format: &'static str,
-    /// The errata applied, in order.
-    pub errata_applied: Vec<u32>,
+    /// The errata applied, in order, each with the lines of its hunks' new sides in `text`.
+    pub errata_applied: Vec<(u32, Vec<LineRange>)>,
     /// Why the RFC's errata were not applied, when they were not: it is extracted as published.
     pub errata_failure: Option<SeriesFailure>,
 }
@@ -53,12 +53,14 @@ pub fn extract_rfc(dir: &Path, rfc: u32, series: Option<&Series>) -> Option<RfcE
         }
         Ok(steps) => {
             let provenance = provenance(&published, &steps, format);
-            let corrected = steps.last().map_or(published, |(_, text)| text.clone());
+            let placements: Vec<_> = steps.iter().map(|s| s.placements.clone()).collect();
+            let hunks = final_hunk_lines(&placements);
+            let corrected = steps.last().map_or(published, |step| step.text.clone());
             let mut result = extract_text(corrected, format, source);
             for (candidate, errata) in result.candidates.iter_mut().zip(provenance) {
                 candidate.source.errata = errata;
             }
-            result.errata_applied = steps.iter().map(|(id, _)| *id).collect();
+            result.errata_applied = steps.iter().map(|s| s.errata_id).zip(hunks).collect();
             Some(result)
         }
     }
@@ -78,10 +80,15 @@ fn modules_of(text: &str, format: Format) -> Vec<(String, String)> {
 /// For each module of the last text of `steps`, the errata whose patch changed it. A module is followed from one text
 /// to the next by name, or by position when the patch renamed it (RFC 7508 erratum 5875 corrects a module name) and
 /// the number of modules stayed the same; a module a patch adds or changes is attributed to that erratum.
-fn provenance(published: &str, steps: &[(u32, String)], format: Format) -> Vec<Vec<u32>> {
+fn provenance(published: &str, steps: &[Step], format: Format) -> Vec<Vec<u32>> {
     let mut previous = modules_of(published, format);
     let mut errata: Vec<Vec<u32>> = vec![Vec::new(); previous.len()];
-    for (id, text) in steps {
+    for Step {
+        errata_id: id,
+        text,
+        ..
+    } in steps
+    {
         let next = modules_of(text, format);
         let mut used = vec![false; previous.len()];
         let mut next_errata = Vec::with_capacity(next.len());

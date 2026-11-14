@@ -5,9 +5,10 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use glint_corpus::{
-    AllowedOid, BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo, DOCUMENTS_FILE,
-    DocumentRecord, Documents, Exports, ModuleRecord, ModuleSource, Oid, OidAssignment, OidLabels,
-    ParseStatus, Pointer, SourceKind, build_dir, latest_path,
+    AllowedOid, AppliedErratum, BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo,
+    DOCUMENTS_FILE, DocumentRecord, Documents, ErrataFailure, Exports, HunkLines, ModuleRecord,
+    ModuleSource, Oid, OidAssignment, OidLabels, ParseStatus, Pointer, SourceKind, build_dir,
+    latest_path,
 };
 use glint_diag::Severity;
 use glint_sema::{
@@ -19,7 +20,7 @@ use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
 use crate::Settings;
-use crate::collect::{Candidate, extract_draft, extract_rfc};
+use crate::collect::{Candidate, RfcExtraction, extract_draft, extract_rfc};
 use crate::errata::{Errata, read_errata};
 use crate::iana::read_iana;
 use crate::index::{RfcMeta, read_drafts, read_index};
@@ -64,9 +65,18 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut texts_by_id: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
     let mut errata_applied: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let mut errata_failed: BTreeMap<u32, glint_errata::SeriesFailure> = BTreeMap::new();
-    for (rfc, extraction) in extracted {
+    // The errata of every RFC with a module, by document id, for its document record.
+    let mut errata_by_id: BTreeMap<String, DocumentErrata> = BTreeMap::new();
+    for (rfc, mut extraction) in extracted {
         if !extraction.errata_applied.is_empty() {
-            errata_applied.insert(rfc, extraction.errata_applied.clone());
+            errata_applied.insert(
+                rfc,
+                extraction
+                    .errata_applied
+                    .iter()
+                    .map(|(id, _)| *id)
+                    .collect(),
+            );
         }
         if let Some(failure) = extraction.errata_failure.clone() {
             errata_failed.insert(rfc, failure);
@@ -74,7 +84,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         if !extraction.notes.is_empty() {
             extraction_notes.insert(rfc, extraction.notes.clone());
         }
-        for candidate in extraction.candidates {
+        let candidates_of_rfc = std::mem::take(&mut extraction.candidates);
+        for candidate in candidates_of_rfc {
             if candidate.smi {
                 smi_modules.push((
                     candidate.name.clone(),
@@ -87,6 +98,10 @@ pub fn run(settings: &Settings) -> Result<String, String> {
             }
         }
         if rfcs_with_modules.contains(&rfc) {
+            errata_by_id.insert(
+                format!("rfc{rfc}"),
+                document_errata(rfc, &extraction, &errata),
+            );
             texts_by_id.insert(format!("rfc{rfc}"), (extraction.text, extraction.format));
         }
     }
@@ -287,7 +302,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         .flat_map(|record| audit_record(record, &audited))
         .collect();
 
-    let documents = document_index(&records, &meta, &draft_dates, &texts_by_id);
+    let documents = document_index(&records, &meta, &draft_dates, &texts_by_id, &errata_by_id);
     let texts: Vec<(String, String, String)> = texts_by_id
         .into_iter()
         .map(|(id, (text, format))| (id, format.to_owned(), text))
@@ -395,12 +410,50 @@ fn write_with_digest(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String>
     std::fs::write(&digest_path, digest).map_err(|e| format!("{}: {e}", digest_path.display()))
 }
 
+/// An RFC's applied errata, and why they were not applied when they were not.
+type DocumentErrata = (Vec<AppliedErratum>, Option<ErrataFailure>);
+
+/// The errata of RFC `rfc` for its document record: each applied erratum with its ledger row (who decided, the note),
+/// its patch and where its hunks are in the corrected text.
+fn document_errata(rfc: u32, extraction: &RfcExtraction, errata: &Errata) -> DocumentErrata {
+    let patches: HashMap<u32, &String> = match errata.series.get(&rfc) {
+        Some(Ok(list)) => list.iter().map(|(id, patch)| (*id, patch)).collect(),
+        _ => HashMap::new(),
+    };
+    let applied = extraction
+        .errata_applied
+        .iter()
+        .map(|(id, ranges)| {
+            let row = errata.rows.get(&(rfc, *id));
+            AppliedErratum {
+                id: *id,
+                by: row.map(|r| r.by.to_string()).unwrap_or_default(),
+                note: row.map(|r| r.note.clone()).unwrap_or_default(),
+                patch: patches.get(id).map(|p| (*p).clone()).unwrap_or_default(),
+                hunks: ranges
+                    .iter()
+                    .map(|r| HunkLines {
+                        start_line: r.start,
+                        end_line: r.end,
+                    })
+                    .collect(),
+            }
+        })
+        .collect();
+    let failure = extraction.errata_failure.as_ref().map(|f| ErrataFailure {
+        errata_id: f.errata_id,
+        reason: f.reason.clone(),
+    });
+    (applied, failure)
+}
+
 /// One entry per document that publishes a module of the corpus, in the order of the modules.
 fn document_index(
     records: &[ModuleRecord],
     meta: &HashMap<u32, RfcMeta>,
     drafts: &HashMap<String, (String, Option<String>)>,
     texts: &BTreeMap<String, (String, &'static str)>,
+    errata: &BTreeMap<String, DocumentErrata>,
 ) -> Vec<DocumentRecord> {
     let mut seen: HashSet<&str> = HashSet::new();
     let mut documents = Vec::new();
@@ -422,6 +475,11 @@ fn document_index(
                 .and_then(|m| m.date.clone())
                 .or_else(|| draft.map(|(date, _)| date.clone())),
             text_format: texts.get(id).map(|(_, format)| (*format).to_owned()),
+            errata: errata
+                .get(id)
+                .map(|(applied, _)| applied.clone())
+                .unwrap_or_default(),
+            errata_failure: errata.get(id).and_then(|(_, failure)| failure.clone()),
         });
     }
     documents

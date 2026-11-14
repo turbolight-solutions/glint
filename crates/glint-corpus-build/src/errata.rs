@@ -8,8 +8,8 @@ use glint_errata::store::{
     patch_format, patched_series, read_ledger, read_regular_file, scan_patches,
 };
 use glint_errata::{
-    Decision, MAX_FEED_BYTES, SeriesFailure, Source, SourceFormat, apply_patch, forbidden_in_patch,
-    parse_feed,
+    Decision, MAX_FEED_BYTES, Placement, Row, SeriesFailure, Source, SourceFormat,
+    apply_patch_placed, forbidden_in_patch, parse_feed,
 };
 
 /// One RFC's patches, `(errata_id, patch)` in id order, or why they cannot be read.
@@ -18,6 +18,18 @@ pub type Series = Result<Vec<(u32, String)>, SeriesFailure>;
 #[derive(Debug, Default)]
 pub struct Errata {
     pub series: BTreeMap<u32, Series>,
+    /// The ledger row of each `patched` erratum, by (rfc, errata_id): who decided it and the note.
+    pub rows: BTreeMap<(u32, u32), Row>,
+}
+
+/// One patch of a series, applied.
+#[derive(Debug, Clone)]
+pub struct Step {
+    pub errata_id: u32,
+    /// The text after the patch.
+    pub text: String,
+    /// Where each hunk of the patch landed in the text before it.
+    pub placements: Vec<Placement>,
 }
 
 /// Reads and checks `dir`. Malformed errata data fails the build: the ledger, a stray or unreadable entry under
@@ -57,7 +69,12 @@ pub fn read_errata(dir: &Path, feed: Option<&Path>) -> Result<Errata, String> {
             }
         }
     }
-    Ok(Errata { series })
+    let rows = rows
+        .into_iter()
+        .filter(|r| r.decision == Decision::Patched)
+        .map(|r| (r.key(), r))
+        .collect();
+    Ok(Errata { series, rows })
 }
 
 fn check_verified(patched: &BTreeSet<(u32, u32)>, feed_path: &Path) -> Result<(), String> {
@@ -90,17 +107,17 @@ fn check_verified(patched: &BTreeSet<(u32, u32)>, feed_path: &Path) -> Result<()
     }
 }
 
-/// The texts of `published` after each patch of `series`, in order, or why the series cannot be applied to a source
-/// of `format`: a patch for the other format, or a patch that does not apply. All or nothing.
+/// `published` after each patch of `series`, in order, or why the series cannot be applied to a source of `format`: a
+/// patch for the other format, or a patch that does not apply. All or nothing.
 pub fn apply(
     rfc: u32,
     format: SourceFormat,
     published: &str,
     series: &Series,
-) -> Result<Vec<(u32, String)>, SeriesFailure> {
+) -> Result<Vec<Step>, SeriesFailure> {
     let list = series.as_ref().map_err(Clone::clone)?;
     let source = Source { rfc, format };
-    let mut texts: Vec<(u32, String)> = Vec::with_capacity(list.len());
+    let mut steps: Vec<Step> = Vec::with_capacity(list.len());
     let mut current = published.to_owned();
     for (id, patch) in list {
         if patch_format(patch) != Some(format) {
@@ -112,11 +129,17 @@ pub fn apply(
                 ),
             });
         }
-        current = apply_patch(&current, patch, source).map_err(|e| SeriesFailure {
+        let (text, placements) =
+            apply_patch_placed(&current, patch, source).map_err(|e| SeriesFailure {
+                errata_id: *id,
+                reason: e.0,
+            })?;
+        current.clone_from(&text);
+        steps.push(Step {
             errata_id: *id,
-            reason: e.0,
-        })?;
-        texts.push((*id, current.clone()));
+            text,
+            placements,
+        });
     }
-    Ok(texts)
+    Ok(steps)
 }

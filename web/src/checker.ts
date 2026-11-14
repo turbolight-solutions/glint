@@ -3,10 +3,13 @@ import type { Action, EditorHandle, LintDiagnostic } from "./editor";
 import { createEditor, highlightingSpec, markersSpec, replaceTextSpec } from "./editor";
 import {
   ApiError,
+  type AppliedErratum,
   type CheckOptions,
   type CheckResponse,
   type Diagnostic,
+  type ErrataFailure,
   type FormatName,
+  type HunkLines,
   type Label,
   type ModuleInfo,
   api,
@@ -36,6 +39,17 @@ function formatFromName(name: string): FormatName | null {
   return null;
 }
 
+/** The errata the corpus applied to a document opened by name. */
+interface TabErrata {
+  applied: AppliedErratum[];
+  failure: ErrataFailure | null;
+  /**
+   * The editor text the hunk lines refer to: jumps work while the editor still holds it. Null when the editor's lines
+   * are not the corpus text's (it read a lone `\r` as a line break), so the line numbers cannot be trusted.
+   */
+  text: string | null;
+}
+
 export interface CheckerView {
   show(route: Extract<Route, { view: "checker" }>): void;
 }
@@ -55,6 +69,8 @@ interface Tab {
   status: string;
   error: string | null;
   result: { response: CheckResponse; text: string; offsets: OffsetMap } | null;
+  /** Errata of the corpus document the tab was opened from; null for any other text. */
+  errata: TabErrata | null;
   fetching: boolean;
   /** Module to put the cursor at once the document and its check are on screen. */
   pendingModule: { name: string; oid?: string } | null;
@@ -105,7 +121,9 @@ export function createChecker(root: HTMLElement): CheckerView {
   // Read-only views inside the open module panels; they are rebuilt whenever the pane is.
   let moduleViews: EditorHandle[] = [];
   const importsPane = h("div");
+  const errataPane = h("div");
   const diagnosticsBadge = h("span", { class: "badge text-bg-secondary ms-1" }, "0");
+  const errataBadge = h("span", { class: "badge text-bg-secondary ms-1 d-none" }, "0");
   const leftPane = h("div", { class: "pane pane-left", "data-drop-hint": "Drop files to check them" });
   const fileInput = h("input", {
     type: "file",
@@ -184,6 +202,7 @@ export function createChecker(root: HTMLElement): CheckerView {
       status: "",
       error: null,
       result: null,
+      errata: null,
       fetching: false,
       pendingModule: null,
       openModules: new Set(),
@@ -368,6 +387,12 @@ export function createChecker(root: HTMLElement): CheckerView {
       tab.format = "";
       edit(tab, () => highlightingSpec(response.document.format === "bare"));
       edit(tab, (state) => replaceTextSpec(state, content));
+      const sameLines = stateOf(tab).doc.lines === content.split("\n").length;
+      tab.errata = {
+        applied: response.document.errata ?? [],
+        failure: response.document.errata_failure ?? null,
+        text: sameLines ? textOf(tab) : null,
+      };
       if (textOf(tab) === content) {
         syncChrome(tab);
         apply(tab, response, content);
@@ -393,6 +418,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     tab.fetching = false;
     tab.name = `${document}#${name}`;
     tab.format = "bare";
+    tab.errata = null;
     edit(tab, () => highlightingSpec(true));
     edit(tab, (state) => replaceTextSpec(state, module.text));
     syncChrome(tab);
@@ -465,6 +491,7 @@ export function createChecker(root: HTMLElement): CheckerView {
 
   /** Fills the right-hand panes from a tab's last check, or with the empty-state hint. */
   function renderResult(tab: Tab): void {
+    renderErrata(tab);
     if (!tab.result) {
       diagnosticsBadge.textContent = "0";
       diagnosticsBadge.className = "badge text-bg-secondary ms-1";
@@ -685,6 +712,105 @@ export function createChecker(root: HTMLElement): CheckerView {
     );
   }
 
+  /** Whether the editor still holds the text a tab's errata lines refer to. */
+  function errataJumpable(tab: Tab): boolean {
+    return tab.errata?.text != null && textOf(tab) === tab.errata.text;
+  }
+
+  function linesLabel(lines: HunkLines): string {
+    if (lines.end_line < lines.start_line) return `removed before line ${lines.start_line}`;
+    if (lines.end_line === lines.start_line) return `line ${lines.start_line}`;
+    return `lines ${lines.start_line}–${lines.end_line}`;
+  }
+
+  /** The diff of one erratum, its hunk headers replaced by the lines each hunk is at in the editor. */
+  function errataDiff(tab: Tab, erratum: AppliedErratum): HTMLElement {
+    const diff = h("div", { class: "errata-diff font-monospace small" });
+    let hunk = -1;
+    let jump: ((event: Event) => void) | null = null;
+    for (const line of erratum.patch.split("\n")) {
+      // The file headers come before the first hunk; a removed `-- comment` line also starts with `---`.
+      if (line === "" || (hunk < 0 && !line.startsWith("@@"))) continue;
+      if (line.startsWith("@@")) {
+        hunk++;
+        const lines = erratum.hunks[hunk];
+        jump = lines && errataJumpable(tab) ? jumpToLines(tab, lines) : null;
+        const label = lines ? linesLabel(lines) : line;
+        append(diff, [
+          jump
+            ? h("a", { class: "errata-hunk d-block", href: "#", title: "Show in the editor", onclick: jump }, label)
+            : h("div", { class: "errata-hunk text-secondary" }, label),
+        ]);
+        continue;
+      }
+      const kind = line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : "ctx";
+      const lineJump = kind === "del" ? null : jump;
+      append(diff, [
+        h("div", { class: `diff-line diff-${kind}${lineJump ? " diff-jump" : ""}`, onclick: lineJump ?? undefined }, line),
+      ]);
+    }
+    return diff;
+  }
+
+  function jumpToLines(tab: Tab, lines: HunkLines): (event: Event) => void {
+    return (event) => {
+      event.preventDefault();
+      if (!errataJumpable(tab)) {
+        // The text changed since the pane was drawn: say so instead of jumping to the wrong lines.
+        if (isActive(tab)) renderErrata(tab);
+        return;
+      }
+      editor.revealLines(lines.start_line, lines.end_line);
+    };
+  }
+
+  function renderErrata(tab: Tab): void {
+    const errata = tab.errata;
+    const count = errata?.applied.length ?? 0;
+    errataBadge.textContent = String(count);
+    errataBadge.className = `badge text-bg-secondary ms-1${count === 0 ? " d-none" : ""}`;
+    const failure = errata?.failure
+      ? h(
+          "div",
+          { class: "alert alert-warning m-2 small", role: "alert" },
+          `The errata of this RFC could not be applied (erratum ${errata.failure.errata_id}: ${errata.failure.reason}). The text is the published one.`,
+        )
+      : null;
+    if (!errata || count === 0) {
+      replace(errataPane, failure, h("div", { class: "p-3 text-secondary" }, "No errata applied."));
+      return;
+    }
+    replace(
+      errataPane,
+      failure,
+      errataJumpable(tab)
+        ? null
+        : h("div", { class: "px-3 pt-2 small text-secondary" }, "The text was changed after it was opened, so the lines below may no longer match; open the document again to jump to them."),
+      h(
+        "div",
+        { class: "list-group list-group-flush" },
+        ...errata.applied.map((erratum) =>
+          h(
+            "div",
+            { class: "list-group-item erratum" },
+            h(
+              "div",
+              { class: "d-flex flex-wrap gap-2 align-items-baseline" },
+              h(
+                "a",
+                { class: "fw-semibold", href: `https://www.rfc-editor.org/errata/eid${erratum.id}`, target: "_blank", rel: "noopener" },
+                `Erratum ${erratum.id}`,
+              ),
+              h("span", { class: "small text-secondary" }, `applied, decided by ${erratum.by}`),
+            ),
+            erratum.note ? h("div", { class: "small mb-1" }, erratum.note) : null,
+            errataDiff(tab, erratum),
+          ),
+        ),
+      ),
+    );
+  }
+
   function tabButton(id: string, label: string, active: boolean, extra?: Node): HTMLElement {
     return h(
       "li",
@@ -737,6 +863,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     tab.format = formatFromName(file.name) ?? "";
     tab.target = "";
     tab.result = null;
+    tab.errata = null;
     setError(tab, null);
     edit(tab, () => highlightingSpec(tab.format === "bare"));
     edit(tab, (state) => replaceTextSpec(state, text));
@@ -871,6 +998,7 @@ export function createChecker(root: HTMLElement): CheckerView {
           tabButton("pane-diagnostics", "Diagnostics", true, diagnosticsBadge),
           tabButton("pane-modules", "Modules", false),
           tabButton("pane-imports", "Imports", false),
+          tabButton("pane-errata", "Applied Errata", false, errataBadge),
         ),
         h(
           "div",
@@ -878,6 +1006,7 @@ export function createChecker(root: HTMLElement): CheckerView {
           tabPane("pane-diagnostics", true, diagnosticsPane),
           tabPane("pane-modules", false, modulesPane),
           tabPane("pane-imports", false, importsPane),
+          tabPane("pane-errata", false, errataPane),
         ),
       ),
     ),

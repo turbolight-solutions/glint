@@ -78,12 +78,48 @@ export interface ModuleInfo {
 
 export type FormatName = "xml" | "markdown" | "text" | "bare";
 
+/**
+ * Lines `start_line..end_line` (1-based, inclusive) of the corrected text. A hunk that only removed lines has
+ * `end_line === start_line - 1`: the empty place before line `start_line`.
+ */
+export interface HunkLines {
+  start_line: number;
+  end_line: number;
+}
+
+/** An RFC erratum whose patch the corpus applied to the document's text. */
+export interface AppliedErratum {
+  id: number;
+  /** Who decided to apply it: `human` or `claude`. */
+  by: string;
+  /** What the patch changes. */
+  note: string;
+  /** A unified diff of the document's source. */
+  patch: string;
+  /** Per hunk of the patch, where its new side is in the corrected text. */
+  hunks: HunkLines[];
+}
+
+/** Why an RFC's errata were not applied: its text is the published one. */
+export interface ErrataFailure {
+  errata_id: number;
+  reason: string;
+}
+
 export interface CheckResponse {
   schema_version: number;
   /** The version of Glint that checked, and the build of the data it checked against. */
   glint_version: string;
   data_build: string;
-  document: { name: string; format: FormatName; content?: string };
+  document: {
+    name: string;
+    format: FormatName;
+    /** The text, for a document checked by name. */
+    content?: string;
+    /** For a document checked by name: the errata applied to its text, in the order they were applied. */
+    errata?: AppliedErratum[];
+    errata_failure?: ErrataFailure;
+  };
   files: FileInfo[];
   blocks: BlockInfo[];
   modules: ModuleInfo[];

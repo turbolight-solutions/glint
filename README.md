@@ -42,7 +42,7 @@ cargo run --release -p glint-corpus-build -- --rfc-dir corpus/cache/rfc --drafts
 # Modules that other standards bodies publish as files (ITU-T, ETSI, ...) are listed in corpus/sources.toml.
 
 cargo run -p glint-asn1 -- corpus update                  # download the published data into the user cache
-cargo run -p glint-asn1 -- corpus update --from corpus/out/data/v2/<build>/corpus.json   # or install a local build
+cargo run -p glint-asn1 -- corpus update --from corpus/out/data/v3/<build>/corpus.json   # or install a local build
 
 cargo run -p glint-asn1 -- check draft.xml                # extract, parse, resolve imports, run the checks
 cargo run -p glint-asn1 -- check draft.txt --format json --pin PKIX1Explicit88=rfc5280   # or --pin ERS=1.3.6.1.5.5.11.0.1.1

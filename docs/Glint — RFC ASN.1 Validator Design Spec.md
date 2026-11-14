@@ -332,6 +332,7 @@ The corpus is data, not code: `corpus-build` builds it every day, and it is publ
 - Backing out or re-triaging an erratum re-makes every higher patch of the RFC against its new base; one that no longer applies goes back to a person.
 - Errata that only fix prose are not applied. Errata of other documents (ITU-T corrigenda, drafts) are out of scope.
 - `glint-errata` holds the feed parser, ledger, patch engine and triage queue; `glint errata` the triage commands.
+- An RFC's record in `corpus.json` (`documents[]`) lists the errata applied to its text in `documents.bin` (`errata`: id, `by`, the ledger note, the patch, and per hunk the lines `start_line..end_line` its new side occupies in the corrected text, followed through the later patches of the series; a hunk that only removed lines has `end_line = start_line - 1`, and a later hunk that changes lines inside a range widens it to that hunk's new lines), or why they were not applied (`errata_failure`). The web UI shows them in the Applied Errata tab.
 
 ### Override policy
 
@@ -478,7 +479,7 @@ Also ship a composite GitHub Action (`glint-action`) that downloads a release bi
 | Call | Request | Response |
 | --- | --- | --- |
 | `check` | `{ content, name?, format?, options: { pins?, severity?, snippets? } }` | `{ glint_version, data_build, document, files[], blocks[], modules[], diagnostics[] }` |
-| `checkDocument` | `{ draft: "draft-ietf-lamps-foo", rev?: "03" }` or `{ rfc: 5280 }` | Same as `check`, plus the document's text |
+| `checkDocument` | `{ draft: "draft-ietf-lamps-foo", rev?: "03" }` or `{ rfc: 5280 }` | Same as `check`, plus the document's text and the errata applied to it (`document.errata`, `document.errata_failure`) |
 | `modules(q, offset, limit)` | Search by name or OID substring | `{ total, offset, limit, modules: [...] }` |
 | `module(source, name, oid?)` | `oid` picks one of several modules of that name in the source | Module text and metadata |
 | `oid(dotted)` | — | Labels, assignments of this OID and its children across the corpus |
@@ -491,7 +492,7 @@ Data of another schema, or a file of another build than the pointer names, is re
 
 - **Stack:** Vite + TypeScript, no heavy framework needed (Svelte or plain TS components are fine). CodeMirror 6 with a small ASN.1 syntax mode (Lezer grammar or stream parser) for highlighting.
 - **Styling:** Bootstrap 5 for layout, components and theming. Load it from a CDN (pin the version and add Subresource Integrity hashes to the `<link>` and `<script>` tags). Use its grid and utilities for the two-pane layout, `nav-tabs` for the right-pane tabs, `list-group`/`table` for diagnostics and module lists, and its color modes (`data-bs-theme`) for light/dark. Use Bootstrap's JavaScript only where needed (tabs, collapse), not jQuery; custom CSS is limited to CodeMirror theming and diagnostic severity colors.
-- **Layout:** left pane is the document editor; right pane has tabs for Diagnostics, Modules (extracted, with parse status), and Imports (each import and which RFC it resolved to, linked to the corpus viewer).
+- **Layout:** left pane is the document editor; right pane has tabs for Diagnostics, Modules (extracted, with parse status), Imports (each import and which RFC it resolved to, linked to the corpus viewer), and Applied Errata (for an RFC opened by name: each erratum applied to its text, linked to the RFC Editor, with who decided it, the ledger note and the diff; clicking a hunk selects its lines in the editor while the text is unedited).
 - **Inline feedback:** diagnostics become CodeMirror lint markers; clicking a snippet mismatch jumps to the module definition (secondary label).
 - **Inputs:** paste, file upload, or draft name/RFC number box. Re-check on demand plus debounced auto-check (800 ms) for documents under 1 MB; larger ones show a notice and wait for the Check button.
 - **Corpus browser:** search box over `modules`, modules open in the checker at their start line, and an OID lookup page.

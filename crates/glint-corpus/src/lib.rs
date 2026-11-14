@@ -19,7 +19,7 @@ pub use data::{
 pub use labels::{AllowedOid, LabelEvidence, LabelProblem, OidLabels, OidNode};
 pub use oid::{Oid, OidParseError};
 pub use record::{
-    BODY_DRAFT, BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, Exports, IanaModuleId,
-    ModuleRecord, ModuleSource, OidAssignment, OverrideTier, ParseStatus, SourceKind, SyntaxEra,
-    document_title, draft_name, rfc_number, same_document,
+    AppliedErratum, BODY_DRAFT, BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, ErrataFailure,
+    Exports, HunkLines, IanaModuleId, ModuleRecord, ModuleSource, OidAssignment, OverrideTier,
+    ParseStatus, SourceKind, SyntaxEra, document_title, draft_name, rfc_number, same_document,
 };

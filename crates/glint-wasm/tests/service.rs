@@ -6,8 +6,8 @@
 )]
 
 use glint_corpus::{
-    CorpusData, CorpusInfo, DocumentRecord, Documents, Exports, ModuleRecord, ModuleSource,
-    OidAssignment, OidLabels, ParseStatus, SourceKind, SyntaxEra,
+    AppliedErratum, CorpusData, CorpusInfo, DocumentRecord, Documents, Exports, HunkLines,
+    ModuleRecord, ModuleSource, OidAssignment, OidLabels, ParseStatus, SourceKind, SyntaxEra,
 };
 use glint_wasm::{CheckRequest, DocumentRequest, Service, complete};
 
@@ -32,7 +32,7 @@ Appendix A.  ASN.1 Module
    END
 ";
 
-fn service() -> Service {
+fn data() -> CorpusData {
     let module = ModuleRecord {
         name: "Base".to_owned(),
         oid: Some("1.3.6.1.4.1.99.1".parse().unwrap()),
@@ -57,7 +57,7 @@ fn service() -> Service {
         .map(|(oid, label)| (oid.parse().unwrap(), label.to_owned(), "rfc1000".to_owned())),
         Vec::new(),
     );
-    let data = CorpusData {
+    CorpusData {
         info: CorpusInfo {
             build: BUILD.to_owned(),
             notices: Vec::new(),
@@ -69,6 +69,8 @@ fn service() -> Service {
             obsoleted_by: Vec::new(),
             date: Some("2026-10-01".to_owned()),
             text_format: Some("text".to_owned()),
+            errata: Vec::new(),
+            errata_failure: None,
         }],
         modules: vec![module],
         oid_assignments: vec![
@@ -87,9 +89,12 @@ fn service() -> Service {
         ],
         oid_nodes: labels.nodes(),
         ..CorpusData::default()
-    };
+    }
+}
+
+fn service() -> Service {
     let mut service = Service::default();
-    service.load_corpus(&data.to_json()).unwrap();
+    service.load_corpus(&data().to_json()).unwrap();
     service
 }
 
@@ -157,6 +162,66 @@ fn documents_are_checked_by_name_once_their_texts_are_loaded() {
         service.check_document(absent).err().unwrap().code,
         "not_found"
     );
+}
+
+#[test]
+fn a_document_checked_by_name_carries_its_errata() {
+    let mut data = data();
+    let patch = "--- a/rfc1000.txt\n+++ b/rfc1000.txt\n@@ -3 +3 @@\n-  Name ::= BOOLEAN\n+  Name ::= INTEGER\n";
+    data.documents.push(DocumentRecord {
+        id: "rfc1000".to_owned(),
+        body: "rfc".to_owned(),
+        status: None,
+        obsoleted_by: Vec::new(),
+        date: None,
+        text_format: Some("text".to_owned()),
+        errata: vec![AppliedErratum {
+            id: 1234,
+            by: "human".to_owned(),
+            note: "Name is an INTEGER".to_owned(),
+            patch: patch.to_owned(),
+            hunks: vec![HunkLines {
+                start_line: 3,
+                end_line: 3,
+            }],
+        }],
+        errata_failure: None,
+    });
+    let mut service = Service::default();
+    service.load_corpus(&data.to_json()).unwrap();
+    let texts = vec![
+        ("rfc1000".to_owned(), "text".to_owned(), BASE.to_owned()),
+        (
+            "draft-ietf-x-mine-02".to_owned(),
+            "text".to_owned(),
+            DRAFT_TEXT.to_owned(),
+        ),
+    ];
+    service
+        .load_documents(Documents::write(BUILD, &texts))
+        .unwrap();
+    let rfc: DocumentRequest = serde_json::from_str(r#"{"rfc": 1000}"#).unwrap();
+    let document = json(&service.check_document(rfc).unwrap())["document"].clone();
+    assert_eq!(
+        document["errata"],
+        serde_json::json!([{
+            "id": 1234,
+            "by": "human",
+            "note": "Name is an INTEGER",
+            "patch": patch,
+            "hunks": [{"start_line": 3, "end_line": 3}],
+        }])
+    );
+    assert!(document.get("errata_failure").is_none());
+
+    // A document without errata says so; pasted text has no errata at all.
+    let draft: DocumentRequest = serde_json::from_str(r#"{"draft": "draft-ietf-x-mine"}"#).unwrap();
+    let document = json(&service.check_document(draft).unwrap())["document"].clone();
+    assert_eq!(document["errata"], serde_json::json!([]));
+    let pasted: CheckRequest =
+        serde_json::from_str(r#"{"content": "M DEFINITIONS ::= BEGIN END"}"#).unwrap();
+    let document = json(&service.check(pasted).unwrap())["document"].clone();
+    assert!(document.get("errata").is_none());
 }
 
 #[test]

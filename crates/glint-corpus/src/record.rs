@@ -285,6 +285,43 @@ pub struct DocumentRecord {
     pub date: Option<String>,
     /// `xml` or `text` when `documents.bin` has the text of the document.
     pub text_format: Option<String>,
+    /// The errata applied to the text in `documents.bin`, in the order they were applied (RFCs only).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errata: Vec<AppliedErratum>,
+    /// Why the RFC's errata were not applied, when they were not: its text is the published one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub errata_failure: Option<ErrataFailure>,
+}
+
+/// An erratum whose patch was applied to a document's text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppliedErratum {
+    /// The RFC Editor's errata id.
+    pub id: u32,
+    /// Who decided to apply it: `human` or `claude`.
+    pub by: String,
+    /// The triage ledger's note: what the patch changes.
+    pub note: String,
+    /// The patch, a unified diff of the document's source, against the published text plus the lower errata.
+    pub patch: String,
+    /// Per hunk of `patch`, the lines its new side (context and added lines) occupies in the corrected text.
+    pub hunks: Vec<HunkLines>,
+}
+
+/// Lines `start_line..=end_line` of the corrected text, 1-based. A hunk that only removed lines has
+/// `end_line == start_line - 1`: the empty place before line `start_line`. A later erratum that changed lines inside
+/// the range has widened it to cover that erratum's new lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HunkLines {
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+/// The erratum whose patch stopped an RFC's series, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErrataFailure {
+    pub errata_id: u32,
+    pub reason: String,
 }
 
 /// `corpus.json`.

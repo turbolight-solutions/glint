@@ -1190,6 +1190,46 @@ fn errata_are_applied_to_text_and_xml_before_extraction() {
 }
 
 #[test]
+fn documents_list_their_errata_with_the_lines_of_each_hunk() {
+    use glint_errata::{Source, SourceFormat, parse_patch};
+    let fixture = errata_fixture("hunks");
+    run_ok(&fixture, &errata_args(&fixture));
+    let out = fixture.dir.join("out");
+    let data = load_data(&out);
+    let texts = documents(&out);
+    let mut seen = Vec::new();
+    for (rfc, format) in [(5280, SourceFormat::Text), (8692, SourceFormat::Xml)] {
+        let id = format!("rfc{rfc}");
+        let record = data.documents.iter().find(|d| d.id == id).unwrap();
+        assert!(record.errata_failure.is_none());
+        let text = texts.get(&id).unwrap().0;
+        let lines: Vec<&str> = text.split_inclusive('\n').collect();
+        for erratum in &record.errata {
+            seen.push(erratum.id);
+            assert_eq!(
+                (erratum.by.as_str(), erratum.note.as_str()),
+                ("claude", "test")
+            );
+            let stored = std::fs::read_to_string(glint_errata::store::patch_path(
+                &fixture.errata,
+                rfc,
+                erratum.id,
+            ))
+            .unwrap();
+            assert_eq!(erratum.patch, stored);
+            let hunks = parse_patch(&erratum.patch, Source { rfc, format }).unwrap();
+            assert_eq!(hunks.len(), erratum.hunks.len());
+            for (hunk, range) in hunks.iter().zip(&erratum.hunks) {
+                let shown = &lines[range.start_line - 1..range.end_line];
+                assert_eq!(shown, hunk.new, "RFC {rfc} erratum {}", erratum.id);
+            }
+        }
+    }
+    assert_eq!(seen, [9001, 9002, 9003]);
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+#[test]
 fn no_errata_builds_the_rfcs_as_published() {
     let fixture = errata_fixture("published");
     let mut args = errata_args(&fixture);
@@ -1220,6 +1260,16 @@ fn a_series_that_does_not_apply_leaves_the_rfc_as_published() {
             .iter()
             .filter(|m| m.source.document == "rfc8692")
             .all(|m| m.source.errata.is_empty())
+    );
+    let document = data.documents.iter().find(|d| d.id == "rfc8692").unwrap();
+    assert!(document.errata.is_empty());
+    assert!(
+        document
+            .errata_failure
+            .as_ref()
+            .is_some_and(|f| f.errata_id == 9003 && f.reason.contains("not in the text")),
+        "{:?}",
+        document.errata_failure
     );
     let report = std::fs::read_to_string(fixture.dir.join("out/report.md")).unwrap();
     assert!(

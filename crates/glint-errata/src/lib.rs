@@ -27,9 +27,9 @@ pub use ledger::{
 };
 pub use locate::{Match, locate_all};
 pub use patch::{
-    Hunk, MAX_HUNKS, MAX_PATCH_BYTES, PatchError, RebaseOutcome, SeriesFailure, Source,
-    SourceFormat, apply_patch, apply_series, changed_lines, forbidden_in_patch, make_patch,
-    parse_patch, rebase,
+    Hunk, LineRange, MAX_HUNKS, MAX_PATCH_BYTES, PatchError, Placement, RebaseOutcome,
+    SeriesFailure, Source, SourceFormat, apply_patch, apply_patch_placed, apply_series,
+    changed_lines, final_hunk_lines, forbidden_in_patch, make_patch, parse_patch, rebase,
 };
 pub use queue::{
     Queue, QueueItem, QueueReason, Scope, asn1_relevant, compute_queue, compute_scope, failing_keys,

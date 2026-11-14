@@ -8,9 +8,9 @@ use glint_check::{
     CheckOptions, Config, DocumentRef, ImportSummary, Report, SeveritySetting, check_document,
 };
 use glint_corpus::{
-    Corpus, CorpusData, CorpusProvider, DataError, Documents, LabelEvidence, LabelProblem,
-    ModuleRecord, Oid, OidAssignment, ParseStatus, SCHEMA, SyntaxEra, document_title, draft_name,
-    preferred, unique_label,
+    AppliedErratum, Corpus, CorpusData, CorpusProvider, DataError, DocumentRecord, Documents,
+    ErrataFailure, LabelEvidence, LabelProblem, ModuleRecord, Oid, OidAssignment, ParseStatus,
+    SCHEMA, SyntaxEra, document_title, draft_name, preferred, unique_label,
 };
 use glint_diag::{Diagnostic, FileId};
 use glint_extract::{BlockKind, Format, detect_format};
@@ -144,7 +144,7 @@ impl Service {
         );
         let options = request.options.into_check_options()?;
         let report = check_document(&name, &request.content, format, &self.corpus, &options);
-        Ok(self.to_response(report, name, None))
+        Ok(self.to_response(report, name, None, None))
     }
 
     /// Checks a draft or RFC by name from `documents.bin`: `draft-ietf-lamps-foo`, `draft-ietf-lamps-foo-03`,
@@ -177,7 +177,8 @@ impl Service {
             Format::Text
         };
         let report = check_document(&id, text, format, &self.corpus, &options);
-        Ok(self.to_response(report, id, Some(text.to_owned())))
+        let record = self.corpus.documents().iter().find(|d| d.id == id);
+        Ok(self.to_response(report, id, Some(text.to_owned()), record))
     }
 
     /// The document id that `documents.bin` has for a reference: the RFC, or the revision of the draft the corpus
@@ -221,7 +222,14 @@ impl Service {
         ))
     }
 
-    fn to_response(&self, report: Report, name: String, content: Option<String>) -> CheckResponse {
+    /// `content` and `record` are given for a document checked by name: its text and its record in the corpus.
+    fn to_response(
+        &self,
+        report: Report,
+        name: String,
+        content: Option<String>,
+        record: Option<&DocumentRecord>,
+    ) -> CheckResponse {
         let files = report
             .files
             .iter()
@@ -272,6 +280,8 @@ impl Service {
                 name,
                 format: format_name(report.format),
                 content,
+                errata: record.map(|r| r.errata.clone()),
+                errata_failure: record.and_then(|r| r.errata_failure.clone()),
             },
             files,
             blocks,
@@ -589,6 +599,12 @@ struct DocumentInfo {
     /// Only for a document checked by name, whose text the page has not got.
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
+    /// Only for a document checked by name: the errata applied to its text, in the order they were applied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    errata: Option<Vec<AppliedErratum>>,
+    /// Only for an RFC checked by name whose errata could not be applied: its text is the published one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    errata_failure: Option<ErrataFailure>,
 }
 
 #[derive(Serialize)]
