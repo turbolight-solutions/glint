@@ -1,0 +1,11 @@
+--- a/rfc7292.txt
++++ b/rfc7292.txt
+@@ -1271,7 +1271,7 @@
+    Each of the six PBE object identifiers above has the following ASN.1
+    type for parameters:
+ 
+-   pkcs-12PbeParams ::= SEQUENCE {
++   Pkcs-12PbeParams ::= SEQUENCE {
+        salt        OCTET STRING,
+        iterations  INTEGER
+    }

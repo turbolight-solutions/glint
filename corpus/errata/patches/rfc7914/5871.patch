@@ -1,5 +1,23 @@
 --- a/rfc7914.txt
 +++ b/rfc7914.txt
+@@ -413,7 +413,7 @@
+    The parameters field associated with this OID in an
+    AlgorithmIdentifier shall have type scrypt-params:
+ 
+-   scrypt-params ::= SEQUENCE {
++   Scrypt-params ::= SEQUENCE {
+           salt OCTET STRING,
+           costParameter INTEGER (1..MAX),
+           blockSize INTEGER (1..MAX),
+@@ -440,7 +440,7 @@
+    [RFC5958], the following extension of the PBES2-KDFs type is needed:
+ 
+       PBES2-KDFs ALGORITHM-IDENTIFIER ::=
+-          { {scrypt-params IDENTIFIED BY id-scrypt}, ... }
++          { {Scrypt-params IDENTIFIED BY id-scrypt}, ... }
+ 
+ 
+ 
 @@ -459,13 +459,19 @@
  
     -- scrypt ASN.1 Module

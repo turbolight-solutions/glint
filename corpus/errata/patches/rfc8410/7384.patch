@@ -1,10 +1,9 @@
 --- a/rfc8410.txt
 +++ b/rfc8410.txt
-@@ -523,6 +523,22 @@
-                         keyCertSign, cRLSign}
+@@ -524,6 +524,22 @@
          PRIVATE-KEY CurvePrivateKey
      }
-+
+ 
 +   sa-Ed448 SIGNATURE-ALGORITHM ::= {
 +      IDENTIFIER id-Ed448
 +       PARAMS ARE absent
@@ -20,6 +19,7 @@
 +                       keyCertSign, cRLSign}
 +       PRIVATE-KEY CurvePrivateKey
 +   }
- 
++
      kaa-X25519 KEY-AGREE ::= {
          IDENTIFIER id-X25519
+         PARAMS ARE absent

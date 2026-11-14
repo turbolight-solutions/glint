@@ -1,0 +1,16 @@
+--- a/rfc8702.xml
++++ b/rfc8702.xml
+@@ -242,11 +242,11 @@
+ 	 identifiers for Keccak message authentication codes (KMACs) using SHAKE128 and SHAKE256, 
+ 	 and we include them here for convenience.</t>
+       <sourcecode type="asn.1" markers="false" pn="section-2-12">
+-   id-KmacWithSHAKE128 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2) 
++   id-KMACWithSHAKE128 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
+        country(16) us(840) organization(1) gov(101) csor(3) 
+        nistAlgorithm(4) 2 19 }
+ 
+-   id-KmacWithSHAKE256 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2) 
++   id-KMACWithSHAKE256 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
+        country(16) us(840) organization(1) gov(101) csor(3) 
+        nistAlgorithm(4) 2 20 }
+ </sourcecode>

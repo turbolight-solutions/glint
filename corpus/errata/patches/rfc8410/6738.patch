@@ -1,0 +1,14 @@
+--- a/rfc8410.txt
++++ b/rfc8410.txt
+@@ -354,9 +354,9 @@
+       version Version,
+       privateKeyAlgorithm PrivateKeyAlgorithmIdentifier,
+       privateKey PrivateKey,
+-      attributes [0] IMPLICIT Attributes OPTIONAL,
++      attributes [0] Attributes OPTIONAL,
+       ...,
+-      [[2: publicKey [1] IMPLICIT PublicKey OPTIONAL ]],
++      [[2: publicKey [1] PublicKey OPTIONAL ]],
+       ...
+    }
+ 

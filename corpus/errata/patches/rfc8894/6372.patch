@@ -1,0 +1,11 @@
+--- a/rfc8894.xml
++++ b/rfc8894.xml
+@@ -1519,7 +1519,7 @@
+ The messageData for this type consists of an IssuerAndSubject:
+           </t>
+           <sourcecode markers="false" pn="section-3.3.3-2">
+-issuerAndSubject ::= SEQUENCE {
++IssuerAndSubject ::= SEQUENCE {
+     issuer     Name,
+     subject    Name
+     }

@@ -1,0 +1,11 @@
+--- a/rfc8419.txt
++++ b/rfc8419.txt
+@@ -194,7 +194,7 @@
+       hashAlg-SHAKE256-LEN  ALGORITHM  ::=  { OID id-shake256-len
+                               PARMS ShakeOutputLen }
+ 
+-      hashalgs  OBJECT IDENTIFIER  ::=  { joint-iso-itu-t(2)
++      hashAlgs  OBJECT IDENTIFIER  ::=  { joint-iso-itu-t(2)
+                               country(16) us(840) organization(1)
+                               gov(101) csor(3) nistalgorithm(4) 2 }
+ 
