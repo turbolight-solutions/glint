@@ -39,6 +39,9 @@ pub struct ReportData<'a> {
     pub drafts_with_modules: usize,
     pub records: &'a [ModuleRecord],
     pub outcomes: &'a [ModuleOutcome],
+    /// By record: a module of an obsoleted RFC that no maintained module of another document imports. Its findings
+    /// are left out of the totals of the maintained modules.
+    pub unmaintained: &'a [bool],
     pub skipped_smi: &'a [(u32, String)],
     pub unreadable: usize,
     pub extraction_notes: &'a BTreeMap<u32, Vec<String>>,
@@ -125,6 +128,21 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     let _ = writeln!(out, "| Warnings only | {warnings} |");
     let _ = writeln!(out, "| Errors (parses, fails a check) | {errors} |");
     let _ = writeln!(out, "| Unparseable | {unparseable} |");
+    let unmaintained = data.unmaintained.iter().filter(|&&u| u).count();
+    let _ = writeln!(
+        out,
+        "| Unmaintained (obsoleted RFC, imported by no maintained module of another document) | {unmaintained} |"
+    );
+    let maintained_errors = data
+        .outcomes
+        .iter()
+        .zip(data.unmaintained)
+        .filter(|(o, u)| !**u && matches!(o.status, ParseStatus::Errors | ParseStatus::Unparseable))
+        .count();
+    let _ = writeln!(
+        out,
+        "| Maintained modules with errors (errors or unparseable) | {maintained_errors} |"
+    );
     let _ = writeln!(
         out,
         "| SMI MIB modules skipped | {} |",
@@ -153,22 +171,36 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     );
     let _ = writeln!(out);
 
-    let mut by_code: BTreeMap<&str, usize> = BTreeMap::new();
-    for outcome in data.outcomes {
+    // By code: (all modules, maintained modules).
+    let mut by_code: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for (index, outcome) in data.outcomes.iter().enumerate() {
+        let maintained = !data.unmaintained.get(index).copied().unwrap_or(false);
         for finding in &outcome.findings {
             if finding.severity != Severity::Info {
                 let slot = by_code.entry(finding.code.as_str()).or_default();
-                *slot = slot.saturating_add(1);
+                slot.0 = slot.0.saturating_add(1);
+                if maintained {
+                    slot.1 = slot.1.saturating_add(1);
+                }
             }
         }
     }
     let _ = writeln!(out, "## Findings by code\n");
-    let _ = writeln!(out, "| Code | Count |\n| --- | --- |");
+    let _ = writeln!(
+        out,
+        "Maintained: without the findings of unmaintained modules (obsoleted RFCs that no maintained module of another \
+         document imports).\n"
+    );
+    let _ = writeln!(out, "| Code | All | Maintained |\n| --- | --- | --- |");
     let mut sorted: Vec<_> = by_code.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
-    for (code, n) in sorted {
-        let _ = writeln!(out, "| `{code}` | {n} |");
+    sorted.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(a.0.cmp(b.0)));
+    let (mut all, mut maintained) = (0_usize, 0_usize);
+    for (code, (n, m)) in sorted {
+        all = all.saturating_add(n);
+        maintained = maintained.saturating_add(m);
+        let _ = writeln!(out, "| `{code}` | {n} | {m} |");
     }
+    let _ = writeln!(out, "| Total | {all} | {maintained} |");
     let _ = writeln!(out);
 
     let _ = writeln!(out, "## Overrides\n");
@@ -279,7 +311,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         out,
         "Every module that is not clean, with up to five findings each.\n"
     );
-    for (record, outcome) in data.records.iter().zip(data.outcomes) {
+    for (index, (record, outcome)) in data.records.iter().zip(data.outcomes).enumerate() {
         if outcome.status == ParseStatus::Clean {
             continue;
         }
@@ -287,9 +319,19 @@ pub fn render_report(data: &ReportData<'_>) -> String {
             .oid
             .as_ref()
             .map_or(String::new(), |o| format!(" {o}"));
+        let unmaintained = if data.unmaintained.get(index).copied().unwrap_or(false) {
+            let by: Vec<String> = record
+                .obsoleted_by
+                .iter()
+                .map(|n| format!("RFC {n}"))
+                .collect();
+            format!(" (unmaintained: obsoleted by {})", by.join(", "))
+        } else {
+            String::new()
+        };
         let _ = writeln!(
             out,
-            "### {} `{}`{oid} — {}\n",
+            "### {} `{}`{oid} — {}{unmaintained}\n",
             record.source.label(),
             record.name,
             status_name(outcome.status)

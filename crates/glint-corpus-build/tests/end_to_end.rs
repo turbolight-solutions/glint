@@ -1402,3 +1402,98 @@ fn an_override_of_a_module_errata_correct_is_refused() {
     );
     let _ = std::fs::remove_dir_all(fixture.dir);
 }
+
+/// A plain-text RFC holding one module, with its header OID `{ 1 3 6 1 4 1 99999 <n> }`.
+fn module_rfc(dir: &Path, n: u32, name: &str, body: &str) {
+    std::fs::write(
+        dir.join(format!("rfc{n}.txt")),
+        format!(
+            "\n\nRequest for Comments: {n}\n\n1.  Module\n\n   {name} {{ 1 3 6 1 4 1 99999 {n} }}\n   DEFINITIONS ::= BEGIN\n{body}\n   END\n"
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn modules_of_obsoleted_rfcs_that_nothing_maintained_imports_are_unmaintained() {
+    let dir = std::env::temp_dir().join(format!("glint-e2e-unmaintained-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let rfcs = dir.join("rfc");
+    std::fs::create_dir_all(&rfcs).unwrap();
+    // 101 (obsoleted) is imported by 200 (current): maintained. 102 (obsoleted) is imported by nothing, and 103
+    // (obsoleted) only by 102: both unmaintained.
+    module_rfc(&rfcs, 101, "Kept", "   A ::= INTEGER");
+    module_rfc(
+        &rfcs,
+        102,
+        "Dropped",
+        "   IMPORTS C FROM Inner { 1 3 6 1 4 1 99999 103 };\n   B ::= Undefined1",
+    );
+    module_rfc(&rfcs, 103, "Inner", "   C ::= Undefined2");
+    module_rfc(
+        &rfcs,
+        200,
+        "Current",
+        "   IMPORTS A FROM Kept { 1 3 6 1 4 1 99999 101 };\n   D ::= A",
+    );
+    let entry = |n: u32, obsoleted_by: Option<u32>| {
+        let by = obsoleted_by.map_or(String::new(), |b| {
+            format!("<obsoleted-by><doc-id>RFC{b}</doc-id></obsoleted-by>")
+        });
+        format!(
+            "<rfc-entry><doc-id>RFC{n}</doc-id><date><month>May</month><year>2000</year></date>{by}\
+             <current-status>PROPOSED STANDARD</current-status></rfc-entry>"
+        )
+    };
+    std::fs::write(
+        rfcs.join("rfc-index.xml"),
+        format!(
+            "<rfc-index>{}{}{}{}</rfc-index>",
+            entry(101, Some(300)),
+            entry(102, Some(300)),
+            entry(103, Some(300)),
+            entry(200, None)
+        ),
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-14"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = std::fs::read_to_string(dir.join("out/report.md")).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        report.contains(
+            "| Unmaintained (obsoleted RFC, imported by no maintained module of another document) | 2 |"
+        ),
+        "{report}"
+    );
+    assert!(report.contains("`Dropped`"), "{report}");
+    let heading = |name: &str| {
+        report
+            .lines()
+            .find(|l| l.starts_with("### ") && l.contains(&format!("`{name}`")))
+            .unwrap_or_default()
+            .to_owned()
+    };
+    assert!(
+        heading("Dropped").ends_with("(unmaintained: obsoleted by RFC 300)"),
+        "{report}"
+    );
+    assert!(
+        heading("Inner").ends_with("(unmaintained: obsoleted by RFC 300)"),
+        "{report}"
+    );
+    assert!(!heading("Kept").contains("unmaintained"), "{report}");
+    // Each unmaintained module has one E110, left out of the maintained totals.
+    assert!(report.contains("| `E110` | 2 | 0 |"), "{report}");
+}

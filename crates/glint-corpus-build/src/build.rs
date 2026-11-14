@@ -12,8 +12,8 @@ use glint_corpus::{
 };
 use glint_diag::Severity;
 use glint_sema::{
-    AssignedId, DraftSource, Evaluator, ExportsModel, ModuleModel, Options, SourceId, analyze,
-    syntax_era,
+    AssignedId, DraftSource, Evaluator, ExportsModel, ModuleModel, Options, Origin, SourceId,
+    analyze, syntax_era,
 };
 use glint_syntax::{ParseOptions, ast, parse_source_with};
 use rayon::prelude::*;
@@ -263,6 +263,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         .map(|record| check_record(record, &corpus, &allowlist))
         .collect();
 
+    let imports: Vec<Vec<usize>> = outcomes.iter().map(|c| c.imports.clone()).collect();
+    let unmaintained = unmaintained(&records, &imports);
     let mut oid_assignments: Vec<OidAssignment> = Vec::new();
     let mut label_triples: Vec<(Oid, String, String)> = Vec::new();
     let mut outcome_list = Vec::new();
@@ -333,6 +335,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         drafts_with_modules,
         records: &corpus_data.modules,
         outcomes: &outcome_list,
+        unmaintained: &unmaintained,
         skipped_smi: &skipped_smi,
         unreadable,
         extraction_notes: &extraction_notes,
@@ -856,6 +859,39 @@ struct Checked {
     assignments: Vec<OidAssignment>,
     /// The labels the module writes, with the OIDs of their arcs: its evidence for the label table.
     labels: Vec<(Oid, String)>,
+    /// The corpus modules its imports resolve to, as indexes into the records.
+    imports: Vec<usize>,
+}
+
+/// Which modules are unmaintained: a module of an obsoleted RFC that no maintained module of another document
+/// imports, directly or through other modules. Every other module (a current RFC's, a draft's, a module of another
+/// standards body) is maintained. `imports[i]` are the records module `i` imports.
+fn unmaintained(records: &[ModuleRecord], imports: &[Vec<usize>]) -> Vec<bool> {
+    let mut maintained: Vec<bool> = records
+        .iter()
+        .map(|r| r.source.is_draft() || r.source.body != BODY_RFC || r.obsoleted_by.is_empty())
+        .collect();
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for (importer, targets) in imports.iter().enumerate() {
+            if !maintained.get(importer).copied().unwrap_or(false) {
+                continue;
+            }
+            let document = records.get(importer).map(|r| &r.source.document);
+            for &target in targets {
+                let other = records.get(target).map(|r| &r.source.document) != document;
+                if other
+                    && let Some(slot) = maintained.get_mut(target)
+                    && !*slot
+                {
+                    *slot = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+    maintained.into_iter().map(|m| !m).collect()
 }
 
 fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]) -> Checked {
@@ -953,6 +989,22 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]
                 .collect()
         })
         .unwrap_or_default();
+    let imports = analysis
+        .drafts
+        .first()
+        .and_then(|&module| analysis.graph.module(module))
+        .map(|module| {
+            module
+                .imports
+                .iter()
+                .filter_map(|import| analysis.graph.module(import.target?))
+                .filter_map(|target| match target.origin {
+                    Origin::Corpus { record } => Some(record),
+                    Origin::Draft | Origin::Builtin => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     syntax.extend(findings);
     Checked {
         outcome: ModuleOutcome {
@@ -961,6 +1013,7 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]
         },
         assignments,
         labels,
+        imports,
     }
 }
 
