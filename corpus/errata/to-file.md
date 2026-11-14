@@ -10,6 +10,8 @@ accepts the text), and **Known errata**: the RFC's errata in the feed when the e
 the RFC that is not in that list is new: if it reports the defect, remove the entry; if not, add its id to the list.
 `glint errata list N` prints the RFC's errata, whatever their status.
 
+`corpus/failures.md` puts these defects among all the errors the corpus still has, Glint's own gaps included.
+
 Entries are in two sections. **Worth filing**: the RFC is current, or a maintained module still imports its modules
 (RFC 2459, 2510); most important first, modules that current RFCs import, then the rest. **Obsolete, low value**: the
 RFC is obsoleted and no maintained module of another document imports its modules (corpus-build's report marks them
