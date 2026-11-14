@@ -167,7 +167,8 @@ For each id not in the entry's **Known errata**, `glint errata show N ID --no-ex
 
 A Verified erratum you decide in this session that fixes a listed defect counts the same way. Add an entry, in the
 format above, for each defect the session shows that no erratum covers: an erratum that is wrong itself, or a defect
-a `prove` loss exposes (step 3). Other errors `prove` still reports after a patch go in the summary as candidates.
+a `prove` loss exposes (step 3). It goes under "Worth filing", or under "Obsolete, low value" when the RFC is
+Historic, or obsoleted with modules corpus-build's `report.md` marks "unmaintained". Other errors `prove` still reports after a patch go in the summary as candidates.
 
 ### 5. Finish the session
 
