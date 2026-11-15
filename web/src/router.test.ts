@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { corpusHash, hashForTarget, moduleHash, parseHash } from "./router";
+import { corpusHash, draftHash, hashForTarget, moduleHash, parseHash, rfcHash } from "./router";
 
 describe("parseHash", () => {
   it("defaults to the checker", () => {
@@ -10,6 +10,24 @@ describe("parseHash", () => {
   it("reads a draft name and an RFC number", () => {
     expect(parseHash("#draft-ietf-lamps-foo-03")).toEqual({ view: "checker", draft: "draft-ietf-lamps-foo-03" });
     expect(parseHash("#rfc5280")).toEqual({ view: "checker", rfc: 5280 });
+  });
+
+  it("reads the RFCXML view of an RFC", () => {
+    expect(parseHash("#rfc10082.xml")).toEqual({ view: "checker", rfc: 10082, xml: true });
+    expect(parseHash("#rfc10082")).not.toHaveProperty("xml");
+    expect(parseHash(rfcHash(10082, true))).toEqual({ view: "checker", rfc: 10082, xml: true });
+    expect(rfcHash(10082)).toBe("#rfc10082");
+  });
+
+  it("reads the RFCXML view of a draft", () => {
+    expect(parseHash("#draft-ietf-lamps-foo-03.xml")).toEqual({ view: "checker", draft: "draft-ietf-lamps-foo-03", xml: true });
+    expect(parseHash("#draft-ietf-lamps-foo.xml")).toEqual({ view: "checker", draft: "draft-ietf-lamps-foo", xml: true });
+    expect(parseHash("#draft-ietf-lamps-foo-03")).not.toHaveProperty("xml");
+    expect(parseHash(draftHash("draft-a-b-01", true))).toEqual({ view: "checker", draft: "draft-a-b-01", xml: true });
+    expect(draftHash("draft-a-b-01")).toBe("#draft-a-b-01");
+    expect(parseHash("#draft-a-b-01.xml?module=M")).toEqual({ view: "checker", draft: "draft-a-b-01", xml: true, module: "M" });
+    // Any other extension is no route.
+    expect(parseHash("#draft-a-b-01.txt")).toEqual({ view: "checker" });
   });
 
   it("reads the corpus, module and OID routes", () => {
@@ -56,9 +74,16 @@ describe("hashForTarget", () => {
     }
   });
 
-  it("accepts draft names, with or without a file extension", () => {
+  it("opens an RFC's RFCXML when its file name is typed", () => {
+    expect(hashForTarget("rfc10082.xml")).toBe("#rfc10082.xml");
+    expect(hashForTarget("RFC10082.txt")).toBe("#rfc10082");
+  });
+
+  it("accepts draft names, with or without a file extension, and opens a draft's RFCXML by its file name", () => {
     expect(hashForTarget("draft-ietf-lamps-foo-03.txt")).toBe("#draft-ietf-lamps-foo-03");
     expect(hashForTarget("Draft-IETF-lamps-foo")).toBe("#draft-ietf-lamps-foo");
+    expect(hashForTarget("draft-ietf-lamps-foo-03.xml")).toBe("#draft-ietf-lamps-foo-03.xml");
+    expect(hashForTarget("draft-ietf-lamps-foo-03.md")).toBeNull();
   });
 
   it("rejects everything else", () => {

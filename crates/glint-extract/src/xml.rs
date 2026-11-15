@@ -26,9 +26,9 @@ fn is_header_only(text: &str) -> bool {
 }
 
 /// A captured ASN.1 element, before it is handed to the [`Sink`].
-struct Captured {
-    candidate: Candidate,
-    marking: Marking,
+pub(crate) struct Captured {
+    pub candidate: Candidate,
+    pub marking: Marking,
 }
 
 impl Captured {
@@ -75,6 +75,37 @@ impl Captured {
     }
 }
 
+/// Hands captured elements to the [`Sink`] in order, holding back a header-only element until the next one shows
+/// whether it continues it ([`Captured::continues_into`]).
+#[derive(Default)]
+pub(crate) struct HeaderJoiner {
+    pending: Option<Captured>,
+}
+
+impl HeaderJoiner {
+    pub fn push(&mut self, captured: Captured, sink: &mut Sink) {
+        let captured = match self.pending.take() {
+            Some(header) if header.continues_into(&captured) => header.join(captured),
+            Some(other) => {
+                sink.accept(other.candidate, other.marking);
+                captured
+            }
+            None => captured,
+        };
+        if is_header_only(&captured.candidate.text) {
+            self.pending = Some(captured);
+        } else {
+            sink.accept(captured.candidate, captured.marking);
+        }
+    }
+
+    pub fn finish(self, sink: &mut Sink) {
+        if let Some(header) = self.pending {
+            sink.accept(header.candidate, header.marking);
+        }
+    }
+}
+
 /// What an `<sourcecode>` or `<artwork>` element holds, judged by its `type` attribute.
 enum Typing {
     Asn1 { exact: bool },
@@ -109,10 +140,11 @@ struct SectionInfo {
     title: Option<String>,
 }
 
-struct Capture {
-    element: String,
-    type_attr: Option<String>,
-    content_start: usize,
+/// An open `<sourcecode>` or `<artwork>` element.
+pub(crate) struct Capture {
+    pub element: String,
+    pub type_attr: Option<String>,
+    pub content_start: usize,
     tag_start: usize,
     section: Option<SectionInfo>,
 }
@@ -338,6 +370,12 @@ pub fn code_elements(source: &str) -> Vec<CodeElement> {
 
 /// Finds ASN.1 in `<sourcecode>` (RFCXML v3) and `<artwork>` (RFCXML v2 and v3) elements.
 pub(crate) fn extract(source: &str, sink: &mut Sink) {
+    walk(source, sink, |_, _| {});
+}
+
+/// [`extract`], telling `observe` about each element taken as an ASN.1 candidate, before header-only elements are
+/// joined with the next one.
+pub(crate) fn walk(source: &str, sink: &mut Sink, mut observe: impl FnMut(&Capture, &Captured)) {
     let mut reader = Reader::from_str(source);
     let config = reader.config_mut();
     config.check_end_names = false;
@@ -349,8 +387,7 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
     let mut numbering = Numbering::default();
     let mut capture: Option<Capture> = None;
     let mut name_text: Option<String> = None;
-    // A header-only element waits here for the element that may continue it.
-    let mut pending: Option<Captured> = None;
+    let mut joiner = HeaderJoiner::default();
 
     loop {
         let before = position(&reader);
@@ -423,19 +460,8 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
                     && let Some(done) = capture.take()
                     && let Some(captured) = finish_capture(source, &done, before, after, sink)
                 {
-                    let captured = match pending.take() {
-                        Some(header) if header.continues_into(&captured) => header.join(captured),
-                        Some(other) => {
-                            sink.accept(other.candidate, other.marking);
-                            captured
-                        }
-                        None => captured,
-                    };
-                    if is_header_only(&captured.candidate.text) {
-                        pending = Some(captured);
-                    } else {
-                        sink.accept(captured.candidate, captured.marking);
-                    }
+                    observe(&done, &captured);
+                    joiner.push(captured, sink);
                 }
                 if name == "name"
                     && let Some(title) = name_text.take()
@@ -447,9 +473,7 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
             _ => {}
         }
     }
-    if let Some(header) = pending {
-        sink.accept(header.candidate, header.marking);
-    }
+    joiner.finish(sink);
     if let Some(unfinished) = capture {
         sink.note(
             "I200",
@@ -502,6 +526,31 @@ fn close_element(name: &str, stack: &mut Vec<Frame>, sections: &mut Vec<SectionI
     sections.truncate(sections.len().saturating_sub(closed_sections));
 }
 
+/// How an element of type `type_attr` is taken as ASN.1, noting a non-standard type, or `None` when it is not.
+pub(crate) fn marking(
+    type_attr: Option<&str>,
+    span: &Range<usize>,
+    sink: &mut Sink,
+) -> Option<Marking> {
+    match typing(type_attr) {
+        Typing::Asn1 { exact } => {
+            if !exact {
+                sink.note(
+                    "W203",
+                    format!(
+                        "non-standard type `{}` for ASN.1; use `asn.1`",
+                        type_attr.unwrap_or_default()
+                    ),
+                    span.clone(),
+                );
+            }
+            Some(Marking::Declared)
+        }
+        Typing::Other => None,
+        Typing::Missing => Some(Marking::Guessed { warn: true }),
+    }
+}
+
 /// The ASN.1 candidate of a closed element, or `None` when the element is not ASN.1.
 fn finish_capture(
     source: &str,
@@ -512,23 +561,7 @@ fn finish_capture(
 ) -> Option<Captured> {
     let content = capture.content_start..end_start.max(capture.content_start);
     let span = capture.tag_start..end_after;
-    let marking = match typing(capture.type_attr.as_deref()) {
-        Typing::Asn1 { exact } => {
-            if !exact {
-                sink.note(
-                    "W203",
-                    format!(
-                        "non-standard type `{}` for ASN.1; use `asn.1`",
-                        capture.type_attr.as_deref().unwrap_or_default()
-                    ),
-                    span.clone(),
-                );
-            }
-            Marking::Declared
-        }
-        Typing::Other => return None,
-        Typing::Missing => Marking::Guessed { warn: true },
-    };
+    let marking = marking(capture.type_attr.as_deref(), &span, sink)?;
 
     let (text, map) = decode_content(source, content).finish();
     if capture.element == "artwork" && marking != Marking::Declared {

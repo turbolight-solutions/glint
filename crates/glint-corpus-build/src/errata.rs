@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use glint_errata::store::{
-    patch_format, patched_series, read_ledger, read_regular_file, scan_patches,
+    patch_format, patched_series, patched_text_series, read_ledger, read_regular_file,
+    scan_patches, scan_text_patches,
 };
 use glint_errata::{
     Decision, MAX_FEED_BYTES, Placement, Row, SeriesFailure, Source, SourceFormat,
@@ -18,6 +19,8 @@ pub type Series = Result<Vec<(u32, String)>, SeriesFailure>;
 #[derive(Debug, Default)]
 pub struct Errata {
     pub series: BTreeMap<u32, Series>,
+    /// For an RFC whose source is XML, its errata as patches to the published `rfcN.txt`, which the web UI shows.
+    pub text_series: BTreeMap<u32, Series>,
     /// The ledger row of each `patched` erratum, by (rfc, errata_id): who decided it and the note.
     pub rows: BTreeMap<(u32, u32), Row>,
 }
@@ -47,8 +50,10 @@ pub fn read_errata(dir: &Path, feed: Option<&Path>) -> Result<Errata, String> {
         .filter(|r| r.decision == Decision::Patched)
         .map(|r| r.key())
         .collect();
+    let text_files = scan_text_patches(dir);
     let orphans: Vec<String> = files
         .iter()
+        .chain(&text_files)
         .filter(|(key, _)| !patched.contains(key))
         .map(|(_, path)| path.display().to_string())
         .collect();
@@ -62,7 +67,8 @@ pub fn read_errata(dir: &Path, feed: Option<&Path>) -> Result<Errata, String> {
         check_verified(&patched, feed_path)?;
     }
     let series = patched_series(dir, &rows, &files);
-    for (rfc, list) in &series {
+    let text_series = patched_text_series(dir, &rows, &text_files);
+    for (rfc, list) in series.iter().chain(&text_series) {
         for (id, patch) in list.iter().flatten() {
             if let Some(problem) = forbidden_in_patch(patch) {
                 return Err(format!("the patch of RFC {rfc} erratum {id}: {problem}"));
@@ -74,7 +80,11 @@ pub fn read_errata(dir: &Path, feed: Option<&Path>) -> Result<Errata, String> {
         .filter(|r| r.decision == Decision::Patched)
         .map(|r| (r.key(), r))
         .collect();
-    Ok(Errata { series, rows })
+    Ok(Errata {
+        series,
+        text_series,
+        rows,
+    })
 }
 
 fn check_verified(patched: &BTreeSet<(u32, u32)>, feed_path: &Path) -> Result<(), String> {

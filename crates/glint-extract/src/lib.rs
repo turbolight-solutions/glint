@@ -8,10 +8,12 @@
 
 mod block;
 mod classify;
+mod declared;
 mod lines;
 mod markdown;
 mod modules;
 mod notes;
+mod rendered;
 mod sink;
 mod source_map;
 mod text;
@@ -22,8 +24,10 @@ use std::path::Path;
 
 pub use block::{Block, BlockKind, Origin, SectionRef};
 pub use classify::{block_kind, is_inline_asn1, is_smi, looks_like_asn1};
+pub use declared::{DeclaredBlock, declared_blocks, extract_declared};
 pub use modules::{ModuleSlice, module_slices};
 pub use notes::{ExtractNote, Severity};
+pub use rendered::{Margin, TextBlock, block_margin, display_lines, is_rendered, locate_blocks};
 pub use source_map::{Assembler, Mapped, SourceMap};
 pub use xml::{CodeElement, code_elements};
 
@@ -48,6 +52,9 @@ pub struct Extraction {
     pub format: Format,
     pub blocks: Vec<Block>,
     pub notes: Vec<ExtractNote>,
+    /// Whether the blocks were declared by the caller ([`extract_declared`]: the ASN.1 elements of the RFCXML source
+    /// the text was rendered from) rather than found in the document.
+    pub blocks_declared: bool,
 }
 
 /// Extracts the ASN.1 blocks of `source`, read as `format`.
@@ -59,6 +66,10 @@ pub fn extract(source: &str, format: Format) -> Extraction {
         Format::Text => text::extract(source, &mut sink),
         Format::Bare => extract_bare(source, &mut sink),
     }
+    finish(format, sink)
+}
+
+fn finish(format: Format, sink: Sink) -> Extraction {
     let mut blocks = sink.blocks;
     if modules_are_all_smi(&blocks) {
         blocks.retain(|block| block.kind != BlockKind::Fragment);
@@ -67,6 +78,7 @@ pub fn extract(source: &str, format: Format) -> Extraction {
         format,
         blocks,
         notes: sink.notes,
+        blocks_declared: false,
     }
 }
 

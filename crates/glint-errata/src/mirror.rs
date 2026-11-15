@@ -13,7 +13,10 @@
 
 use similar::{Algorithm, DiffTag, capture_diff_slices};
 
-use glint_extract::{CodeElement, code_elements};
+use glint_extract::{
+    CodeElement, TextBlock as Block, block_margin, code_elements, display_lines, is_rendered,
+    locate_blocks,
+};
 
 use crate::patch::{Source, SourceFormat, make_patch, split_lines};
 
@@ -29,67 +32,6 @@ pub enum MirrorError {
     /// Anything else: the XML change shows nothing in the text, or no patch can be made.
     #[error("{0}")]
     Other(String),
-}
-
-/// Where an element's content is in the text: `len` lines from the 0-based line `start`, each indented by `indent`
-/// spaces more than in the element.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Block {
-    start: usize,
-    len: usize,
-    indent: usize,
-}
-
-impl Block {
-    fn end(&self) -> usize {
-        self.start.saturating_add(self.len)
-    }
-}
-
-/// A line of an element's content as `xml2rfc` writes it into the text, before its indentation: tabs expanded to
-/// 8-column stops, no-break spaces as spaces, and no whitespace at the end.
-fn display_line(line: &str) -> String {
-    let mut out = String::with_capacity(line.len());
-    let mut column = 0usize;
-    for c in line.chars() {
-        match c {
-            '\t' => {
-                let next = column.saturating_add(8).saturating_sub(column % 8);
-                out.extend(std::iter::repeat_n(' ', next.saturating_sub(column)));
-                column = next;
-            }
-            '\u{a0}' => {
-                out.push(' ');
-                column = column.saturating_add(1);
-            }
-            c => {
-                out.push(c);
-                column = column.saturating_add(1);
-            }
-        }
-    }
-    out.truncate(out.trim_end().len());
-    out
-}
-
-/// The lines of an element's content as the text shows them ([`display_line`]), without the blank lines before the
-/// first and after the last line with text.
-fn display_lines(content: &str) -> Vec<String> {
-    let lines: Vec<String> = content.split('\n').map(display_line).collect();
-    let first = lines.iter().position(|l| !l.is_empty());
-    let last = lines.iter().rposition(|l| !l.is_empty());
-    match (first, last) {
-        (Some(first), Some(last)) => lines.get(first..=last).unwrap_or_default().to_vec(),
-        _ => Vec::new(),
-    }
-}
-
-/// Whether `xml2rfc` shows the element in the text: SVG artwork is left out.
-fn rendered(element: &CodeElement) -> bool {
-    !element
-        .type_attr
-        .as_deref()
-        .is_some_and(|t| t.trim().eq_ignore_ascii_case("svg"))
 }
 
 /// The 1-based line of byte `offset` in `text`.
@@ -108,81 +50,37 @@ fn describe(xml: &str, k: usize, element: &CodeElement) -> String {
     )
 }
 
-/// The indentation the text adds when its lines from `at` are `lines` (display lines, the first one not blank).
-fn matches_at(text: &[&str], at: usize, lines: &[String]) -> Option<usize> {
-    let window = text.get(at..at.checked_add(lines.len())?)?;
-    let (first_text, first_line) = (window.first()?.trim_end(), lines.first()?);
-    let prefix = first_text.strip_suffix(first_line.as_str())?;
-    if !prefix.bytes().all(|b| b == b' ') {
-        return None;
-    }
-    let indent = prefix.len();
-    let rest = window.iter().zip(lines.iter()).skip(1);
-    for (text_line, line) in rest {
-        let text_line = text_line.trim_end();
-        let same = if line.is_empty() {
-            text_line.is_empty()
-        } else {
-            text_line.len() == indent.saturating_add(line.len())
-                && text_line
-                    .get(..indent)
-                    .is_some_and(|p| p.bytes().all(|b| b == b' '))
-                && text_line.get(indent..) == Some(line.as_str())
-        };
-        if !same {
-            return None;
-        }
-    }
-    Some(indent)
-}
-
 /// The places in `text[from..to]` where `lines` is a block.
 fn blocks_in(text: &[&str], lines: &[String], from: usize, to: usize) -> Vec<Block> {
     (from..to.min(text.len()))
         .filter(|&at| at.saturating_add(lines.len()) <= to)
         .filter_map(|at| {
-            matches_at(text, at, lines).map(|indent| Block {
+            block_margin(text, at, lines).map(|margin| Block {
                 start: at,
                 len: lines.len(),
-                indent,
+                indent: margin.indent,
+                bar: margin.bar,
+                breaks: Vec::new(),
             })
         })
         .collect()
 }
 
-/// Each element's block in the text, in order: every shown element with content must be found, after the block of
-/// the element before it. Elements the text does not show (SVG, empty) get `None`.
+/// Each element's block in the text, in order ([`locate_blocks`]).
 fn locate(
     xml: &str,
     elements: &[CodeElement],
     text: &[&str],
 ) -> Result<Vec<Option<Block>>, MirrorError> {
-    let mut cursor = 0usize;
-    let mut found = Vec::with_capacity(elements.len());
-    for (k, element) in elements.iter().enumerate() {
-        let lines = display_lines(&element.text);
-        if lines.is_empty() || !rendered(element) {
-            found.push(None);
-            continue;
-        }
-        let block = (cursor..text.len())
-            .find_map(|at| {
-                matches_at(text, at, &lines).map(|indent| Block {
-                    start: at,
-                    len: lines.len(),
-                    indent,
-                })
-            })
-            .ok_or_else(|| {
-                MirrorError::Unlocated(format!(
-                    "{} is not found in the text after the block before it",
-                    describe(xml, k, element)
-                ))
-            })?;
-        cursor = block.end();
-        found.push(Some(block));
-    }
-    Ok(found)
+    locate_blocks(elements, text).map_err(|k| {
+        let what = elements.get(k).map_or_else(
+            || format!("element {}", k.saturating_add(1)),
+            |e| describe(xml, k, e),
+        );
+        MirrorError::Unlocated(format!(
+            "{what} is not found in the text after the block before it"
+        ))
+    })
 }
 
 /// The XML around the elements' content: the text before the first, between each two, and after the last.
@@ -229,7 +127,7 @@ fn only_content_changes(
 
 /// The new lines of a block: `block`'s lines of the text with the change from `old` to `new` (display lines) made,
 /// lines the change keeps copied from the text, and new lines indented like the block.
-fn changed_block(text: &[&str], block: Block, old: &[String], new: &[String]) -> Vec<String> {
+fn changed_block(text: &[&str], block: &Block, old: &[String], new: &[String]) -> Vec<String> {
     let mut out = Vec::with_capacity(new.len());
     for op in capture_diff_slices(Algorithm::Myers, old, new) {
         let (tag, old_range, new_range) = op.as_tag_tuple();
@@ -244,10 +142,11 @@ fn changed_block(text: &[&str], block: Block, old: &[String], new: &[String]) ->
             );
         } else {
             out.extend(new.get(new_range).unwrap_or_default().iter().map(|line| {
+                let margin = block.margin();
                 if line.is_empty() {
-                    "\n".to_owned()
+                    format!("{}\n", margin.blank())
                 } else {
-                    format!("{}{line}\n", " ".repeat(block.indent))
+                    format!("{}{line}\n", margin.text())
                 }
             }));
         }
@@ -275,7 +174,7 @@ pub fn mirror_text(xml_before: &str, xml_after: &str, text: &str) -> Result<Stri
     }
     for &k in &changed {
         if let Some(element) = old.get(k)
-            && (!rendered(element) || display_lines(&element.text).is_empty())
+            && (!is_rendered(element) || display_lines(&element.text).is_empty())
         {
             return Err(MirrorError::Unlocated(format!(
                 "{} changes, but the text does not show it",
@@ -291,6 +190,13 @@ pub fn mirror_text(xml_before: &str, xml_after: &str, text: &str) -> Result<Stri
         let (Some(Some(block)), Some(a), Some(b)) = (blocks.get(k), old.get(k), new.get(k)) else {
             continue;
         };
+        // RFCs from 8650 on, the only ones read from RFCXML, are not paginated.
+        if !block.breaks.is_empty() {
+            return Err(MirrorError::Unlocated(format!(
+                "{} runs across a page break of the text",
+                describe(xml_before, k, a)
+            )));
+        }
         // The block must be the only one with this content between its neighbours, or the k-th block was found in
         // the wrong place.
         let from = blocks
@@ -322,7 +228,7 @@ pub fn mirror_text(xml_before: &str, xml_after: &str, text: &str) -> Result<Stri
                 .iter()
                 .copied(),
         );
-        out.extend(changed_block(&lines, *block, &old_lines, &new_lines));
+        out.extend(changed_block(&lines, block, &old_lines, &new_lines));
         at = block.end();
     }
     out.extend(lines.get(at..).unwrap_or_default().iter().copied());
@@ -401,6 +307,23 @@ mod tests {
         let applied = apply_patch(text, &patch, TEXT).map_err(|e| MirrorError::Other(e.0))?;
         assert_eq!(Ok(applied.clone()), mirror_text(before, after, text));
         Ok(applied)
+    }
+
+    #[test]
+    fn a_change_in_a_quoted_block_keeps_the_bar() {
+        // xml2rfc draws a <sourcecode> inside a <blockquote> behind a bar (RFC 8951 section 4).
+        let before = xml(
+            "<blockquote>\n<t>follows:</t>\n<sourcecode type=\"asn.1\">\nA ::= SEQUENCE {\n  b  INTEGER }\n\nC ::= BOOLEAN\n</sourcecode>\n</blockquote>\n",
+        );
+        let after = before.replace("  b  INTEGER }", "  b  INTEGER,\n\n  c  BOOLEAN }");
+        let text = "1.  One\n\n   |  follows:\n   |  \n   |     A ::= SEQUENCE {\n   |       b  INTEGER }\n   |  \n   |     C ::= BOOLEAN\n\nEnd\n";
+        assert_eq!(
+            mirror(&before, &after, text),
+            Ok(text.replace(
+                "   |       b  INTEGER }\n",
+                "   |       b  INTEGER,\n   |\n   |       c  BOOLEAN }\n"
+            ))
+        );
     }
 
     #[test]
@@ -524,6 +447,17 @@ mod tests {
             Err(MirrorError::Unlocated(_))
         ));
         assert!(mirror_text(&before, &after, &text.replace("\n  }", "\n   }")).is_ok());
+    }
+
+    #[test]
+    fn a_block_across_a_page_break_is_not_mirrored() {
+        let before = xml("<sourcecode>\nA ::= SEQUENCE {\n  b  INTEGER }\n</sourcecode>\n");
+        let after = before.replace("b  INTEGER", "b  BOOLEAN");
+        let text = "   A ::= SEQUENCE {\n\nAuthor                    Standards Track                  [Page 3]\n\u{c}\nRFC 100                        One                       October 2026\n\n     b  INTEGER }\n";
+        assert!(matches!(
+            mirror_text(&before, &after, text),
+            Err(MirrorError::Unlocated(m)) if m.contains("runs across a page break")
+        ));
     }
 
     #[test]

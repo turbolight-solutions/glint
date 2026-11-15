@@ -29,7 +29,7 @@ Glint is code (the `glint` binary, and the site: `index.html`, the scripts and `
 The data carries a schema number, and code reads exactly one schema; the schema is also in the path, so code never sees data of another schema. The site publishes, per schema:
 
 - `data/v<schema>/latest.json`: `{ "schema", "build" }`, the current build; not cached.
-- `data/v<schema>/<build>/corpus.json` and `documents.bin.gz` (the texts of the RFCs and active drafts with an ASN.1 module, for the web UI; gzipped by `corpus-build`, because Pages would not compress it, and unpacked by the page), each with a `.sha256` of the file as published; never changed once published. Only the latest build is on the site.
+- `data/v<schema>/<build>/corpus.json` and `documents.bin.gz` (the texts of the RFCs and active drafts with an ASN.1 module, for the web UI: an RFC from 8650 on, or a draft with RFCXML, as its published text with the ASN.1 blocks its XML marks, and its (corrected) RFCXML beside it; gzipped by `corpus-build`, because Pages would not compress it, and unpacked by the page), each with a `.sha256` of the file as published; never changed once published. Only the latest build is on the site.
 
 A build id is `<UTC date>.<first 8 hex digits of a SHA-256 of the content>`. `corpus-build` reads the clock once, at its start (`--date` overrides), and everything after reads the id from the data. Every result names the code version and the data build. When the schema changes, the site publishes only the new one; older Glint versions keep the last data of their schema, and their age warning (data over 30 days old) tells their users to upgrade.
 

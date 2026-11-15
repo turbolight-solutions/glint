@@ -17,7 +17,7 @@ them (`--errata-dir corpus/errata`). The corrected modules name the errata that 
   published text plus the RFC's lower-numbered text patches, under the same rules. `glint errata record` derives it
   from the XML patch when that changes only `<sourcecode>` and `<artwork>` content, block by block; otherwise it is
   the change made to the text work file. `glint errata check` requires one per patched erratum, checks that the series
-  applies and that each agrees with its XML patch. corpus-build does not read them yet.
+  applies and that each agrees with its XML patch. corpus-build applies them to the text the web UI shows.
 - `to-file.md`: defects in RFC ASN.1 that no erratum reports yet, each with the RFC's known errata. An entry is
   removed once an erratum reports it, whatever its status (the `errata-triage` skill checks with `glint errata list`).
 

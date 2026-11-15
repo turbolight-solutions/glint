@@ -12,7 +12,8 @@ pub use closure::{
 };
 pub use config::{Config, ConfigError, SeveritySetting};
 pub use pipeline::{
-    BlockSummary, CheckOptions, ImportSummary, ModuleSummary, Report, check_document, document_id,
+    BlockSummary, CheckOptions, ImportSummary, ModuleSummary, Report, check_document,
+    check_extraction, document_id,
 };
 pub use source::{
     DocumentRef, RefError, draft_urls, latest_revision_url, revision_from_datatracker, rfc_urls,

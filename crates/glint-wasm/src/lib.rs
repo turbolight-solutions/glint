@@ -6,7 +6,7 @@ mod service;
 
 pub use complete::{Completion, Item, byte_to_utf16, complete, utf16_to_byte};
 pub use service::{
-    CheckRequest, DocumentRequest, FormatName, GLINT_VERSION, Service, ServiceError,
+    CheckRequest, DocumentFormat, DocumentRequest, FormatName, GLINT_VERSION, Service, ServiceError,
 };
 
 use serde::Serialize;

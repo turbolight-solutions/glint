@@ -6,8 +6,9 @@
 )]
 
 use glint_corpus::{
-    AppliedErratum, CorpusData, CorpusInfo, DocumentRecord, Documents, Exports, HunkLines,
-    ModuleRecord, ModuleSource, OidAssignment, OidLabels, ParseStatus, SourceKind, SyntaxEra,
+    AppliedErratum, CorpusData, CorpusInfo, DocumentBlock, DocumentRecord, DocumentText, Documents,
+    ErratumPatch, Exports, HunkLines, ModuleRecord, ModuleSource, OidAssignment, OidLabels,
+    ParseStatus, SourceKind, SyntaxEra,
 };
 use glint_wasm::{CheckRequest, DocumentRequest, Service, complete};
 
@@ -122,6 +123,376 @@ fn pasted_text_is_checked_and_the_answer_names_code_and_data() {
     assert!(codes.contains(&"E101".to_owned()), "{codes:?}");
 }
 
+fn text(id: &str, content: &str) -> DocumentText {
+    DocumentText {
+        id: id.to_owned(),
+        format: "text".to_owned(),
+        text: content.to_owned(),
+        blocks: None,
+        xml: None,
+    }
+}
+
+fn codes(response: &serde_json::Value) -> Vec<String> {
+    response["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d["code"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+#[test]
+fn the_text_of_an_xml_rfc_is_checked_with_the_blocks_its_xml_marks() {
+    let content = "1.  Introduction\n\n   Prose.\n\nAppendix A.  ASN.1 Module\n\n   Mine DEFINITIONS ::= BEGIN\n   IMPORTS Name FROM Base { 1 3 6 1 4 1 99 1 };\n   Mine ::= SEQUENCE { a Name }\n   END\n";
+    let start = content.find("   Mine DEFINITIONS").unwrap();
+    let block = DocumentBlock {
+        start,
+        end: content.len(),
+        indent: 3,
+        bar: None,
+        breaks: Vec::new(),
+        type_attr: None,
+        section: Some("A".to_owned()),
+        appendix: true,
+        title: Some("ASN.1 Module".to_owned()),
+    };
+    let mut service = service();
+    let texts = vec![DocumentText {
+        blocks: Some(vec![block]),
+        ..text("rfc9000", content)
+    }];
+    service
+        .load_documents(Documents::write(BUILD, &texts))
+        .unwrap();
+    let request: DocumentRequest = serde_json::from_str(r#"{"rfc": 9000}"#).unwrap();
+    let response = json(&service.check_document(request).unwrap());
+    assert_eq!(response["document"]["format"], "text");
+    // No XML stored beside the text: no other view.
+    assert!(response["document"].get("other_format").is_none());
+    assert!(response["document"].get("xml_source").is_none());
+    assert_eq!(response["blocks"].as_array().unwrap().len(), 1);
+    assert_eq!(response["blocks"][0]["section"], "Appendix A");
+    assert_eq!(response["modules"][0]["name"], "Mine");
+    assert_eq!(response["modules"][0]["start"], start);
+    // The block has no `type` in the XML: XML extraction took it by its content and says so, about the XML: the
+    // text's check counts that finding instead of listing it.
+    assert!(!codes(&response).contains(&"W202".to_owned()), "{response}");
+    assert_eq!(
+        response["document"]["markup_findings"],
+        serde_json::json!({ "errors": 0, "warnings": 1, "infos": 0 })
+    );
+
+    // Pasted, the same text is read by the text heuristics, which do not ask for RFCXML marking, and has no XML
+    // source.
+    let pasted: CheckRequest =
+        serde_json::from_value(serde_json::json!({ "content": content, "name": "rfc9000" }))
+            .unwrap();
+    let response = json(&service.check(pasted).unwrap());
+    assert!(response["document"].get("xml_source").is_none());
+    assert!(response["document"].get("markup_findings").is_none());
+    assert_eq!(response["modules"][0]["name"], "Mine");
+    assert!(!codes(&response).contains(&"W202".to_owned()), "{response}");
+}
+
+const RFC9336_XML: &str = include_str!("../../glint-extract/tests/fixtures/xml/rfc9336.xml");
+const RFC9336_TXT: &str = include_str!("../../glint-extract/tests/fixtures/xml/rfc9336.txt");
+
+/// RFC 9336 as corpus-build stores it: its text with the blocks its XML marks, and its XML beside it; with an
+/// erratum whose text and XML patches each have their own lines.
+fn rfc9336() -> Service {
+    let blocks = glint_extract::declared_blocks(RFC9336_XML, RFC9336_TXT)
+        .unwrap()
+        .into_iter()
+        .map(|b| DocumentBlock {
+            start: b.range.start,
+            end: b.range.end,
+            indent: b.indent,
+            bar: b.bar,
+            breaks: b.breaks.into_iter().map(|r| [r.start, r.end]).collect(),
+            type_attr: b.type_attr,
+            appendix: b.section.as_ref().is_some_and(|s| s.appendix),
+            section: b.section.map(|s| s.number),
+            title: b.title,
+        })
+        .collect();
+    let mut data = data();
+    data.documents.push(DocumentRecord {
+        id: "rfc9336".to_owned(),
+        body: "rfc".to_owned(),
+        status: None,
+        obsoleted_by: Vec::new(),
+        date: None,
+        text_format: Some("text".to_owned()),
+        errata: vec![AppliedErratum {
+            id: 4321,
+            by: "claude".to_owned(),
+            note: "a correction".to_owned(),
+            patch: "--- a/rfc9336.txt\n".to_owned(),
+            hunks: vec![HunkLines {
+                start_line: 10,
+                end_line: 11,
+            }],
+            xml: Some(ErratumPatch {
+                patch: "--- a/rfc9336.xml\n".to_owned(),
+                hunks: vec![HunkLines {
+                    start_line: 20,
+                    end_line: 21,
+                }],
+            }),
+        }],
+        errata_failure: None,
+    });
+    let mut service = Service::default();
+    service.load_corpus(&data.to_json()).unwrap();
+    let texts = vec![
+        DocumentText {
+            blocks: Some(blocks),
+            xml: Some(RFC9336_XML.to_owned()),
+            ..text("rfc9336", RFC9336_TXT)
+        },
+        text("draft-ietf-x-mine-02", DRAFT_TEXT),
+    ];
+    service
+        .load_documents(Documents::write(BUILD, &texts))
+        .unwrap();
+    service
+}
+
+#[test]
+fn an_xml_rfc_opens_as_its_text_or_its_xml_and_each_names_the_other() {
+    let service = rfc9336();
+    let open = |request: serde_json::Value| {
+        json(
+            &service
+                .check_document(serde_json::from_value(request).unwrap())
+                .unwrap(),
+        )
+    };
+    let text = open(serde_json::json!({ "rfc": 9336 }));
+    assert_eq!(
+        text,
+        open(serde_json::json!({ "rfc": 9336, "format": "text" }))
+    );
+    let xml = open(serde_json::json!({ "rfc": 9336, "format": "xml" }));
+
+    let url = "https://www.rfc-editor.org/rfc/rfc9336.xml";
+    assert_eq!(text["document"]["name"], "rfc9336");
+    assert_eq!(text["document"]["format"], "text");
+    assert_eq!(text["document"]["content"], RFC9336_TXT);
+    assert_eq!(text["document"]["other_format"], "xml");
+    assert_eq!(text["document"]["xml_source"], url);
+    assert_eq!(xml["document"]["name"], "rfc9336.xml");
+    assert_eq!(xml["document"]["format"], "xml");
+    assert_eq!(xml["document"]["content"], RFC9336_XML);
+    assert_eq!(xml["document"]["other_format"], "text");
+    assert_eq!(xml["document"]["xml_source"], url);
+    assert!(xml["document"].get("markup_findings").is_none());
+
+    // The two untyped `<sourcecode>` elements: W202 on the XML's elements, a count in the text.
+    let w202 = |r: &serde_json::Value| codes(r).iter().filter(|c| *c == "W202").count();
+    assert_eq!(w202(&xml), 2, "{xml}");
+    assert_eq!(w202(&text), 0, "{text}");
+    assert_eq!(
+        text["document"]["markup_findings"],
+        serde_json::json!({ "errors": 0, "warnings": 2, "infos": 0 })
+    );
+    // Everything else is the same in both views, with the same modules.
+    let others = |r: &serde_json::Value| -> Vec<(String, String, String)> {
+        let mut list: Vec<_> = r["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["code"] != "W202")
+            .map(|d| {
+                let field = |k: &str| d[k].as_str().unwrap().to_owned();
+                (field("code"), field("severity"), field("message"))
+            })
+            .collect();
+        list.sort();
+        list
+    };
+    assert_eq!(others(&text), others(&xml));
+    let names = |r: &serde_json::Value| -> Vec<String> {
+        r["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["name"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert!(!names(&text).is_empty());
+    assert_eq!(names(&text), names(&xml));
+    // The XML view's positions are in the XML.
+    let start = xml["modules"][0]["start"].as_u64().unwrap();
+    assert!(RFC9336_XML[..usize::try_from(start).unwrap()].contains("<sourcecode"));
+
+    // Each view's errata are its own patches and lines.
+    let erratum = |r: &serde_json::Value| r["document"]["errata"][0].clone();
+    assert_eq!(erratum(&text)["patch"], "--- a/rfc9336.txt\n");
+    assert_eq!(
+        erratum(&text)["hunks"],
+        serde_json::json!([{"start_line": 10, "end_line": 11}])
+    );
+    assert!(erratum(&text).get("xml").is_none());
+    assert_eq!(erratum(&xml)["patch"], "--- a/rfc9336.xml\n");
+    assert_eq!(
+        erratum(&xml)["hunks"],
+        serde_json::json!([{"start_line": 20, "end_line": 21}])
+    );
+    assert_eq!(erratum(&xml)["id"], 4321);
+    assert!(erratum(&xml).get("xml").is_none());
+}
+
+const FRODOKEM: &str = "draft-ietf-lamps-frodokem-certificates-00";
+const FRODOKEM_XML: &str = include_str!(
+    "../../glint-extract/tests/fixtures/xml/draft-ietf-lamps-frodokem-certificates-00.xml"
+);
+const FRODOKEM_TXT: &str = include_str!(
+    "../../glint-extract/tests/fixtures/xml/draft-ietf-lamps-frodokem-certificates-00.txt"
+);
+
+/// A draft as corpus-build stores it: its paginated text with the blocks its XML marks and their page breaks, and its
+/// XML beside it.
+fn frodokem() -> Service {
+    let blocks: Vec<DocumentBlock> = glint_extract::declared_blocks(FRODOKEM_XML, FRODOKEM_TXT)
+        .unwrap()
+        .into_iter()
+        .map(|b| DocumentBlock {
+            start: b.range.start,
+            end: b.range.end,
+            indent: b.indent,
+            bar: b.bar,
+            breaks: b.breaks.into_iter().map(|r| [r.start, r.end]).collect(),
+            type_attr: b.type_attr,
+            appendix: b.section.as_ref().is_some_and(|s| s.appendix),
+            section: b.section.map(|s| s.number),
+            title: b.title,
+        })
+        .collect();
+    assert!(blocks.iter().any(|b| !b.breaks.is_empty()));
+    let mut data = data();
+    data.documents.push(DocumentRecord {
+        id: FRODOKEM.to_owned(),
+        body: "draft".to_owned(),
+        status: None,
+        obsoleted_by: Vec::new(),
+        date: Some("2026-10-27".to_owned()),
+        text_format: Some("text".to_owned()),
+        errata: Vec::new(),
+        errata_failure: None,
+    });
+    let mut service = Service::default();
+    service.load_corpus(&data.to_json()).unwrap();
+    let texts = vec![DocumentText {
+        blocks: Some(blocks),
+        xml: Some(FRODOKEM_XML.to_owned()),
+        ..text(FRODOKEM, FRODOKEM_TXT)
+    }];
+    service
+        .load_documents(Documents::write(BUILD, &texts))
+        .unwrap();
+    service
+}
+
+#[test]
+fn an_xml_draft_opens_as_its_paginated_text_or_its_xml() {
+    let service = frodokem();
+    let open = |request: serde_json::Value| {
+        json(
+            &service
+                .check_document(serde_json::from_value(request).unwrap())
+                .unwrap(),
+        )
+    };
+    let name = "draft-ietf-lamps-frodokem-certificates";
+    let text = open(serde_json::json!({ "draft": name }));
+    assert_eq!(
+        text,
+        open(serde_json::json!({ "draft": FRODOKEM, "format": "text" }))
+    );
+    let xml = open(serde_json::json!({ "draft": name, "rev": "00", "format": "xml" }));
+    assert_eq!(
+        xml,
+        open(serde_json::json!({ "draft": FRODOKEM, "format": "xml" }))
+    );
+
+    let url = "https://www.ietf.org/archive/id/draft-ietf-lamps-frodokem-certificates-00.xml";
+    assert_eq!(text["document"]["name"], FRODOKEM);
+    assert_eq!(text["document"]["format"], "text");
+    assert_eq!(text["document"]["content"], FRODOKEM_TXT);
+    assert_eq!(text["document"]["other_format"], "xml");
+    assert_eq!(text["document"]["xml_source"], url);
+    assert_eq!(xml["document"]["name"], format!("{FRODOKEM}.xml"));
+    assert_eq!(xml["document"]["format"], "xml");
+    assert_eq!(xml["document"]["content"], FRODOKEM_XML);
+    assert_eq!(xml["document"]["other_format"], "text");
+    assert_eq!(xml["document"]["xml_source"], url);
+    assert_eq!(text["document"]["errata"], serde_json::json!([]));
+
+    // The untyped module element: W202 on the XML, counted in the text.
+    let w202 = |r: &serde_json::Value| codes(r).iter().filter(|c| *c == "W202").count();
+    assert_eq!(w202(&xml), 1, "{xml}");
+    assert_eq!(w202(&text), 0, "{text}");
+    assert_eq!(
+        text["document"]["markup_findings"],
+        serde_json::json!({ "errors": 0, "warnings": 1, "infos": 0 })
+    );
+    // Everything else is the same in both views, and every position in the text is outside its page breaks.
+    let others = |r: &serde_json::Value| -> Vec<(String, String)> {
+        let mut list: Vec<_> = r["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| d["code"] != "W202")
+            .map(|d| {
+                let field = |k: &str| d[k].as_str().unwrap().to_owned();
+                (field("code"), field("message"))
+            })
+            .collect();
+        list.sort();
+        list
+    };
+    assert!(!others(&text).is_empty());
+    assert_eq!(others(&text), others(&xml));
+    let module = &text["modules"][0];
+    assert_eq!(module["name"], "X509-FRODOKEM-2026");
+    assert_eq!(module["name"], xml["modules"][0]["name"]);
+    let (start, end) = (
+        usize::try_from(module["start"].as_u64().unwrap()).unwrap(),
+        usize::try_from(module["end"].as_u64().unwrap()).unwrap(),
+    );
+    let span = &FRODOKEM_TXT[start..end];
+    assert!(span.contains("   X509-FRODOKEM-2026\n") && span.contains("\n   END\n"));
+    // The module runs across the page breaks, which the check left out.
+    assert_eq!(span.matches("[Page ").count(), 4);
+}
+
+#[test]
+fn a_document_without_a_second_view_refuses_it() {
+    let service = rfc9336();
+    let ask = |request: serde_json::Value| {
+        service
+            .check_document(serde_json::from_value(request).unwrap())
+            .err()
+            .unwrap()
+    };
+    let error = ask(serde_json::json!({ "draft": "draft-ietf-x-mine", "format": "xml" }));
+    assert_eq!(error.code, "not_found");
+    assert!(error.message.contains("as text only"), "{}", error.message);
+    let bad: Result<DocumentRequest, _> =
+        serde_json::from_value(serde_json::json!({ "rfc": 9336, "format": "markdown" }));
+    assert!(bad.is_err());
+    // A document has no other view unless the corpus has it.
+    let draft = json(
+        &service
+            .check_document(serde_json::from_str(r#"{"draft": "draft-ietf-x-mine"}"#).unwrap())
+            .unwrap(),
+    );
+    assert!(draft["document"].get("other_format").is_none());
+    assert!(draft["document"].get("markup_findings").is_none());
+}
+
 #[test]
 fn documents_are_checked_by_name_once_their_texts_are_loaded() {
     let mut service = service();
@@ -136,11 +507,7 @@ fn documents_are_checked_by_name_once_their_texts_are_loaded() {
         service.load_documents(wrong_build).err().unwrap().code,
         "data_build"
     );
-    let texts = vec![(
-        "draft-ietf-x-mine-02".to_owned(),
-        "text".to_owned(),
-        DRAFT_TEXT.to_owned(),
-    )];
+    let texts = vec![text("draft-ietf-x-mine-02", DRAFT_TEXT)];
     service
         .load_documents(Documents::write(BUILD, &texts))
         .unwrap();
@@ -184,18 +551,15 @@ fn a_document_checked_by_name_carries_its_errata() {
                 start_line: 3,
                 end_line: 3,
             }],
+            xml: None,
         }],
         errata_failure: None,
     });
     let mut service = Service::default();
     service.load_corpus(&data.to_json()).unwrap();
     let texts = vec![
-        ("rfc1000".to_owned(), "text".to_owned(), BASE.to_owned()),
-        (
-            "draft-ietf-x-mine-02".to_owned(),
-            "text".to_owned(),
-            DRAFT_TEXT.to_owned(),
-        ),
+        text("rfc1000", BASE),
+        text("draft-ietf-x-mine-02", DRAFT_TEXT),
     ];
     service
         .load_documents(Documents::write(BUILD, &texts))

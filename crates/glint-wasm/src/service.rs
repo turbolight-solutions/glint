@@ -6,14 +6,17 @@ use std::path::Path;
 
 use glint_check::{
     CheckOptions, Config, DocumentRef, ImportSummary, Report, SeveritySetting, check_document,
+    check_extraction,
 };
 use glint_corpus::{
-    AppliedErratum, Corpus, CorpusData, CorpusProvider, DataError, DocumentRecord, Documents,
-    ErrataFailure, LabelEvidence, LabelProblem, ModuleRecord, Oid, OidAssignment, ParseStatus,
-    SCHEMA, SyntaxEra, document_title, draft_name, preferred, unique_label,
+    AppliedErratum, Corpus, CorpusData, CorpusProvider, DataError, DocumentBlock, DocumentRecord,
+    Documents, ErrataFailure, LabelEvidence, LabelProblem, ModuleRecord, Oid, OidAssignment,
+    ParseStatus, SCHEMA, SyntaxEra, document_title, draft_name, preferred, unique_label,
 };
 use glint_diag::{Diagnostic, FileId};
-use glint_extract::{BlockKind, Format, detect_format};
+use glint_extract::{
+    BlockKind, DeclaredBlock, Format, SectionRef, detect_format, extract, extract_declared,
+};
 use serde::{Deserialize, Serialize};
 
 /// The version of the code, reported beside the data build in every result.
@@ -171,14 +174,56 @@ impl Service {
         let (text, format) = documents
             .get(&id)
             .ok_or_else(|| self.not_in_corpus(&reference))?;
-        let format = if format == "xml" {
-            Format::Xml
-        } else {
-            Format::Text
-        };
-        let report = check_document(&id, text, format, &self.corpus, &options);
         let record = self.corpus.documents().iter().find(|d| d.id == id);
-        Ok(self.to_response(report, id, Some(text.to_owned()), record))
+        // A document whose source is RFCXML, stored as its text, has its XML (an RFC's corrected by its errata) beside
+        // it: a second view.
+        let xml = documents.xml(&id);
+        let xml_source = xml.map(|_| match reference {
+            DocumentRef::Rfc(_) => format!("https://www.rfc-editor.org/rfc/{id}.xml"),
+            DocumentRef::Draft { .. } => format!("https://www.ietf.org/archive/id/{id}.xml"),
+        });
+        let wanted = request.format.map(DocumentFormat::name);
+        if let Some(wanted) = wanted.filter(|wanted| *wanted != format) {
+            let Some(xml) = xml.filter(|_| wanted == "xml") else {
+                return Err(ServiceError::not_found(format!(
+                    "the corpus has {id} as {format} only"
+                )));
+            };
+            // The XML view: checked as the XML it is, with its errata's XML patches.
+            let name = format!("{id}.xml");
+            let report = check_document(&name, xml, Format::Xml, &self.corpus, &options);
+            let mut response = self.to_response(report, name, Some(xml.to_owned()), record);
+            response.document.errata =
+                record.map(|r| r.errata.iter().filter_map(xml_side).collect());
+            response.document.other_format = Some("text");
+            response.document.xml_source = xml_source;
+            return Ok(response);
+        }
+        let blocks = documents.entry(&id).and_then(|e| e.blocks.as_deref());
+        let extraction = match (format, blocks) {
+            ("xml", _) => extract(text, Format::Xml),
+            (_, Some(blocks)) => {
+                extract_declared(text, &blocks.iter().map(declared_block).collect::<Vec<_>>())
+            }
+            _ => extract(text, Format::Text),
+        };
+        let report = check_extraction(&id, text, extraction, &self.corpus, &options);
+        let declared = report.format == Format::Text && blocks.is_some();
+        let markup_findings = MarkupFindings::count(&report.markup_findings);
+        let mut response = self.to_response(report, id, Some(text.to_owned()), record);
+        if let Some(errata) = response.document.errata.as_mut() {
+            for erratum in errata.iter_mut() {
+                erratum.xml = None;
+            }
+        }
+        if declared {
+            response.document.markup_findings = Some(markup_findings);
+        }
+        if xml.is_some() {
+            response.document.other_format = Some("xml");
+            response.document.xml_source = xml_source;
+        }
+        Ok(response)
     }
 
     /// The document id that `documents.bin` has for a reference: the RFC, or the revision of the draft the corpus
@@ -282,6 +327,9 @@ impl Service {
                 content,
                 errata: record.map(|r| r.errata.clone()),
                 errata_failure: record.and_then(|r| r.errata_failure.clone()),
+                xml_source: None,
+                other_format: None,
+                markup_findings: None,
             },
             files,
             blocks,
@@ -509,8 +557,28 @@ pub struct DocumentRequest {
     pub draft: Option<String>,
     pub rev: Option<String>,
     pub rfc: Option<u32>,
+    /// Which view of the document to open: by default the one `documents.bin` holds first (an RFC from 8650 on or a
+    /// draft whose source is RFCXML: its text); `xml` opens the RFCXML of such a document (an RFC's corrected by its
+    /// errata).
+    pub format: Option<DocumentFormat>,
     #[serde(default)]
     pub options: OptionsInput,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DocumentFormat {
+    Text,
+    Xml,
+}
+
+impl DocumentFormat {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Xml => "xml",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -605,6 +673,42 @@ struct DocumentInfo {
     /// Only for an RFC checked by name whose errata could not be applied: its text is the published one.
     #[serde(skip_serializing_if = "Option::is_none")]
     errata_failure: Option<ErrataFailure>,
+    /// Only for an RFC or draft whose source is RFCXML and that the corpus has both as its text and as its XML,
+    /// checked by name: the URL of the published XML (the RFC Editor's for an RFC, the IETF archive's for a draft).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    xml_source: Option<String>,
+    /// Only for such a document: the format of its other view (`xml` from the text, `text` from the XML), which a
+    /// request with that `format` opens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    other_format: Option<&'static str>,
+    /// Only for the text of a document checked with the ASN.1 blocks its XML marks: how many findings about that marking
+    /// (`W202`, `W203`, ...) the check kept out of `diagnostics`, by severity. The XML view shows them on its elements;
+    /// the text view counts them with its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    markup_findings: Option<MarkupFindings>,
+}
+
+/// The findings about a document's XML markup, counted by severity.
+#[derive(Serialize, Default, Clone, Copy)]
+struct MarkupFindings {
+    errors: usize,
+    warnings: usize,
+    infos: usize,
+}
+
+impl MarkupFindings {
+    fn count(findings: &[Diagnostic]) -> Self {
+        let mut counts = Self::default();
+        for finding in findings {
+            let slot = match finding.severity {
+                glint_diag::Severity::Error => &mut counts.errors,
+                glint_diag::Severity::Warning => &mut counts.warnings,
+                glint_diag::Severity::Info => &mut counts.infos,
+            };
+            *slot = slot.saturating_add(1);
+        }
+        counts
+    }
 }
 
 #[derive(Serialize)]
@@ -691,6 +795,37 @@ fn import_infos(imports: &[ImportSummary]) -> Vec<ImportInfo> {
             symbols: import.symbols.clone(),
         })
         .collect()
+}
+
+/// An erratum as the XML view of its RFC shows it: its XML patch and lines; `None` when it has no XML side.
+fn xml_side(erratum: &AppliedErratum) -> Option<AppliedErratum> {
+    let xml = erratum.xml.clone()?;
+    Some(AppliedErratum {
+        patch: xml.patch,
+        hunks: xml.hunks,
+        xml: None,
+        ..erratum.clone()
+    })
+}
+
+/// A block of `documents.bin` as [`extract_declared`] takes it.
+fn declared_block(block: &DocumentBlock) -> DeclaredBlock {
+    DeclaredBlock {
+        range: block.start..block.end,
+        indent: block.indent,
+        bar: block.bar,
+        breaks: block
+            .breaks
+            .iter()
+            .map(|&[start, end]| start..end)
+            .collect(),
+        type_attr: block.type_attr.clone(),
+        section: block.section.clone().map(|number| SectionRef {
+            number,
+            appendix: block.appendix,
+        }),
+        title: block.title.clone(),
+    }
 }
 
 pub fn status_name(status: ParseStatus) -> &'static str {

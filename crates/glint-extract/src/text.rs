@@ -466,17 +466,40 @@ impl<'a> Document<'a> {
     }
 }
 
-fn classify_line(patterns: &Patterns, content: &str) -> Class {
+/// A line of the furniture of a paginated document: what [`extract`] drops.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PageLine {
+    /// The last line of a page: `Author  Expires <date>  [Page N]`, `Author  Standards Track  [Page N]`.
+    Footer,
+    /// A form feed alone (with whitespace).
+    Feed,
+    /// The first line of a page, `RFC N  <title>  <Month Year>` or `Internet-Draft  <title>  <Month Year>`, with the
+    /// page's form feed in front of it when `after_feed`.
+    Header { after_feed: bool },
+}
+
+/// What `content` (a line without its line break) is as page furniture, if it is any.
+pub(crate) fn page_line(content: &str) -> Option<PageLine> {
+    let patterns = PATTERNS.as_ref()?;
     let without_feed = content.trim_start_matches('\u{0C}');
+    let after_feed = content.len() != without_feed.len();
     if without_feed.trim().is_empty() {
-        return if content.len() == without_feed.len() {
-            Class::Blank
-        } else {
-            Class::Furniture
-        };
+        return after_feed.then_some(PageLine::Feed);
     }
-    if patterns.footer.is_match(without_feed) || patterns.header.is_match(without_feed) {
+    if patterns.footer.is_match(without_feed) {
+        Some(PageLine::Footer)
+    } else if patterns.header.is_match(without_feed) {
+        Some(PageLine::Header { after_feed })
+    } else {
+        None
+    }
+}
+
+fn classify_line(content: &str) -> Class {
+    if page_line(content).is_some() {
         Class::Furniture
+    } else if content.trim().is_empty() {
+        Class::Blank
     } else {
         Class::Content
     }
@@ -513,7 +536,7 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
     let lines = split_lines(source);
     let classes: Vec<Class> = lines
         .iter()
-        .map(|line| classify_line(patterns, line.content(source)))
+        .map(|line| classify_line(line.content(source)))
         .collect();
     let consumed = vec![false; lines.len()];
     let mut document = Document {

@@ -13,13 +13,14 @@ pub use corpus::{
     unique_label,
 };
 pub use data::{
-    CORPUS_FILE, DOCUMENTS_FILE, DataError, DocumentEntry, Documents, Pointer, SCHEMA, build_date,
-    build_dir, latest_path, schema_dir, valid_build_id,
+    BodyRange, CORPUS_FILE, DOCUMENTS_FILE, DataError, DocumentBlock, DocumentEntry, DocumentText,
+    Documents, Pointer, SCHEMA, build_date, build_dir, latest_path, schema_dir, valid_build_id,
 };
 pub use labels::{AllowedOid, LabelEvidence, LabelProblem, OidLabels, OidNode};
 pub use oid::{Oid, OidParseError};
 pub use record::{
     AppliedErratum, BODY_DRAFT, BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, ErrataFailure,
-    Exports, HunkLines, IanaModuleId, ModuleRecord, ModuleSource, OidAssignment, OverrideTier,
-    ParseStatus, SourceKind, SyntaxEra, document_title, draft_name, rfc_number, same_document,
+    ErratumPatch, Exports, HunkLines, IanaModuleId, ModuleRecord, ModuleSource, OidAssignment,
+    OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title, draft_name, rfc_number,
+    same_document,
 };

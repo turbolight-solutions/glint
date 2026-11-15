@@ -306,6 +306,19 @@ pub struct AppliedErratum {
     pub patch: String,
     /// Per hunk of `patch`, the lines its new side (context and added lines) occupies in the corrected text.
     pub hunks: Vec<HunkLines>,
+    /// For an RFC whose source is RFCXML and that `documents.bin` holds as its text with the XML beside it: the XML
+    /// side of the erratum. `patch` and `hunks` above are then the text patch and its lines in the corrected text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xml: Option<ErratumPatch>,
+}
+
+/// An erratum's patch of one view of a document, and where its hunks are in that view once corrected.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErratumPatch {
+    /// A unified diff of the view's source, against the published one plus the lower errata.
+    pub patch: String,
+    /// Per hunk of `patch`, the lines its new side occupies in the corrected view.
+    pub hunks: Vec<HunkLines>,
 }
 
 /// Lines `start_line..=end_line` of the corrected text, 1-based. A hunk that only removed lines has

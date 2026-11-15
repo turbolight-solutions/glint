@@ -524,3 +524,214 @@ describe("applied errata", () => {
     expect(pane(root).textContent).toBe("No errata applied.");
   });
 });
+
+describe("the two views of an RFC from RFCXML", () => {
+  const TEXT = "1.  Introduction\n\n   Thing ::= INTEGER\n";
+  const XML = '<rfc>\n<section>\n<sourcecode>\nThing ::= INTEGER\n</sourcecode>\n</section>\n</rfc>\n';
+  const SOURCE = "https://www.rfc-editor.org/rfc/rfc1000.xml";
+  const W202 = {
+    code: "W202",
+    severity: "warning" as const,
+    message: "text looks like ASN.1 but is not marked as `sourcecode` of type `asn.1`",
+    primary: { file: 0, span: { start: 18, end: 54 }, line_col: [3, 1] as [number, number], section: "1", text: null },
+    secondary: [],
+    notes: [],
+    help: null,
+  };
+  const erratum = { id: 7, by: "human", note: "Thing is an INTEGER" };
+  const VIEWS: Record<"text" | "xml", CheckResponse> = {
+    text: {
+      ...RESPONSE,
+      diagnostics: [],
+      document: {
+        name: "rfc1000",
+        format: "text",
+        content: TEXT,
+        xml_source: SOURCE,
+        other_format: "xml",
+        markup_findings: { errors: 0, warnings: 2, infos: 0 },
+        errata: [{ ...erratum, patch: "--- a/rfc1000.txt\n+++ b/rfc1000.txt\n@@ -3 +3 @@\n-   Thing ::= BOOLEAN\n+   Thing ::= INTEGER\n", hunks: [{ start_line: 3, end_line: 3 }] }],
+      },
+    },
+    xml: {
+      ...RESPONSE,
+      diagnostics: [W202, { ...W202, primary: { ...W202.primary, span: { start: 60, end: 61 } } }],
+      document: {
+        name: "rfc1000.xml",
+        format: "xml",
+        content: XML,
+        xml_source: SOURCE,
+        other_format: "text",
+        errata: [{ ...erratum, patch: "--- a/rfc1000.xml\n+++ b/rfc1000.xml\n@@ -4 +4 @@\n-Thing ::= BOOLEAN\n+Thing ::= INTEGER\n", hunks: [{ start_line: 4, end_line: 4 }] }],
+      },
+    },
+  };
+
+  function serveViews() {
+    return useBackend((_method, args) => VIEWS[(args[0] as { format?: "xml" }).format ?? "text"]);
+  }
+
+  const titles = (root: HTMLElement) => [...root.querySelectorAll(".doc-tab-title")].map((t) => t.textContent);
+  const activeTitle = (root: HTMLElement) => root.querySelector(".doc-tab.active .doc-tab-title")?.textContent;
+  const viewLink = (root: HTMLElement) => root.querySelector<HTMLAnchorElement>(".view-links a:not([target])");
+  const errataPane = (root: HTMLElement) => root.querySelector("#pane-errata") as HTMLElement;
+  const editorText = (root: HTMLElement) => mainView(root).state.doc.toString();
+
+  async function openText(): Promise<{ root: HTMLElement; call: ReturnType<typeof serveViews> }> {
+    const call = serveViews();
+    const root = mount();
+    createChecker(root).show({ view: "checker", rfc: 1000 });
+    await vi.waitFor(() => expect(editorText(root)).toBe(TEXT));
+    return { root, call };
+  }
+
+  it("links the other view and the published XML beside the status line, outside the panes", async () => {
+    const { root } = await openText();
+    const link = viewLink(root);
+    expect(link?.textContent).toBe("RFCXML");
+    expect(link?.getAttribute("href")).toBe("#rfc1000.xml");
+    expect(link?.closest(".toolbar")).not.toBeNull();
+    const published = root.querySelector<HTMLAnchorElement>(".view-links a[target]");
+    expect(published?.href).toBe(SOURCE);
+    expect(published?.target).toBe("_blank");
+    expect(published?.rel).toBe("noopener");
+    // The errata tab no longer carries it.
+    expect(errataPane(root).textContent).not.toContain("RFCXML");
+  });
+
+  it("opens the RFCXML in a tab of its own, and brings an open view's tab forward instead of opening it again", async () => {
+    const { root, call } = await openText();
+    viewLink(root)?.click();
+    await vi.waitFor(() => expect(editorText(root)).toBe(XML));
+    expect(titles(root)).toEqual(["rfc1000", "rfc1000.xml"]);
+    expect(activeTitle(root)).toBe("rfc1000.xml");
+    expect(call.mock.calls.map((c) => c[1][0])).toEqual([
+      expect.not.objectContaining({ format: expect.anything() }),
+      expect.objectContaining({ rfc: 1000, format: "xml" }),
+    ]);
+    expect(viewLink(root)?.textContent).toBe("Text");
+    expect(viewLink(root)?.getAttribute("href")).toBe("#rfc1000");
+
+    viewLink(root)?.click();
+    expect(activeTitle(root)).toBe("rfc1000");
+    expect(editorText(root)).toBe(TEXT);
+    viewLink(root)?.click();
+    expect(activeTitle(root)).toBe("rfc1000.xml");
+    expect(titles(root)).toEqual(["rfc1000", "rfc1000.xml"]);
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
+  it("stands for the findings about the markup with one line in Diagnostics, which opens the RFCXML", async () => {
+    const { root } = await openText();
+    const pane = root.querySelector("#pane-diagnostics") as HTMLElement;
+    const line = pane.querySelector<HTMLAnchorElement>(".markup-findings a");
+    expect(line?.textContent).toBe("2 findings about the RFCXML markup");
+    expect(line?.getAttribute("href")).toBe("#rfc1000.xml");
+    expect(pane.textContent).toContain("No other findings.");
+    // They count with the text view's own findings, so the view opened by default does not hide them.
+    expect(root.querySelector("#pane-diagnostics-tab .badge")?.textContent).toBe("2");
+    expect(root.textContent).toContain("0 errors, 2 warnings (2 about the RFCXML markup)");
+    line?.click();
+    await vi.waitFor(() => expect(editorText(root)).toBe(XML));
+    // The XML view shows them on its elements, and has no such line.
+    expect([...pane.querySelectorAll(".diag .badge")].map((b) => b.textContent)).toEqual(["W202", "W202"]);
+    expect(pane.querySelector(".markup-findings")).toBeNull();
+  });
+
+  it("shows each view's own errata patches, and jumps to that view's lines", async () => {
+    const { root } = await openText();
+    const diff = () => [...errataPane(root).querySelectorAll(".diff-add")].map((e) => e.textContent);
+    expect(diff()).toEqual(["+   Thing ::= INTEGER"]);
+    errataPane(root).querySelector<HTMLAnchorElement>("a.errata-hunk")?.click();
+    expect(mainView(root).state.selection.main.from).toBe(TEXT.indexOf("   Thing"));
+
+    viewLink(root)?.click();
+    await vi.waitFor(() => expect(editorText(root)).toBe(XML));
+    expect(diff()).toEqual(["+Thing ::= INTEGER"]);
+    expect(errataPane(root).querySelector(".errata-hunk")?.textContent).toBe("line 4");
+    errataPane(root).querySelector<HTMLAnchorElement>("a.errata-hunk")?.click();
+    expect(mainView(root).state.selection.main.from).toBe(XML.indexOf("Thing ::="));
+  });
+
+  it("says when the edited text is read without the RFCXML marking", async () => {
+    const { root } = await openText();
+    const status = () => root.querySelector('[role="status"]')?.textContent ?? "";
+    expect(status()).not.toContain("edited text");
+    // The edited text is checked as pasted text: the answer names no other view.
+    answerWith({ ...RESPONSE, diagnostics: [], document: { name: "rfc1000", format: "text" } });
+    mainView(root).dispatch({ changes: { from: 0, insert: "zero\n" } });
+    checkButton(root)?.click();
+    await vi.waitFor(() => expect(status()).toContain("ASN.1 found by reading the edited text, not from the RFCXML marking"));
+  });
+});
+
+describe("the two views of a draft from RFCXML", () => {
+  const DRAFT = "draft-ietf-x-thing-03";
+  const TEXT = "Internet-Draft    Thing    October 2026\n\n   Thing ::= INTEGER\n";
+  const XML = '<rfc>\n<section>\n<sourcecode>\nThing ::= INTEGER\n</sourcecode>\n</section>\n</rfc>\n';
+  const SOURCE = `https://www.ietf.org/archive/id/${DRAFT}.xml`;
+  const VIEWS: Record<"text" | "xml", CheckResponse> = {
+    text: {
+      ...RESPONSE,
+      diagnostics: [],
+      document: {
+        name: DRAFT,
+        format: "text",
+        content: TEXT,
+        xml_source: SOURCE,
+        other_format: "xml",
+        markup_findings: { errors: 0, warnings: 1, infos: 0 },
+        errata: [],
+      },
+    },
+    xml: {
+      ...RESPONSE,
+      diagnostics: [],
+      document: { name: `${DRAFT}.xml`, format: "xml", content: XML, xml_source: SOURCE, other_format: "text", errata: [] },
+    },
+  };
+
+  const editorText = (root: HTMLElement) => mainView(root).state.doc.toString();
+  const viewLink = (root: HTMLElement) => root.querySelector<HTMLAnchorElement>(".view-links a:not([target])");
+  const activeTitle = (root: HTMLElement) => root.querySelector(".doc-tab.active .doc-tab-title")?.textContent;
+
+  function serveViews() {
+    return useBackend((_method, args) => VIEWS[(args[0] as { format?: "xml" }).format ?? "text"]);
+  }
+
+  it("opens the text, links the RFCXML view and the archive's XML, and opens the RFCXML by its route", async () => {
+    const call = serveViews();
+    const root = mount();
+    createChecker(root).show({ view: "checker", draft: DRAFT });
+    await vi.waitFor(() => expect(editorText(root)).toBe(TEXT));
+    expect(call.mock.calls[0]?.[1][0]).toEqual(expect.objectContaining({ draft: DRAFT }));
+    expect(call.mock.calls[0]?.[1][0]).not.toHaveProperty("format");
+    const link = viewLink(root);
+    expect(link?.textContent).toBe("RFCXML");
+    expect(link?.getAttribute("href")).toBe(`#${DRAFT}.xml`);
+    expect(link?.title).toBe("Open the RFCXML of this draft, with its findings about the markup");
+    const published = root.querySelector<HTMLAnchorElement>(".view-links a[target]");
+    expect(published?.href).toBe(SOURCE);
+    expect(published?.getAttribute("aria-label")).toBe("Published RFCXML at ietf.org");
+    expect(root.querySelector(".markup-findings a")?.getAttribute("href")).toBe(`#${DRAFT}.xml`);
+
+    link?.click();
+    await vi.waitFor(() => expect(editorText(root)).toBe(XML));
+    expect(call.mock.calls[1]?.[1][0]).toEqual(expect.objectContaining({ draft: DRAFT, format: "xml" }));
+    expect(activeTitle(root)).toBe(`${DRAFT}.xml`);
+    expect(viewLink(root)?.textContent).toBe("Text");
+    expect(viewLink(root)?.getAttribute("href")).toBe(`#${DRAFT}`);
+  });
+
+  it("opens the RFCXML of a draft typed with its .xml file name", async () => {
+    const call = serveViews();
+    const root = mount();
+    createChecker(root);
+    const input = root.querySelector<HTMLInputElement>('input[type="text"]') as HTMLInputElement;
+    input.value = `${DRAFT}.xml`;
+    root.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(editorText(root)).toBe(XML));
+    expect(call.mock.calls[0]?.[1][0]).toEqual(expect.objectContaining({ draft: DRAFT, format: "xml" }));
+    expect(activeTitle(root)).toBe(`${DRAFT}.xml`);
+  });
+});

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::CorpusData;
 
 /// The schema of the data this code reads. Bumped whenever the layout of any data file changes.
-pub const SCHEMA: u32 = 3;
+pub const SCHEMA: u32 = 4;
 
 /// The directory of every build of the current schema, relative to the site root.
 pub fn schema_dir() -> String {
@@ -136,6 +136,71 @@ pub struct DocumentEntry {
     /// Byte range of the text in the body.
     pub start: usize,
     pub len: usize,
+    /// For the text of an RFC or draft whose source is RFCXML: the blocks of the XML elements that XML extraction takes
+    /// as ASN.1, which a check extracts instead of reading the text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<Vec<DocumentBlock>>,
+    /// For the text of an RFC or draft whose source is RFCXML (with `blocks`): where in the body its RFCXML is (an RFC's
+    /// corrected: the published XML with the XML patches of its errata), the document's second view.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xml: Option<BodyRange>,
+}
+
+/// A byte range of the body of `documents.bin`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BodyRange {
+    pub start: usize,
+    pub len: usize,
+}
+
+impl BodyRange {
+    fn of<'a>(&self, body: &'a [u8]) -> Option<&'a str> {
+        let end = self.start.checked_add(self.len)?;
+        std::str::from_utf8(body.get(self.start..end)?).ok()
+    }
+}
+
+/// A block of a document's text that its RFCXML source marks as ASN.1 (or that XML extraction takes as ASN.1 by its
+/// content: no `type`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentBlock {
+    /// Byte range in the document's text of the block's lines, line breaks included.
+    pub start: usize,
+    pub end: usize,
+    /// The margin the text puts before each line of the element's content: `indent` bytes of spaces, with a `|` at
+    /// byte `bar` when the element is quoted (`<blockquote>`).
+    pub indent: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bar: Option<usize>,
+    /// In a paginated text (an Internet-Draft's): the byte ranges `[start, end)` in the text of the page breaks between
+    /// the block's lines (footer, form feed, header and the blank lines around them), which are not the element's
+    /// content.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub breaks: Vec<[usize; 2]>,
+    /// The element's `type` attribute.
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub type_attr: Option<String>,
+    /// The section number (`4.1`, `A`), and whether it is an appendix.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub appendix: bool,
+    /// The section title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+/// A document to write into `documents.bin`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentText {
+    pub id: String,
+    /// `xml` or `text`.
+    pub format: String,
+    pub text: String,
+    /// See [`DocumentEntry::blocks`].
+    pub blocks: Option<Vec<DocumentBlock>>,
+    /// See [`DocumentEntry::xml`].
+    pub xml: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -156,18 +221,29 @@ pub struct Documents {
 }
 
 impl Documents {
-    /// Builds the file from `(id, format, text)` triples.
-    pub fn write(build: &str, documents: &[(String, String, String)]) -> Vec<u8> {
+    /// Builds the file.
+    pub fn write(build: &str, documents: &[DocumentText]) -> Vec<u8> {
         let mut entries = Vec::with_capacity(documents.len());
         let mut body: Vec<u8> = Vec::new();
-        for (id, format, text) in documents {
-            entries.push(DocumentEntry {
-                id: id.clone(),
-                format: format.clone(),
-                start: body.len(),
-                len: text.len(),
+        for document in documents {
+            let start = body.len();
+            body.extend_from_slice(document.text.as_bytes());
+            let xml = document.xml.as_ref().map(|xml| {
+                let range = BodyRange {
+                    start: body.len(),
+                    len: xml.len(),
+                };
+                body.extend_from_slice(xml.as_bytes());
+                range
             });
-            body.extend_from_slice(text.as_bytes());
+            entries.push(DocumentEntry {
+                id: document.id.clone(),
+                format: document.format.clone(),
+                start,
+                len: document.text.len(),
+                blocks: document.blocks.clone(),
+                xml,
+            });
         }
         let header = DocumentsHeader {
             schema: SCHEMA,
@@ -192,13 +268,35 @@ impl Documents {
             serde_json::from_slice(head).map_err(|e| DataError::Damaged(e.to_string()))?;
         let body = rest.get(1..).unwrap_or_default().to_vec();
         for entry in &header.documents {
-            let fits = entry
-                .start
-                .checked_add(entry.len)
-                .is_some_and(|end| end <= body.len());
-            if !fits {
+            let text = BodyRange {
+                start: entry.start,
+                len: entry.len,
+            };
+            let fits = |range: &BodyRange| {
+                range
+                    .start
+                    .checked_add(range.len)
+                    .is_some_and(|end| end <= body.len())
+            };
+            if !fits(&text) || entry.xml.as_ref().is_some_and(|xml| !fits(xml)) {
                 return Err(DataError::Damaged(format!(
                     "documents.bin: {} lies outside the file",
+                    entry.id
+                )));
+            }
+            let blocks_fit = entry.blocks.iter().flatten().all(|b| {
+                let mut at = b.start;
+                b.end <= entry.len
+                    && b.breaks.iter().all(|&[start, end]| {
+                        let inside = at <= start && start <= end;
+                        at = end;
+                        inside
+                    })
+                    && at <= b.end
+            });
+            if !blocks_fit {
+                return Err(DataError::Damaged(format!(
+                    "documents.bin: a block of {} lies outside its text",
                     entry.id
                 )));
             }
@@ -240,10 +338,23 @@ impl Documents {
 
     /// The text and format of a document.
     pub fn get(&self, id: &str) -> Option<(&str, &str)> {
-        let entry = self.entries.get(*self.by_id.get(id)?)?;
-        let end = entry.start.checked_add(entry.len)?;
-        let bytes = self.body.get(entry.start..end)?;
-        Some((std::str::from_utf8(bytes).ok()?, entry.format.as_str()))
+        let entry = self.entry(id)?;
+        let text = BodyRange {
+            start: entry.start,
+            len: entry.len,
+        }
+        .of(&self.body)?;
+        Some((text, entry.format.as_str()))
+    }
+
+    /// The RFCXML of an RFC (corrected) or draft stored as its text, when the file has it ([`DocumentEntry::xml`]).
+    pub fn xml(&self, id: &str) -> Option<&str> {
+        self.entry(id)?.xml.as_ref()?.of(&self.body)
+    }
+
+    /// The header entry of a document.
+    pub fn entry(&self, id: &str) -> Option<&DocumentEntry> {
+        self.entries.get(*self.by_id.get(id)?)
     }
 }
 
@@ -268,19 +379,103 @@ mod tests {
         ));
     }
 
+    fn document(id: &str, format: &str, text: &str) -> DocumentText {
+        DocumentText {
+            id: id.to_owned(),
+            format: format.to_owned(),
+            text: text.to_owned(),
+            blocks: None,
+            xml: None,
+        }
+    }
+
     #[test]
     fn documents_round_trip() {
+        let block = DocumentBlock {
+            start: 4,
+            end: 8,
+            indent: 3,
+            bar: None,
+            breaks: vec![[5, 6]],
+            type_attr: Some("asn.1".to_owned()),
+            section: Some("A".to_owned()),
+            appendix: true,
+            title: None,
+        };
         let docs = vec![
-            ("rfc1".to_owned(), "text".to_owned(), "one\ntwo".to_owned()),
-            ("rfc2".to_owned(), "xml".to_owned(), "<rfc/>".to_owned()),
+            document("rfc1", "text", "one\ntwo"),
+            document("rfc2", "xml", "<rfc/>"),
+            DocumentText {
+                blocks: Some(vec![block.clone()]),
+                xml: Some("<rfc>one A</rfc>".to_owned()),
+                ..document("rfc8692", "text", "one\n   A\n")
+            },
+            document("rfc3", "text", "three"),
         ];
         let bytes = Documents::write("2026-11-05.0123abcd", &docs);
         let read = Documents::read(bytes).unwrap();
         assert_eq!(read.get("rfc1"), Some(("one\ntwo", "text")));
         assert_eq!(read.get("rfc2"), Some(("<rfc/>", "xml")));
-        assert_eq!(read.get("rfc3"), None);
+        assert_eq!(read.get("rfc4"), None);
+        assert_eq!(read.entry("rfc1").unwrap().blocks, None);
+        assert_eq!(read.entry("rfc8692").unwrap().blocks, Some(vec![block]));
+        // The second view of an RFC stored as text, and the text after it, each where they belong.
+        assert_eq!(read.get("rfc8692"), Some(("one\n   A\n", "text")));
+        assert_eq!(read.xml("rfc8692"), Some("<rfc>one A</rfc>"));
+        assert_eq!(read.get("rfc3"), Some(("three", "text")));
+        assert_eq!(read.xml("rfc1"), None);
+        assert_eq!(read.xml("rfc4"), None);
         assert!(read.require_build("2026-11-05.0123abcd").is_ok());
         assert!(read.require_build("2026-11-06.0123abcd").is_err());
+    }
+
+    #[test]
+    fn a_block_outside_its_text_is_damage() {
+        let block = |start, end, breaks: Vec<[usize; 2]>| DocumentBlock {
+            start,
+            end,
+            indent: 0,
+            bar: None,
+            breaks,
+            type_attr: None,
+            section: None,
+            appendix: false,
+            title: None,
+        };
+        let read = |block: DocumentBlock| {
+            let docs = vec![DocumentText {
+                blocks: Some(vec![block]),
+                ..document("rfc1", "text", "one\ntwo")
+            }];
+            Documents::read(Documents::write("2026-11-05.0123abcd", &docs))
+        };
+        assert!(read(block(0, 7, vec![[2, 3], [4, 5]])).is_ok());
+        // Past the text, a page break outside the block, out of order, or backwards.
+        for damaged in [
+            block(2, 9, Vec::new()),
+            block(0, 4, vec![[3, 5]]),
+            block(2, 7, vec![[1, 3]]),
+            block(0, 7, vec![[4, 5], [2, 3]]),
+            block(0, 7, vec![[3, 2]]),
+        ] {
+            assert!(
+                matches!(read(damaged.clone()), Err(DataError::Damaged(m)) if m.contains("block of rfc1")),
+                "{damaged:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_xml_view_outside_the_file_is_damage() {
+        let docs = vec![DocumentText {
+            xml: Some("<rfc/>".to_owned()),
+            ..document("rfc1", "text", "one")
+        }];
+        let mut bytes = Documents::write("2026-11-05.0123abcd", &docs);
+        bytes.truncate(bytes.len() - 1);
+        assert!(
+            matches!(Documents::read(bytes), Err(DataError::Damaged(m)) if m.contains("rfc1 lies outside"))
+        );
     }
 
     #[test]

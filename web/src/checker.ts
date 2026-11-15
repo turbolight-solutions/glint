@@ -11,13 +11,14 @@ import {
   type FormatName,
   type HunkLines,
   type Label,
+  type MarkupFindings,
   type ModuleInfo,
   api,
   moduleLabel,
 } from "./api";
 import { append, debounce, h, replace } from "./dom";
 import { OffsetMap } from "./offsets";
-import { hashForTarget, moduleHash, oidHash, type Route } from "./router";
+import { draftHash, hashForTarget, moduleHash, oidHash, type Route, rfcHash } from "./router";
 import { createTabStrip, nextActive } from "./tabs";
 
 const AUTO_CHECK_MS = 500;
@@ -71,6 +72,16 @@ interface Tab {
   result: { response: CheckResponse; text: string; offsets: OffsetMap } | null;
   /** Errata of the corpus document the tab was opened from; null for any other text. */
   errata: TabErrata | null;
+  /**
+   * For an RFC or draft opened by name that the corpus has both as its text and as its RFCXML (an RFC's corrected by its
+   * errata): the published XML's URL.
+   */
+  xmlSource: string | null;
+  /**
+   * For such a document: the route of its other view (the RFCXML from the text, the text from the RFCXML). A check of the
+   * text view's edited text reads it with the text heuristics, not with the blocks the RFCXML marks.
+   */
+  otherView: CheckerRoute | null;
   fetching: boolean;
   /** Module to put the cursor at once the document and its check are on screen. */
   pendingModule: { name: string; oid?: string } | null;
@@ -82,8 +93,20 @@ interface Tab {
   scheduleAuto: () => void;
 }
 
+type CheckerRoute = Extract<Route, { view: "checker" }>;
+
+/** The hash of a draft or RFC route: its text or its RFCXML. */
+function viewHash(route: CheckerRoute): string {
+  return route.rfc !== undefined ? rfcHash(route.rfc, route.xml) : draftHash(route.draft ?? "", route.xml);
+}
+
 function titleOf(tab: Tab): string {
   return tab.name ?? (tab.target || "Untitled");
+}
+
+/** How many findings about the RFCXML markup a text view's check counted. */
+function markupCount(markup: MarkupFindings | undefined): number {
+  return markup ? markup.errors + markup.warnings + markup.infos : 0;
 }
 
 export function createChecker(root: HTMLElement): CheckerView {
@@ -114,6 +137,8 @@ export function createChecker(root: HTMLElement): CheckerView {
   const snippets = h("input", { class: "form-check-input", type: "checkbox", id: "opt-snippets", checked: true });
   const auto = h("input", { class: "form-check-input", type: "checkbox", id: "opt-auto", checked: true });
   const status = h("span", { class: "small text-secondary", role: "status", "aria-live": "polite" });
+  // Links to the other view of an RFC the corpus has as text and as RFCXML, and to the published XML.
+  const viewLinks = h("span", { class: "small text-nowrap view-links" });
   const alertBox = h("div", { class: "px-2" });
   const editorHost = h("div", { class: "editor-host" });
   const diagnosticsPane = h("div", { class: "list-group list-group-flush" });
@@ -203,6 +228,8 @@ export function createChecker(root: HTMLElement): CheckerView {
       error: null,
       result: null,
       errata: null,
+      xmlSource: null,
+      otherView: null,
       fetching: false,
       pendingModule: null,
       openModules: new Set(),
@@ -232,6 +259,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     target.value = active.target;
     formatSelect.value = active.format;
     status.textContent = active.status;
+    renderViewLinks(active);
     showError(active.error);
     renderResult(active);
     renderTabs();
@@ -354,14 +382,13 @@ export function createChecker(root: HTMLElement): CheckerView {
   }
 
   /** What a route opens, as it appears in the URL hash and names the tab that holds it. */
-  function targetOf(route: Extract<Route, { view: "checker" }>): string {
-    if (route.rfc !== undefined) return `rfc${route.rfc}`;
-    if (route.draft) return route.draft;
+  function targetOf(route: CheckerRoute): string {
+    if (route.rfc !== undefined || route.draft) return viewHash(route).slice(1);
     // Each module of another body is a file of its own, so it names the tab along with its document.
     return route.document && route.module ? moduleHash(route.document, route.module, route.moduleOid).slice(1) : "";
   }
 
-  async function loadTarget(route: Extract<Route, { view: "checker" }>): Promise<void> {
+  async function loadTarget(route: CheckerRoute): Promise<void> {
     const tab = claimTab();
     const { mine, signal } = startRun(tab);
     tab.pendingModule = route.module ? { name: route.module, oid: route.moduleOid } : null;
@@ -378,7 +405,8 @@ export function createChecker(root: HTMLElement): CheckerView {
         await loadModule(tab, mine, route.document, route.module, route.moduleOid);
         return;
       }
-      const request = route.rfc !== undefined ? { rfc: route.rfc } : { draft: route.draft ?? "" };
+      const format = route.xml ? { format: "xml" as const } : {};
+      const request = route.rfc !== undefined ? { rfc: route.rfc, ...format } : { draft: route.draft ?? "", ...format };
       const response = await api.checkDocument(request, options(), signal);
       if (mine !== tab.sequence) return;
       const content = response.document.content ?? "";
@@ -393,6 +421,11 @@ export function createChecker(root: HTMLElement): CheckerView {
         failure: response.document.errata_failure ?? null,
         text: sameLines ? textOf(tab) : null,
       };
+      tab.xmlSource = response.document.xml_source ?? null;
+      const other = response.document.other_format;
+      const document = route.rfc !== undefined ? { rfc: route.rfc } : { draft: route.draft ?? "" };
+      tab.otherView = other ? { view: "checker", ...document, ...(other === "xml" ? { xml: true } : {}) } : null;
+      if (isActive(tab)) renderViewLinks(tab);
       if (textOf(tab) === content) {
         syncChrome(tab);
         apply(tab, response, content);
@@ -419,6 +452,9 @@ export function createChecker(root: HTMLElement): CheckerView {
     tab.name = `${document}#${name}`;
     tab.format = "bare";
     tab.errata = null;
+    tab.xmlSource = null;
+    tab.otherView = null;
+    if (isActive(tab)) renderViewLinks(tab);
     edit(tab, () => highlightingSpec(true));
     edit(tab, (state) => replaceTextSpec(state, module.text));
     syncChrome(tab);
@@ -476,12 +512,23 @@ export function createChecker(root: HTMLElement): CheckerView {
       .filter((m): m is LintDiagnostic => m !== null);
     edit(tab, (state) => markersSpec(state, markers));
     tab.result = { response, text, offsets };
-    const errors = response.diagnostics.filter((d) => d.severity === "error").length;
-    const warnings = response.diagnostics.filter((d) => d.severity === "warning").length;
+    // Findings about the RFCXML markup are shown on the XML view but counted here too, so the text view (the one
+    // opened by default) does not hide them.
+    const markup = response.document.markup_findings;
+    const errors = response.diagnostics.filter((d) => d.severity === "error").length + (markup?.errors ?? 0);
+    const warnings = response.diagnostics.filter((d) => d.severity === "warning").length + (markup?.warnings ?? 0);
+    const markupTotal = markupCount(markup);
+    const ofMarkup = markupTotal > 0 ? ` (${markupTotal} about the RFCXML markup)` : "";
     setError(tab, null);
+    // A check of the text view's edited text cannot use the blocks the RFCXML source marks: it reads the text, and
+    // says so.
+    const heuristic =
+      tab.otherView?.xml && !response.document.other_format
+        ? " · ASN.1 found by reading the edited text, not from the RFCXML marking"
+        : "";
     setStatus(
       tab,
-      `${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"} · Glint ${response.glint_version}, data ${response.data_build}`,
+      `${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}${ofMarkup} · Glint ${response.glint_version}, data ${response.data_build}${heuristic}`,
     );
     if (isActive(tab)) {
       renderResult(tab);
@@ -505,7 +552,7 @@ export function createChecker(root: HTMLElement): CheckerView {
       return;
     }
     const { response, offsets } = tab.result;
-    renderDiagnostics(response, offsets);
+    renderDiagnostics(tab, response, offsets);
     renderModules(tab, response, offsets);
     renderImports(response);
   }
@@ -530,15 +577,31 @@ export function createChecker(root: HTMLElement): CheckerView {
     );
   }
 
-  function renderDiagnostics(response: CheckResponse, offsets: OffsetMap): void {
-    diagnosticsBadge.textContent = String(response.diagnostics.length);
-    diagnosticsBadge.className = `badge ms-1 ${response.diagnostics.some((d) => d.severity === "error") ? "text-bg-danger" : "text-bg-secondary"}`;
+  /** The line that stands for the findings about the RFCXML marking a text view keeps out of its list. */
+  function markupLine(tab: Tab, count: number): HTMLElement {
+    const label = `${count} finding${count === 1 ? "" : "s"} about the RFCXML markup`;
+    const other = tab.otherView;
+    return h(
+      "div",
+      { class: "list-group-item small markup-findings" },
+      other?.xml ? viewLink(other, label, `Show them on the elements of the ${other.rfc !== undefined ? "corrected " : ""}RFCXML`) : label,
+    );
+  }
+
+  function renderDiagnostics(tab: Tab, response: CheckResponse, offsets: OffsetMap): void {
+    const markupFindingsOf = response.document.markup_findings;
+    const markup = markupCount(markupFindingsOf);
+    diagnosticsBadge.textContent = String(response.diagnostics.length + markup);
+    const anyError = response.diagnostics.some((d) => d.severity === "error") || (markupFindingsOf?.errors ?? 0) > 0;
+    diagnosticsBadge.className = `badge ms-1 ${anyError ? "text-bg-danger" : "text-bg-secondary"}`;
+    const markupFindings = markup > 0 ? markupLine(tab, markup) : null;
     if (response.diagnostics.length === 0) {
-      replace(diagnosticsPane, h("div", { class: "p-3 text-success" }, "No findings."));
+      replace(diagnosticsPane, markupFindings, h("div", { class: "p-3 text-success" }, markupFindings ? "No other findings." : "No findings."));
       return;
     }
     replace(
       diagnosticsPane,
+      markupFindings,
       ...response.diagnostics.map((d) => {
         const inDocument = response.files.find((f) => f.id === d.primary.file)?.kind === "document";
         const open = () => {
@@ -864,6 +927,8 @@ export function createChecker(root: HTMLElement): CheckerView {
     tab.target = "";
     tab.result = null;
     tab.errata = null;
+    tab.xmlSource = null;
+    tab.otherView = null;
     setError(tab, null);
     edit(tab, () => highlightingSpec(tab.format === "bare"));
     edit(tab, (state) => replaceTextSpec(state, text));
@@ -940,10 +1005,70 @@ export function createChecker(root: HTMLElement): CheckerView {
     void loadTarget(parseTarget(hash));
   }
 
-  function parseTarget(hash: string): Extract<Route, { view: "checker" }> {
-    const rfc = /^#rfc(\d+)$/.exec(hash);
-    if (rfc?.[1]) return { view: "checker", rfc: Number(rfc[1]) };
-    return { view: "checker", draft: hash.slice(1) };
+  function parseTarget(hash: string): CheckerRoute {
+    const rfc = /^#rfc(\d+)(\.xml)?$/.exec(hash);
+    if (rfc?.[1]) return { view: "checker", rfc: Number(rfc[1]), ...(rfc[2] ? { xml: true } : {}) };
+    const draft = /^#(.*?)(\.xml)?$/.exec(hash);
+    return { view: "checker", draft: draft?.[1] ?? "", ...(draft?.[2] ? { xml: true } : {}) };
+  }
+
+  /** Shows the tab that holds a route, or opens it in a tab of its own. */
+  function openRoute(route: CheckerRoute): void {
+    const open = tabs.find((t) => t.target === targetOf(route));
+    if (open) {
+      open.pendingModule = route.module ? { name: route.module, oid: route.moduleOid } : null;
+      activate(open);
+    } else {
+      void loadTarget(route);
+    }
+  }
+
+  /** A link that opens the other view of an RFC or draft, or brings its tab forward. */
+  function viewLink(route: CheckerRoute, label: string, title: string): HTMLElement {
+    return h(
+      "a",
+      {
+        href: viewHash(route),
+        title,
+        onclick: (event) => {
+          event.preventDefault();
+          openRoute(route);
+        },
+      },
+      label,
+    );
+  }
+
+  /** The links beside the status line: the other view of the active RFC or draft, and its published RFCXML. */
+  function renderViewLinks(tab: Tab): void {
+    const other = tab.otherView;
+    const rfc = other?.rfc !== undefined;
+    const title = other?.xml
+      ? rfc
+        ? "Open the corrected RFCXML of this RFC, with its findings about the markup"
+        : "Open the RFCXML of this draft, with its findings about the markup"
+      : rfc
+        ? "Open the published text of this RFC, with its errata applied"
+        : "Open the published text of this draft";
+    replace(
+      viewLinks,
+      other ? viewLink(other, other.xml ? "RFCXML" : "Text", title) : null,
+      other && tab.xmlSource ? " " : null,
+      other && tab.xmlSource
+        ? h(
+            "a",
+            {
+              class: "text-secondary",
+              href: tab.xmlSource,
+              target: "_blank",
+              rel: "noopener",
+              title: rfc ? "The RFCXML as the RFC Editor published it, without errata" : "The RFCXML as the IETF archive has it",
+              "aria-label": rfc ? "Published RFCXML at rfc-editor.org" : "Published RFCXML at ietf.org",
+            },
+            "↗",
+          )
+        : null,
+    );
   }
 
   root.className = "view view-checker";
@@ -976,6 +1101,7 @@ export function createChecker(root: HTMLElement): CheckerView {
         formatSelect,
         h("div", { class: "form-check mb-0" }, snippets, h("label", { class: "form-check-label small", for: "opt-snippets" }, "Snippets")),
         h("div", { class: "form-check mb-0" }, auto, h("label", { class: "form-check-label small", for: "opt-auto" }, "Auto-check")),
+        viewLinks,
         status,
       ),
     ),
@@ -1033,13 +1159,7 @@ export function createChecker(root: HTMLElement): CheckerView {
         return;
       }
       // Coming back to a link (the back button, a bookmark) shows the tab that already has it.
-      const open = tabs.find((t) => t.target === wanted);
-      if (open) {
-        open.pendingModule = route.module ? { name: route.module, oid: route.moduleOid } : null;
-        activate(open);
-      } else {
-        void loadTarget(route);
-      }
+      openRoute(route);
     },
   };
 }

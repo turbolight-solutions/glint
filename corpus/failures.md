@@ -228,7 +228,7 @@ recount:
    counted per module. With the `report-unmaintained` change, `report.md` also gives the totals without
    unmaintained modules and marks them under "Modules needing attention".
 3. Inline findings: apply each RFC's patches from `corpus/errata/patches/rfcN/` to a copy of its source, in id
-   order, run `cargo run --release -p glint-asn1 -- check --format json --corpus corpus/out/data/v3/<build>/corpus.json
+   order, run `cargo run --release -p glint-asn1 -- check --format json --corpus corpus/out/data/v4/<build>/corpus.json
    <copy>`, and count E300, W301 and W302.
 4. Update the tables and the as-of line, and tick the items in "What to do next". Drop a row when its module is
    clean; move a module to another cause when a fix shows the first diagnosis was wrong.

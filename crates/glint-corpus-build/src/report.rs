@@ -45,6 +45,8 @@ pub struct ReportData<'a> {
     pub skipped_smi: &'a [(u32, String)],
     pub unreadable: usize,
     pub extraction_notes: &'a BTreeMap<u32, Vec<String>>,
+    /// The notes on drafts with a module: why one is kept as RFCXML for the web UI.
+    pub draft_notes: &'a BTreeMap<String, Vec<String>>,
     pub source_problems: &'a [String],
     pub overrides: &'a [Override],
     /// The errata applied, in order, by RFC.
@@ -395,6 +397,11 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     for (rfc, notes) in data.extraction_notes {
         for note in notes {
             let _ = writeln!(out, "- RFC {rfc}: {note}");
+        }
+    }
+    for (draft, notes) in data.draft_notes {
+        for note in notes {
+            let _ = writeln!(out, "- {draft}: {note}");
         }
     }
     out

@@ -6,11 +6,12 @@ use std::path::Path;
 
 use glint_corpus::{
     AllowedOid, AppliedErratum, BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo,
-    DOCUMENTS_FILE, DocumentRecord, Documents, ErrataFailure, Exports, HunkLines, ModuleRecord,
-    ModuleSource, Oid, OidAssignment, OidLabels, ParseStatus, Pointer, SourceKind, build_dir,
-    latest_path,
+    DOCUMENTS_FILE, DocumentRecord, DocumentText, Documents, ErrataFailure, ErratumPatch, Exports,
+    HunkLines, ModuleRecord, ModuleSource, Oid, OidAssignment, OidLabels, ParseStatus, Pointer,
+    SourceKind, build_dir, latest_path,
 };
 use glint_diag::Severity;
+use glint_errata::LineRange;
 use glint_sema::{
     AssignedId, DraftSource, Evaluator, ExportsModel, ModuleModel, Options, Origin, SourceId,
     analyze, syntax_era,
@@ -21,7 +22,7 @@ use sha2::{Digest, Sha256};
 
 use crate::Settings;
 use crate::collect::{Candidate, RfcExtraction, extract_draft, extract_rfc};
-use crate::errata::{Errata, read_errata};
+use crate::errata::{Errata, Series, read_errata};
 use crate::iana::read_iana;
 use crate::index::{RfcMeta, read_drafts, read_index};
 use crate::overrides::{
@@ -51,7 +52,13 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let extracted: Vec<_> = numbers
         .par_iter()
         .filter_map(|&rfc| {
-            extract_rfc(&settings.rfc_dir, rfc, errata.series.get(&rfc)).map(|e| (rfc, e))
+            extract_rfc(
+                &settings.rfc_dir,
+                rfc,
+                errata.series.get(&rfc),
+                errata.text_series.get(&rfc),
+            )
+            .map(|e| (rfc, e))
         })
         .collect();
 
@@ -62,7 +69,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut extraction_notes: BTreeMap<u32, Vec<String>> = BTreeMap::new();
     let mut rfcs_with_modules: HashSet<u32> = HashSet::new();
     // The text of every document with a module, by document id, for documents.bin.
-    let mut texts_by_id: BTreeMap<String, (String, &'static str)> = BTreeMap::new();
+    let mut texts_by_id: BTreeMap<String, DocumentText> = BTreeMap::new();
     let mut errata_applied: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let mut errata_failed: BTreeMap<u32, glint_errata::SeriesFailure> = BTreeMap::new();
     // The errata of every RFC with a module, by document id, for its document record.
@@ -80,6 +87,9 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         }
         if let Some(failure) = extraction.errata_failure.clone() {
             errata_failed.insert(rfc, failure);
+        }
+        if let Some(reason) = &extraction.kept_as_xml {
+            extraction.notes.push(kept_as_xml_note(reason));
         }
         if !extraction.notes.is_empty() {
             extraction_notes.insert(rfc, extraction.notes.clone());
@@ -102,7 +112,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
                 format!("rfc{rfc}"),
                 document_errata(rfc, &extraction, &errata),
             );
-            texts_by_id.insert(format!("rfc{rfc}"), (extraction.text, extraction.format));
+            let id = format!("rfc{rfc}");
+            texts_by_id.insert(id.clone(), document_text(id, extraction));
         }
     }
 
@@ -122,9 +133,13 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         None => Vec::new(),
     };
     let mut drafts_with_modules = 0_usize;
-    for (id, extraction) in extracted_drafts {
+    // Why a draft with a module is kept as RFCXML for the web UI, by draft.
+    let mut draft_notes: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (id, mut extraction) in extracted_drafts {
         let (smi, modules): (Vec<Candidate>, Vec<Candidate>) =
-            extraction.candidates.into_iter().partition(|c| c.smi);
+            std::mem::take(&mut extraction.candidates)
+                .into_iter()
+                .partition(|c| c.smi);
         smi_modules.extend(
             smi.iter()
                 .map(|c| (c.name.clone(), module_oid(&c.text, &c.name))),
@@ -132,7 +147,10 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         if !modules.is_empty() {
             drafts_with_modules = drafts_with_modules.saturating_add(1);
             candidates.extend(modules);
-            texts_by_id.insert(id, (extraction.text, extraction.format));
+            if let Some(reason) = &extraction.kept_as_xml {
+                draft_notes.insert(id.clone(), vec![kept_as_xml_note(reason)]);
+            }
+            texts_by_id.insert(id.clone(), document_text(id, extraction));
         }
     }
 
@@ -305,10 +323,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         .collect();
 
     let documents = document_index(&records, &meta, &draft_dates, &texts_by_id, &errata_by_id);
-    let texts: Vec<(String, String, String)> = texts_by_id
-        .into_iter()
-        .map(|(id, (text, format))| (id, format.to_owned(), text))
-        .collect();
+    let texts: Vec<DocumentText> = texts_by_id.into_values().collect();
     let mut corpus_data = CorpusData {
         info,
         documents,
@@ -339,6 +354,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         skipped_smi: &skipped_smi,
         unreadable,
         extraction_notes: &extraction_notes,
+        draft_notes: &draft_notes,
         source_problems: &source_problems,
         overrides: &applied,
         errata_applied: &errata_applied,
@@ -427,33 +443,75 @@ fn write_with_digest(dir: &Path, name: &str, bytes: &[u8]) -> Result<(), String>
     std::fs::write(&digest_path, digest).map_err(|e| format!("{}: {e}", digest_path.display()))
 }
 
+fn kept_as_xml_note(reason: &str) -> String {
+    format!("kept as RFCXML for the web UI: {reason}")
+}
+
+fn document_text(id: String, extraction: RfcExtraction) -> DocumentText {
+    DocumentText {
+        id,
+        format: extraction.format.to_owned(),
+        text: extraction.text,
+        blocks: extraction.blocks,
+        xml: extraction.xml,
+    }
+}
+
 /// An RFC's applied errata, and why they were not applied when they were not.
 type DocumentErrata = (Vec<AppliedErratum>, Option<ErrataFailure>);
 
 /// The errata of RFC `rfc` for its document record: each applied erratum with its ledger row (who decided, the note),
-/// its patch and where its hunks are in the corrected text.
+/// its patch and where its hunks are in the corrected text; for the text of an RFC whose source is XML, also its XML
+/// patch and where those hunks are in the corrected XML stored beside the text.
 fn document_errata(rfc: u32, extraction: &RfcExtraction, errata: &Errata) -> DocumentErrata {
-    let patches: HashMap<u32, &String> = match errata.series.get(&rfc) {
-        Some(Ok(list)) => list.iter().map(|(id, patch)| (*id, patch)).collect(),
-        _ => HashMap::new(),
+    let patches_of = |series: &BTreeMap<u32, Series>| -> HashMap<u32, String> {
+        match series.get(&rfc) {
+            Some(Ok(list)) => list.iter().cloned().collect(),
+            _ => HashMap::new(),
+        }
     };
+    let side = |patches: &HashMap<u32, String>, id: u32, ranges: &[LineRange]| ErratumPatch {
+        patch: patches.get(&id).cloned().unwrap_or_default(),
+        hunks: ranges
+            .iter()
+            .map(|r| HunkLines {
+                start_line: r.start,
+                end_line: r.end,
+            })
+            .collect(),
+    };
+    let xml_patches = patches_of(&errata.series);
+    let text_patches = if extraction.text_patches {
+        patches_of(&errata.text_series)
+    } else {
+        HashMap::new()
+    };
+    let shown_patches = if extraction.text_patches {
+        &text_patches
+    } else {
+        &xml_patches
+    };
+    // Only for the text of an RFC whose source is XML: the lines of each erratum in the corrected XML beside it.
+    let xml_ranges: HashMap<u32, &[LineRange]> = extraction
+        .xml_errata_applied
+        .iter()
+        .map(|(id, ranges)| (*id, ranges.as_slice()))
+        .collect();
     let applied = extraction
         .errata_applied
         .iter()
         .map(|(id, ranges)| {
             let row = errata.rows.get(&(rfc, *id));
+            let ErratumPatch { patch, hunks } = side(shown_patches, *id, ranges);
             AppliedErratum {
                 id: *id,
                 by: row.map(|r| r.by.to_string()).unwrap_or_default(),
                 note: row.map(|r| r.note.clone()).unwrap_or_default(),
-                patch: patches.get(id).map(|p| (*p).clone()).unwrap_or_default(),
-                hunks: ranges
-                    .iter()
-                    .map(|r| HunkLines {
-                        start_line: r.start,
-                        end_line: r.end,
-                    })
-                    .collect(),
+                patch,
+                hunks,
+                xml: xml_ranges
+                    .get(id)
+                    .map(|ranges| side(&xml_patches, *id, ranges)),
             }
         })
         .collect();
@@ -469,7 +527,7 @@ fn document_index(
     records: &[ModuleRecord],
     meta: &HashMap<u32, RfcMeta>,
     drafts: &HashMap<String, (String, Option<String>)>,
-    texts: &BTreeMap<String, (String, &'static str)>,
+    texts: &BTreeMap<String, DocumentText>,
     errata: &BTreeMap<String, DocumentErrata>,
 ) -> Vec<DocumentRecord> {
     let mut seen: HashSet<&str> = HashSet::new();
@@ -491,7 +549,7 @@ fn document_index(
             date: rfc_meta
                 .and_then(|m| m.date.clone())
                 .or_else(|| draft.map(|(date, _)| date.clone())),
-            text_format: texts.get(id).map(|(_, format)| (*format).to_owned()),
+            text_format: texts.get(id).map(|t| t.format.clone()),
             errata: errata
                 .get(id)
                 .map(|(applied, _)| applied.clone())

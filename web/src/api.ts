@@ -87,7 +87,8 @@ export interface HunkLines {
   end_line: number;
 }
 
-/** An RFC erratum whose patch the corpus applied to the document's text. */
+/** An RFC erratum whose patch the corpus applied to the document's text: for an RFC with two views, the patch of the
+ * view checked (its text patch, or its XML patch) and its lines in that view. */
 export interface AppliedErratum {
   id: number;
   /** Who decided to apply it: `human` or `claude`. */
@@ -106,6 +107,13 @@ export interface ErrataFailure {
   reason: string;
 }
 
+/** Findings about an RFC's XML markup, counted by severity. */
+export interface MarkupFindings {
+  errors: number;
+  warnings: number;
+  infos: number;
+}
+
 export interface CheckResponse {
   schema_version: number;
   /** The version of Glint that checked, and the build of the data it checked against. */
@@ -119,6 +127,21 @@ export interface CheckResponse {
     /** For a document checked by name: the errata applied to its text, in the order they were applied. */
     errata?: AppliedErratum[];
     errata_failure?: ErrataFailure;
+    /**
+     * For an RFC or draft whose source is RFCXML and that the corpus has both as its text and as its XML (an RFC's
+     * corrected by its errata), checked by name: the URL of the published XML (the RFC Editor's for an RFC, the IETF
+     * archive's for a draft). The text's ASN.1 blocks are the ones the XML marks, not the ones the text heuristics would
+     * find.
+     */
+    xml_source?: string;
+    /** For such a document: the format of its other view, which `checkDocument` with that `format` opens. */
+    other_format?: "text" | "xml";
+    /**
+     * For the text of such a document: the findings about the RFCXML marking of its ASN.1 (`W202`, `W203`, ...) the check
+     * kept out of `diagnostics`, by severity. The XML view shows them on its elements; the text view counts them with
+     * its own.
+     */
+    markup_findings?: MarkupFindings;
   };
   files: FileInfo[];
   blocks: BlockInfo[];
@@ -333,8 +356,15 @@ export const api = {
     if (format) request.format = format;
     return call<CheckResponse>("check", [request], signal);
   },
-  /** Checks a draft or RFC by name, from the texts in the data. */
-  checkDocument(target: { draft: string; rev?: string } | { rfc: number }, options: CheckOptions, signal?: AbortSignal) {
+  /**
+   * Checks a draft or RFC by name, from the texts in the data; `format: "xml"` opens the RFCXML of one the data has as
+   * its text (an RFC's corrected by its errata).
+   */
+  checkDocument(
+    target: { draft: string; rev?: string; format?: "text" | "xml" } | { rfc: number; format?: "text" | "xml" },
+    options: CheckOptions,
+    signal?: AbortSignal,
+  ) {
     return call<CheckResponse>("checkDocument", [{ ...target, options }], signal);
   },
   corpus: () => call<CorpusResponse>("corpus", []),

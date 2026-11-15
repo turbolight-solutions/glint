@@ -118,6 +118,14 @@ fn the_build_writes_digests_and_the_document_texts_under_one_build_id() {
         .map(|d| (d.id.as_str(), d.text_format.as_deref()))
         .collect();
     assert!(indexed.contains(&("rfc8692", Some("xml"))), "{indexed:?}");
+    // Without its published text, an XML RFC's corrected XML is what the web UI shows.
+    assert!(
+        built
+            .report
+            .contains("RFC 8692: kept as RFCXML for the web UI: no rfc8692.txt"),
+        "{}",
+        built.report
+    );
 
     let again = build("layout-again", None);
     assert_eq!(
@@ -874,6 +882,140 @@ fn active_drafts_join_the_corpus_but_are_no_label_evidence() {
             .all(|e| !e.documents.iter().any(|d| d.starts_with("draft-"))),
         "drafts are no label evidence"
     );
+    // The mirror has no text of the draft: the web UI gets its XML.
+    let report = std::fs::read_to_string(dir.join("out/report.md")).unwrap();
+    assert!(
+        report.contains(
+            "- draft-ietf-lamps-shake-01: kept as RFCXML for the web UI: no draft-ietf-lamps-shake-01.txt"
+        ),
+        "{report}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+const FRODOKEM: &str = "draft-ietf-lamps-frodokem-certificates-00";
+
+/// The FrodoKEM draft fixture's text.
+fn frodokem_text() -> String {
+    std::fs::read_to_string(fixture(&format!("xml/{FRODOKEM}.txt"))).unwrap()
+}
+
+/// Builds a corpus of RFC 5280 and the drafts `drafts`, each the FrodoKEM draft fixture's XML under another id, with
+/// the text the mirror has of it, if any.
+fn build_drafts(tag: &str, drafts: &[(&str, Option<String>)]) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("glint-e2e-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (rfcs, mirror) = (dir.join("rfc"), dir.join("drafts"));
+    std::fs::create_dir_all(&rfcs).unwrap();
+    std::fs::create_dir_all(&mirror).unwrap();
+    std::fs::copy(
+        fixture("text/rfc5280-appendix-a.txt"),
+        rfcs.join("rfc5280.txt"),
+    )
+    .unwrap();
+    let mut index = String::from("# index\n");
+    for (id, text) in drafts {
+        std::fs::copy(
+            fixture(&format!("xml/{FRODOKEM}.xml")),
+            mirror.join(format!("{id}.xml")),
+        )
+        .unwrap();
+        if let Some(text) = text {
+            std::fs::write(mirror.join(format!("{id}.txt")), text).unwrap();
+        }
+        index.push_str(&format!(
+            "{id}\t-1\tActive\tI-D Exists\t\t\t2026-10-27\tlamps\n"
+        ));
+    }
+    std::fs::write(mirror.join("all_id2.txt"), index).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_corpus-build"))
+        .arg("--rfc-dir")
+        .arg(&rfcs)
+        .arg("--drafts-dir")
+        .arg(&mirror)
+        .arg("--out")
+        .arg(dir.join("out"))
+        .args(["--date", "2026-11-05"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    dir
+}
+
+#[test]
+fn a_draft_read_from_xml_is_kept_as_its_paginated_text_with_the_xml_beside_it() {
+    let dir = build_drafts("draft-text", &[(FRODOKEM, Some(frodokem_text()))]);
+    let out = dir.join("out");
+    let data = load_data(&out);
+    let texts = documents(&out);
+    let xml = std::fs::read_to_string(fixture(&format!("xml/{FRODOKEM}.xml"))).unwrap();
+    let txt = frodokem_text();
+
+    // documents.bin: the published text, with the blocks of the XML's ASN.1 elements and their page breaks; the XML
+    // beside it.
+    assert_eq!(texts.get(FRODOKEM), Some((txt.as_str(), "text")));
+    assert_eq!(texts.xml(FRODOKEM), Some(xml.as_str()));
+    let record = data.documents.iter().find(|d| d.id == FRODOKEM).unwrap();
+    assert_eq!(record.text_format.as_deref(), Some("text"));
+    assert!(record.errata.is_empty());
+    let blocks = texts.entry(FRODOKEM).unwrap().blocks.clone().unwrap();
+    let [block] = blocks.as_slice() else {
+        panic!("{blocks:?}")
+    };
+    assert!(txt[block.start..block.end].starts_with("   <CODE BEGINS>\n   X509-FRODOKEM-2026\n"));
+    assert_eq!(block.breaks.len(), 4);
+    for &[start, end] in &block.breaks {
+        assert!(txt[start..end].contains("[Page "), "{:?}", &txt[start..end]);
+    }
+    let report = std::fs::read_to_string(out.join("report.md")).unwrap();
+    assert!(!report.contains("kept as RFCXML"), "{report}");
+
+    // The modules are those of the XML, exactly as when the mirror has no text of the draft.
+    let xml_only = build_drafts("draft-xml-only", &[(FRODOKEM, None)]);
+    let modules = |data: &CorpusData| {
+        serde_json::to_string(
+            &data
+                .modules
+                .iter()
+                .filter(|m| m.source.document == FRODOKEM)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    };
+    let before = load_data(&xml_only.join("out"));
+    assert!(!modules(&data).is_empty() && modules(&data) != "[]");
+    assert_eq!(modules(&data), modules(&before));
+    assert_eq!(
+        documents(&xml_only.join("out")).get(FRODOKEM),
+        Some((xml.as_str(), "xml"))
+    );
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(xml_only);
+}
+
+#[test]
+fn a_draft_whose_blocks_are_not_all_in_its_text_is_kept_as_xml() {
+    // The module's first line, re-wrapped.
+    let rewrapped =
+        frodokem_text().replacen("   X509-FRODOKEM-2026\n", "   X509-\n   FRODOKEM-2026\n", 1);
+    let id = "draft-ietf-lamps-rewrapped-00";
+    let dir = build_drafts("draft-rewrapped", &[(id, Some(rewrapped))]);
+    let out = dir.join("out");
+    let texts = documents(&out);
+    let (_, format) = texts.get(id).unwrap();
+    assert_eq!(format, "xml");
+    assert!(texts.entry(id).unwrap().blocks.is_none() && texts.xml(id).is_none());
+    let report = std::fs::read_to_string(out.join("report.md")).unwrap();
+    assert!(
+        report.contains(&format!(
+            "- {id}: kept as RFCXML for the web UI: <sourcecode>/<artwork> element"
+        )),
+        "{report}"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -1306,24 +1448,185 @@ fn a_patch_for_the_other_format_is_not_applied() {
     let _ = std::fs::remove_dir_all(fixture.dir);
 }
 
-#[test]
-fn text_patches_are_not_read() {
-    // The text patches of an XML RFC are for the text a reader sees; the corpus is built from the XML and its patches.
-    let fixture = errata_fixture("text-patch");
-    std::fs::write(
-        glint_errata::store::text_patch_path(&fixture.errata, 8692, 9002),
-        "not a patch the build reads\n",
+/// Adds RFC 8692's published text to an errata fixture, with the text patches of errata 9002 and 9003 mirrored from
+/// their XML patches, as `glint errata record` makes them.
+fn with_published_text(errata_fixture: &ErrataFixture) {
+    use glint_errata::{Source, SourceFormat, apply_patch, mirror_patch, store};
+    std::fs::copy(
+        fixture("xml/rfc8692.txt"),
+        errata_fixture.rfcs.join("rfc8692.txt"),
     )
     .unwrap();
+    let mut xml = std::fs::read_to_string(errata_fixture.rfcs.join("rfc8692.xml")).unwrap();
+    let mut text = std::fs::read_to_string(errata_fixture.rfcs.join("rfc8692.txt")).unwrap();
+    let source = Source {
+        rfc: 8692,
+        format: SourceFormat::Xml,
+    };
+    for id in [9002, 9003] {
+        let patch =
+            store::read_patch(&store::patch_path(&errata_fixture.errata, 8692, id)).unwrap();
+        let after = apply_patch(&xml, &patch, source).unwrap();
+        let text_patch = mirror_patch(8692, &xml, &after, &text).unwrap();
+        store::write_text_patch(&errata_fixture.errata, 8692, id, &text_patch).unwrap();
+        text = apply_patch(
+            &text,
+            &text_patch,
+            Source {
+                format: SourceFormat::Text,
+                ..source
+            },
+        )
+        .unwrap();
+        xml = after;
+    }
+}
+
+#[test]
+fn an_xml_rfc_is_kept_as_its_corrected_text_with_the_blocks_its_xml_marks() {
+    use glint_errata::{Source, SourceFormat, parse_patch};
+    let fixture = errata_fixture("text-view");
+    with_published_text(&fixture);
     run_ok(&fixture, &errata_args(&fixture));
-    let report = std::fs::read_to_string(fixture.dir.join("out/report.md")).unwrap();
-    assert!(!report.contains("built as published"), "{report}");
+    let out = fixture.dir.join("out");
+    let data = load_data(&out);
+    let texts = documents(&out);
+
+    // The modules are still extracted from the corrected XML.
+    let module = data
+        .modules
+        .iter()
+        .find(|m| m.name == "PKIXAlgsForSHAKE-2019")
+        .unwrap();
+    assert_eq!(module.source.errata, [9003]);
+    assert!(module.text.contains("-- EXPORTS ALL; corrected"));
+
+    // documents.bin has the published text with the text patches, and the blocks of the XML's ASN.1 elements.
+    let (text, format) = texts.get("rfc8692").unwrap();
+    assert_eq!(format, "text");
+    assert!(!text.contains("<sourcecode"));
+    assert!(text.contains("      signatureValue       BIT STRING (SIZE (1..MAX)) }"));
+    assert!(text.contains("-- EXPORTS ALL; corrected"));
+    let record = data.documents.iter().find(|d| d.id == "rfc8692").unwrap();
+    assert_eq!(record.text_format.as_deref(), Some("text"));
+    let blocks = texts.entry("rfc8692").unwrap().blocks.clone().unwrap();
+    let sections: Vec<(Option<&str>, bool)> = blocks
+        .iter()
+        .map(|b| (b.section.as_deref(), b.appendix))
+        .collect();
+    assert_eq!(
+        sections,
+        [
+            (Some("3"), false),
+            (Some("3"), false),
+            (Some("4.1"), false),
+            (Some("A"), true)
+        ]
+    );
+    let module_block = text.get(blocks[3].start..blocks[3].end).unwrap();
     assert!(
-        documents(&fixture.dir.join("out"))
-            .get("rfc8692")
-            .unwrap()
-            .0
-            .contains("BIT STRING (SIZE (1..MAX)) }")
+        module_block.starts_with("   PKIXAlgsForSHAKE-2019 {"),
+        "{module_block}"
+    );
+    assert!(module_block.contains("-- EXPORTS ALL; corrected"));
+    assert!(
+        blocks
+            .iter()
+            .all(|b| b.type_attr.as_deref() == Some("asn.1") && b.indent == 3)
+    );
+
+    // Beside the text, the corrected XML: the published XML with the XML patches, as extraction read it.
+    let xml = texts.xml("rfc8692").unwrap();
+    assert!(xml.contains("<sourcecode"));
+    assert!(xml.contains("      signatureValue       BIT STRING (SIZE (1..MAX)) }"));
+    assert!(xml.contains("-- EXPORTS ALL; corrected"));
+    let xml_lines: Vec<&str> = xml.split_inclusive('\n').collect();
+
+    // The errata carry the text patches, and their lines are in the text.
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let mut seen = Vec::new();
+    for erratum in &record.errata {
+        seen.push(erratum.id);
+        let stored = std::fs::read_to_string(glint_errata::store::text_patch_path(
+            &fixture.errata,
+            8692,
+            erratum.id,
+        ))
+        .unwrap();
+        assert_eq!(erratum.patch, stored);
+        let source = Source {
+            rfc: 8692,
+            format: SourceFormat::Text,
+        };
+        let hunks = parse_patch(&erratum.patch, source).unwrap();
+        assert_eq!(hunks.len(), erratum.hunks.len());
+        for (hunk, range) in hunks.iter().zip(&erratum.hunks) {
+            assert_eq!(&lines[range.start_line - 1..range.end_line], hunk.new);
+        }
+        // And the XML patches, with their lines in the corrected XML stored beside the text.
+        let xml_side = erratum.xml.as_ref().unwrap();
+        let stored = std::fs::read_to_string(glint_errata::store::patch_path(
+            &fixture.errata,
+            8692,
+            erratum.id,
+        ))
+        .unwrap();
+        assert_eq!(xml_side.patch, stored);
+        let source = Source {
+            rfc: 8692,
+            format: SourceFormat::Xml,
+        };
+        let hunks = parse_patch(&xml_side.patch, source).unwrap();
+        assert_eq!(hunks.len(), xml_side.hunks.len());
+        for (hunk, range) in hunks.iter().zip(&xml_side.hunks) {
+            assert_eq!(&xml_lines[range.start_line - 1..range.end_line], hunk.new);
+        }
+    }
+    assert_eq!(seen, [9002, 9003]);
+    let report = std::fs::read_to_string(out.join("report.md")).unwrap();
+    assert!(!report.contains("kept as RFCXML"), "{report}");
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
+#[test]
+fn an_xml_rfc_whose_text_patches_do_not_apply_is_kept_as_xml() {
+    let fixture = errata_fixture("text-patch-fails");
+    with_published_text(&fixture);
+    let path = glint_errata::store::text_patch_path(&fixture.errata, 8692, 9003);
+    let broken = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("-- EXPORTS ALL;\n", "-- EXPORT NONE;\n");
+    std::fs::write(&path, broken).unwrap();
+    run_ok(&fixture, &errata_args(&fixture));
+    let out = fixture.dir.join("out");
+    let data = load_data(&out);
+    // The corpus is built from the XML and its patches as before.
+    let module = data
+        .modules
+        .iter()
+        .find(|m| m.name == "PKIXAlgsForSHAKE-2019")
+        .unwrap();
+    assert_eq!(module.source.errata, [9003]);
+    // The web UI gets the corrected XML, with the XML patches.
+    let texts = documents(&out);
+    let (text, format) = texts.get("rfc8692").unwrap();
+    assert_eq!(format, "xml");
+    assert!(text.contains("-- EXPORTS ALL; corrected"));
+    assert!(texts.entry("rfc8692").unwrap().blocks.is_none());
+    assert!(texts.xml("rfc8692").is_none(), "no second view");
+    let record = data.documents.iter().find(|d| d.id == "rfc8692").unwrap();
+    assert!(
+        record
+            .errata
+            .iter()
+            .all(|e| e.patch.starts_with("--- a/rfc8692.xml") && e.xml.is_none())
+    );
+    let report = std::fs::read_to_string(out.join("report.md")).unwrap();
+    assert!(
+        report.contains(
+            "RFC 8692: kept as RFCXML for the web UI: the text patch of erratum 9003 does not apply"
+        ),
+        "{report}"
     );
     let _ = std::fs::remove_dir_all(fixture.dir);
 }

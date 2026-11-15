@@ -3,7 +3,7 @@ use std::ops::Range;
 
 use glint_corpus::CorpusProvider;
 use glint_diag::{Diagnostic, FileId, Files, Label, LineIndex, Severity};
-use glint_extract::{Block, BlockKind, Format, extract};
+use glint_extract::{Block, BlockKind, Extraction, Format, extract};
 use glint_sema::{
     DraftSource, Finding, FragmentSource, Loc, Matched, Options, Origin, SnippetOptions,
     analyze_with_fragments, is_ignored, reverse_check,
@@ -62,6 +62,11 @@ pub struct Report {
     pub format: Format,
     pub blocks: Vec<BlockSummary>,
     pub diagnostics: Vec<Diagnostic>,
+    /// For the text of an RFCXML document checked with the blocks its XML marks ([`Extraction::blocks_declared`]): the
+    /// findings about that marking (`W201`, `W202`, `W203`, `I200`, `I201`: an element's `type`, or what an element
+    /// marked as ASN.1 holds). They are about the XML, not the text, so they are kept out of `diagnostics`; a check of
+    /// the XML gives them on its elements.
+    pub markup_findings: Vec<Diagnostic>,
     pub modules: Vec<ModuleSummary>,
     /// The build id of the data the check used.
     pub data_build: String,
@@ -151,21 +156,39 @@ pub fn check_document(
     corpus: &dyn CorpusProvider,
     options: &CheckOptions,
 ) -> Report {
-    let extraction = extract(text, format);
+    check_extraction(name, text, extract(text, format), corpus, options)
+}
+
+/// Checks `text` against `corpus` with the ASN.1 blocks `extraction` found in it (from [`extract`], or
+/// [`glint_extract::extract_declared`] for the text of an RFCXML document with the blocks its XML marks).
+pub fn check_extraction(
+    name: &str,
+    text: &str,
+    extraction: Extraction,
+    corpus: &dyn CorpusProvider,
+    options: &CheckOptions,
+) -> Report {
     let mut files = Files::new();
     let (document, document_index) = files.add_document(name, text);
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
 
-    for note in &extraction.notes {
-        diagnostics.push(
-            Diagnostic::new(
-                note.code,
-                note.message.clone(),
-                Label::new(document, note.span.clone(), &document_index),
-            )
-            .with_severity(extract_severity(note.severity)),
-        );
-    }
+    let notes = extraction.notes.iter().map(|note| {
+        Diagnostic::new(
+            note.code,
+            note.message.clone(),
+            Label::new(document, note.span.clone(), &document_index),
+        )
+        .with_severity(extract_severity(note.severity))
+    });
+    // Extraction from declared blocks notes only what the XML marks: the markup findings.
+    let markup_findings = if extraction.blocks_declared {
+        let mut markup = apply_config(notes.collect(), &options.config);
+        markup.sort_by_key(|d| d.primary.span.start);
+        markup
+    } else {
+        diagnostics.extend(notes);
+        Vec::new()
+    };
 
     let mut sources = Vec::new();
     let mut fragments = Vec::new();
@@ -189,7 +212,9 @@ pub fn check_document(
             if let Some(section) = &block.origin.section {
                 label = label.with_section(section.to_string());
             }
-            let severity = if is_fragment && extraction.format == Format::Text {
+            // A snippet a text yields is a guess; one its RFCXML source marks is not.
+            let guessed = extraction.format == Format::Text && !extraction.blocks_declared;
+            let severity = if is_fragment && guessed {
                 Severity::Warning
             } else {
                 convert_severity(error.severity)
@@ -276,6 +301,7 @@ pub fn check_document(
         format: extraction.format,
         blocks,
         diagnostics,
+        markup_findings,
         modules,
         data_build: corpus.info().build.clone(),
     }
