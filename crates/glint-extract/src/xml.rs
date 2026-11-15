@@ -274,6 +274,68 @@ fn decode_content(source: &str, content: Range<usize>) -> Assembler {
     assembler
 }
 
+/// A `<sourcecode>` or `<artwork>` element of an XML document, as [`code_elements`] lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeElement {
+    /// `sourcecode` or `artwork`.
+    pub element: String,
+    /// The `type` attribute, entities decoded.
+    pub type_attr: Option<String>,
+    /// The raw content, between the start tag's `>` and the end tag's `<`.
+    pub content: Range<usize>,
+    /// The content as a renderer shows it: character references decoded, CDATA unwrapped, comments and nested tags
+    /// dropped.
+    pub text: String,
+}
+
+/// Every `<sourcecode>` and `<artwork>` element with content, in document order, recognised as [`extract`] does: an
+/// element inside another is part of its content, and empty elements (`<artwork src="..."/>`) are left out. Stops at
+/// the first point where the document is not well-formed.
+pub fn code_elements(source: &str) -> Vec<CodeElement> {
+    let mut reader = Reader::from_str(source);
+    let config = reader.config_mut();
+    config.check_end_names = false;
+    config.allow_unmatched_ends = true;
+    config.allow_dangling_amp = true;
+    let mut elements = Vec::new();
+    let mut open: Option<(String, Option<String>, usize)> = None;
+    loop {
+        let before = position(&reader);
+        let Ok(event) = reader.read_event() else {
+            break;
+        };
+        let after = position(&reader);
+        match event {
+            Event::Eof => break,
+            Event::Start(start) if open.is_none() => {
+                let name = local_name(&start);
+                if matches!(name.as_str(), "sourcecode" | "artwork") {
+                    open = Some((name, attribute(&start, "type"), after));
+                }
+            }
+            Event::End(end) => {
+                let name = end.local_name().as_ref().to_owned();
+                if open
+                    .as_ref()
+                    .is_some_and(|(element, _, _)| *element == name)
+                    && let Some((element, type_attr, content_start)) = open.take()
+                {
+                    let content = content_start..before.max(content_start);
+                    let (text, _) = decode_content(source, content.clone()).finish();
+                    elements.push(CodeElement {
+                        element,
+                        type_attr,
+                        content,
+                        text,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    elements
+}
+
 /// Finds ASN.1 in `<sourcecode>` (RFCXML v3) and `<artwork>` (RFCXML v2 and v3) elements.
 pub(crate) fn extract(source: &str, sink: &mut Sink) {
     let mut reader = Reader::from_str(source);

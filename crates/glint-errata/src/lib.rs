@@ -14,6 +14,7 @@ mod feed;
 mod fingerprint;
 mod ledger;
 mod locate;
+mod mirror;
 mod patch;
 mod queue;
 pub mod store;
@@ -26,6 +27,7 @@ pub use ledger::{
     note_problem, parse_ledger, screen_note, superseding_rfc,
 };
 pub use locate::{Match, locate_all};
+pub use mirror::{MirrorError, agree, mirror_patch, mirror_text};
 pub use patch::{
     Hunk, LineRange, MAX_HUNKS, MAX_PATCH_BYTES, PatchError, Placement, RebaseOutcome,
     SeriesFailure, Source, SourceFormat, apply_patch, apply_patch_placed, apply_series,

@@ -12,6 +12,12 @@ them (`--errata-dir corpus/errata`). The corrected modules name the errata that 
 - `patches/rfcN/<errata_id>.patch`: a unified diff of the document `corpus-build` reads, `rfcN.xml` for RFCs with
   RFCXML (8650 on) and `rfcN.txt` otherwise, with headers exactly `--- a/rfcN.xml` and `+++ b/rfcN.xml`. Each patch
   applies to the published document plus the RFC's lower-numbered patched errata.
+- `patches/rfcN/<errata_id>.txt.patch`, for RFCs whose patches are against `rfcN.xml`: the same correction to the
+  published `rfcN.txt` (headers `--- a/rfcN.txt` and `+++ b/rfcN.txt`), which a reader sees. It applies to the
+  published text plus the RFC's lower-numbered text patches, under the same rules. `glint errata record` derives it
+  from the XML patch when that changes only `<sourcecode>` and `<artwork>` content, block by block; otherwise it is
+  the change made to the text work file. `glint errata check` requires one per patched erratum, checks that the series
+  applies and that each agrees with its XML patch. corpus-build does not read them yet.
 - `to-file.md`: defects in RFC ASN.1 that no erratum reports yet, each with the RFC's known errata. An entry is
   removed once an erratum reports it, whatever its status (the `errata-triage` skill checks with `glint errata list`).
 

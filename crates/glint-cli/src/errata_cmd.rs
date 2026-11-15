@@ -17,12 +17,13 @@ use glint_check::{CheckOptions, check_document};
 use glint_corpus::{Corpus, CorpusData, CorpusProvider, Pointer, build_dir, latest_path};
 use glint_corpus_build::Settings;
 use glint_diag::{LineIndex, Severity};
-use glint_errata::store::{self, StoreError, read_source, rfc_source};
+use glint_errata::store::{self, StoreError, read_source, rfc_source, rfc_text};
 use glint_errata::{
     Decider, Decision, Erratum, Feed, MAX_FEED_BYTES, Match, Row, Rule, Scope, SeriesFailure,
-    Source, SourceFormat, apply_patch, apply_series, changed_lines, compute_queue, compute_scope,
-    failing_keys, feed_forbidden, fingerprint, forbidden_in_patch, line_forbidden, locate_all,
-    make_patch, note_problem, parse_feed, parse_patch, rebase, screen_note, superseding_rfc,
+    Source, SourceFormat, agree, apply_patch, apply_series, changed_lines, compute_queue,
+    compute_scope, failing_keys, feed_forbidden, fingerprint, forbidden_in_patch, line_forbidden,
+    locate_all, make_patch, mirror_patch, note_problem, parse_feed, parse_patch, rebase,
+    screen_note, superseding_rfc,
 };
 use glint_extract::{BlockKind, Format, extract};
 use rayon::prelude::*;
@@ -92,6 +93,10 @@ enum Command {
         no_excerpt: bool,
     },
     /// Write the work file of an erratum: the RFC's source with its lower-numbered patched errata applied
+    ///
+    /// For an RFC whose source is XML, also `rfcN-ID.txt`: the published text with the lower errata's text patches.
+    /// Edit it only when the XML change reaches outside `<sourcecode>` and `<artwork>` content; otherwise `record`
+    /// derives the text patch from the XML change.
     Edit {
         #[arg(value_parser = ascii_number)]
         rfc: u32,
@@ -110,6 +115,9 @@ enum Command {
         work_file: PathBuf,
     },
     /// Record a decision; for `patched`, the patch is the work file's change. Higher patches of the RFC are rebased
+    ///
+    /// For an RFC whose source is XML, the text patch is the text work file's change when it was edited, and is
+    /// derived from the XML change otherwise.
     Record {
         #[arg(value_parser = ascii_number)]
         rfc: u32,
@@ -198,6 +206,23 @@ impl Paths {
 
     fn base_file(&self, rfc: u32, errata_id: u32) -> PathBuf {
         self.work.join(format!("rfc{rfc}-{errata_id}.base"))
+    }
+
+    /// The text work file of an erratum of an RFC whose source is XML.
+    fn text_work_file(&self, rfc: u32, errata_id: u32) -> PathBuf {
+        self.work.join(format!("rfc{rfc}-{errata_id}.txt"))
+    }
+
+    fn text_base_file(&self, rfc: u32, errata_id: u32) -> PathBuf {
+        self.work.join(format!("rfc{rfc}-{errata_id}.txt.base"))
+    }
+}
+
+/// The published text of an RFC, which its text patches apply to.
+fn text_source(rfc: u32) -> Source {
+    Source {
+        rfc,
+        format: SourceFormat::Text,
     }
 }
 
@@ -350,6 +375,66 @@ fn series_of(paths: &Paths, rows: &[Row], rfc: u32) -> Result<Vec<(u32, String)>
         .unwrap_or_else(|| Ok(Vec::new()))
 }
 
+/// The text patches of RFC `rfc`'s `patched` rows (an RFC whose source is XML), `(errata_id, patch)` in id order.
+fn text_series_of(
+    paths: &Paths,
+    rows: &[Row],
+    rfc: u32,
+) -> Result<Vec<(u32, String)>, SeriesFailure> {
+    let files = store::scan_text_patches(&paths.errata);
+    let rfc_rows: Vec<Row> = rows.iter().filter(|r| r.rfc == rfc).cloned().collect();
+    store::patched_text_series(&paths.errata, &rfc_rows, &files)
+        .remove(&rfc)
+        .unwrap_or_else(|| Ok(Vec::new()))
+}
+
+/// The text patches there are of RFC `rfc`'s `patched` rows, for rebasing: a missing one (a patched erratum recorded
+/// before text patches existed) is left out, and `check` reports it.
+fn present_text_series(
+    paths: &Paths,
+    rows: &[Row],
+    rfc: u32,
+) -> Result<Vec<(u32, String)>, String> {
+    let files = store::scan_text_patches(&paths.errata);
+    let present: Vec<Row> = rows
+        .iter()
+        .filter(|r| r.rfc == rfc && files.contains_key(&r.key()))
+        .cloned()
+        .collect();
+    text_series_of(paths, &present, rfc)
+        .map_err(|f| format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason))
+}
+
+/// The published `rfcN.txt` of an RFC whose source is XML.
+fn published_text(paths: &Paths, rfc: u32) -> Result<String, String> {
+    let path = rfc_text(&paths.rfcs, rfc).ok_or_else(|| {
+        format!(
+            "rfc{rfc}.txt is not in {}; the text patches of rfc{rfc} apply to it; run corpus/fetch.sh",
+            paths.rfcs.display()
+        )
+    })?;
+    read_source(&path).map_err(store_error)
+}
+
+/// The text erratum `errata_id`'s text patch applies to: the published `rfcN.txt` plus every lower patched erratum's
+/// text patch.
+fn text_base_for(paths: &Paths, rows: &[Row], rfc: u32, errata_id: u32) -> Result<String, String> {
+    let text = published_text(paths, rfc)?;
+    let lower: Vec<Row> = rows
+        .iter()
+        .filter(|r| r.errata_id < errata_id)
+        .cloned()
+        .collect();
+    let series = text_series_of(paths, &lower, rfc)
+        .map_err(|f| format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason))?;
+    apply_series(&text, &series, text_source(rfc)).map_err(|f| {
+        format!(
+            "rfc{rfc}: the text patch of erratum {} does not apply ({}); triage it first",
+            f.errata_id, f.reason
+        )
+    })
+}
+
 fn below(series: &[(u32, String)], errata_id: u32) -> Vec<(u32, String)> {
     series
         .iter()
@@ -414,7 +499,7 @@ fn mirror_rfcs(paths: &Paths) -> BTreeSet<u32> {
 }
 
 /// The patched errata whose patches do not apply: for each RFC, the first that is missing, unreadable or fails, and
-/// every higher one.
+/// every higher one. For an RFC whose source is XML, the text patches count too, when the mirror has `rfcN.txt`.
 fn failing(paths: &Paths, rows: &[Row]) -> BTreeSet<(u32, u32)> {
     let mut found = BTreeSet::new();
     let rfcs: BTreeSet<u32> = rows
@@ -429,6 +514,13 @@ fn failing(paths: &Paths, rows: &[Row]) -> BTreeSet<(u32, u32)> {
         let failure = series_of(paths, rows, rfc)
             .and_then(|series| apply_series(&text, &series, source).map(|_| ()));
         if let Err(f) = failure {
+            found.extend(failing_keys(rows, rfc, f.errata_id));
+        }
+        if source.format == SourceFormat::Xml
+            && let Ok(published) = published_text(paths, rfc)
+            && let Err(f) = text_series_of(paths, rows, rfc)
+                .and_then(|series| apply_series(&published, &series, text_source(rfc)).map(|_| ()))
+        {
             found.extend(failing_keys(rows, rfc, f.errata_id));
         }
     }
@@ -937,15 +1029,33 @@ fn work_dir(paths: &Paths) -> Result<(), String> {
 fn edit(paths: &Paths, rfc: u32, errata_id: u32, force: bool) -> Result<ExitCode, String> {
     let rows = load_rows(paths)?;
     let (base, source) = base_for(paths, &rows, rfc, errata_id)?;
+    // For an XML RFC, the text work file too, when the mirror has the published text.
+    let text = match source.format {
+        SourceFormat::Text => None,
+        SourceFormat::Xml if rfc_text(&paths.rfcs, rfc).is_none() => {
+            println!(
+                "WARNING: rfc{rfc}.txt is not in {}: no text work file, and `record` cannot make the text patch",
+                paths.rfcs.display()
+            );
+            None
+        }
+        SourceFormat::Xml => Some(text_base_for(paths, &rows, rfc, errata_id)?),
+    };
     work_dir(paths)?;
     let path = paths.work_file(source, errata_id);
-    if std::fs::symlink_metadata(&path).is_ok() && !force {
-        return Err(format!(
-            "{} exists (an edit in progress?); pass --force to start again from the base text",
-            path.display()
-        ));
+    let text_path = paths.text_work_file(rfc, errata_id);
+    for existing in [&path, &text_path] {
+        if std::fs::symlink_metadata(existing).is_ok()
+            && !force
+            && (existing == &path || text.is_some())
+        {
+            return Err(format!(
+                "{} exists (an edit in progress?); pass --force to start again from the base text",
+                existing.display()
+            ));
+        }
     }
-    // The work file first, then the digest of its base: after a crash in between, `record` sees the old digest and
+    // Each work file first, then the digest of its base: after a crash in between, `record` sees the old digest and
     // refuses rather than accepting a work file made from another base.
     store::atomic_write(&path, base.as_bytes()).map_err(store_error)?;
     store::atomic_write(
@@ -953,36 +1063,49 @@ fn edit(paths: &Paths, rfc: u32, errata_id: u32, force: bool) -> Result<ExitCode
         format!("{}\n", digest(&base)).as_bytes(),
     )
     .map_err(store_error)?;
+    if let Some(text) = &text {
+        store::atomic_write(&text_path, text.as_bytes()).map_err(store_error)?;
+        store::atomic_write(
+            &paths.text_base_file(rfc, errata_id),
+            format!("{}\n", digest(text)).as_bytes(),
+        )
+        .map_err(store_error)?;
+    }
     let lower = rows
         .iter()
         .any(|r| r.rfc == rfc && r.decision == Decision::Patched && r.errata_id < errata_id);
+    let plus_lower = if lower {
+        format!(" plus its patched errata below {errata_id}")
+    } else {
+        String::new()
+    };
     println!(
-        "wrote {}: the published {}{}. Edit it, run `glint errata prove`, then `record`.",
+        "wrote {}: the published {}{plus_lower}. Edit it, run `glint errata prove`, then `record`.",
         path.display(),
         source.file_name(),
-        if lower {
-            format!(" plus its patched errata below {errata_id}")
-        } else {
-            String::new()
-        }
     );
+    if text.is_some() {
+        println!(
+            "wrote {}: the published rfc{rfc}.txt{plus_lower}. `record` mirrors a change to <sourcecode> and <artwork> content into it; make the same correction there by hand only when the XML change reaches outside them.",
+            text_path.display()
+        );
+    }
     Ok(ExitCode::SUCCESS)
 }
 
-/// The work file of an edit, checked against the base `edit` wrote it from.
+/// The work file of an edit, checked against the base `edit` wrote it from, whose digest is in `base_file`.
 fn read_work(
-    paths: &Paths,
     rfc: u32,
     errata_id: u32,
     base: &str,
     path: &Path,
+    base_file: &Path,
 ) -> Result<String, String> {
     let bytes = store::read_regular_file(path, store::MAX_SOURCE_BYTES)
         .map_err(|e| format!("cannot read the work file: {e}; run `edit` first"))?;
     let edited =
         String::from_utf8(bytes).map_err(|_| format!("{} is not UTF-8", path.display()))?;
-    let base_file = paths.base_file(rfc, errata_id);
-    let started_from = store::read_regular_file(&base_file, 128)
+    let started_from = store::read_regular_file(base_file, 128)
         .ok()
         .and_then(|b| String::from_utf8(b).ok())
         .ok_or_else(|| format!("cannot read {}: the work file was not made by `edit`; run `edit {rfc} {errata_id} --force` and make the edit again", base_file.display()))?;
@@ -1219,7 +1342,23 @@ fn prove(paths: &Paths, work_file: &Path) -> Result<ExitCode, String> {
     let (rfc, errata_id) = (number(1), number(2));
     let rows = load_rows(paths)?;
     let (base, source) = base_for(paths, &rows, rfc, errata_id)?;
-    let edited = read_work(paths, rfc, errata_id, &base, work_file)?;
+    if !name.ends_with(&format!(
+        ".{}",
+        source.file_name().rsplit('.').next().unwrap_or_default()
+    )) {
+        return Err(format!(
+            "{name} is the text work file of rfc{rfc}, whose source is {}; prove {}",
+            source.file_name(),
+            paths.work_file(source, errata_id).display()
+        ));
+    }
+    let edited = read_work(
+        rfc,
+        errata_id,
+        &base,
+        work_file,
+        &paths.base_file(rfc, errata_id),
+    )?;
     let later: Vec<(u32, String)> = series_of(paths, &rows, rfc)
         .map_err(|f| format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason))?
         .into_iter()
@@ -1344,28 +1483,77 @@ fn flag_far(base: &str, patch: &str, source: Source, e: &Erratum) {
     }
 }
 
-/// Writes the patches of `rebased` that differ from `series`, and reports a rebase failure.
+/// Writes the patches (or with `text`, the text patches) of `rebased` that differ from `series`, and reports a rebase
+/// failure.
 fn write_rebased(
     paths: &Paths,
     rfc: u32,
     skip: u32,
     series: &[(u32, String)],
     rebased: &glint_errata::RebaseOutcome,
+    text: bool,
 ) -> Result<(), String> {
     let old: BTreeMap<u32, &String> = series.iter().map(|(id, p)| (*id, p)).collect();
+    let kind = if text { "text patch" } else { "patch" };
     for (id, patch) in rebased.patches.iter().filter(|(id, _)| *id != skip) {
         if old.get(id).is_none_or(|p| *p != patch) {
-            store::write_patch(&paths.errata, rfc, *id, patch).map_err(store_error)?;
-            println!("rebased the patch of rfc{rfc} erratum {id}");
+            if text {
+                store::write_text_patch(&paths.errata, rfc, *id, patch)
+            } else {
+                store::write_patch(&paths.errata, rfc, *id, patch)
+            }
+            .map_err(store_error)?;
+            println!("rebased the {kind} of rfc{rfc} erratum {id}");
         }
     }
     if let Some(failure) = &rebased.failure {
         println!(
-            "WARNING: the patch of rfc{rfc} erratum {} no longer applies ({}); it and every higher patched erratum of rfc{rfc} are queued as patch-fails",
+            "WARNING: the {kind} of rfc{rfc} erratum {} no longer applies ({}); it and every higher patched erratum of rfc{rfc} are queued as patch-fails",
             failure.errata_id, failure.reason
         );
     }
     Ok(())
+}
+
+/// The text patch of an erratum of an XML RFC, whose XML patch takes `base` to `edited`: the text work file's change
+/// when it was edited (checked against the XML change), otherwise the XML change mirrored into the text.
+fn text_patch(
+    paths: &Paths,
+    rows: &[Row],
+    rfc: u32,
+    errata_id: u32,
+    base: &str,
+    edited: &str,
+) -> Result<(String, &'static str), String> {
+    let text_base = text_base_for(paths, rows, rfc, errata_id)?;
+    let work = paths.text_work_file(rfc, errata_id);
+    let edited_text = if std::fs::symlink_metadata(&work).is_ok() {
+        Some(read_work(
+            rfc,
+            errata_id,
+            &text_base,
+            &work,
+            &paths.text_base_file(rfc, errata_id),
+        )?)
+    } else {
+        None
+    };
+    match edited_text.filter(|text| *text != text_base) {
+        None => mirror_patch(rfc, base, edited, &text_base)
+            .map(|patch| (patch, "mirrored from the XML change"))
+            .map_err(|e| {
+                format!(
+                    "the text patch cannot be derived from the XML change: {e}. Make the same correction in {} (the published rfc{rfc}.txt plus its lower errata; `edit` writes it) and record again",
+                    work.display()
+                )
+            }),
+        Some(text) => {
+            agree(base, edited, &text_base, &text).map_err(|e| format!("{}: {e}", work.display()))?;
+            make_patch(text_source(rfc), &text_base, &text)
+                .map(|patch| (patch, "from the text work file"))
+                .map_err(|e| format!("the text work file: {e}"))
+        }
+    }
 }
 
 fn record(
@@ -1421,11 +1609,11 @@ fn record(
     if decision == Decision::Patched {
         let (base, source) = base_for(paths, &rows, rfc, errata_id)?;
         let edited = read_work(
-            paths,
             rfc,
             errata_id,
             &base,
             &paths.work_file(source, errata_id),
+            &paths.base_file(rfc, errata_id),
         )?;
         let patch =
             make_patch(source, &base, &edited).map_err(|e| format!("the work file: {e}"))?;
@@ -1435,9 +1623,36 @@ fn record(
         let (published, _) = published(paths, rfc)?;
         let rebased = rebase(&published, &series, errata_id, Some(&patch), source)
             .map_err(|f| format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason))?;
+        // An XML RFC's text patch, and the higher text patches rebased onto it.
+        let text = match source.format {
+            SourceFormat::Text => None,
+            SourceFormat::Xml => {
+                let (text_patch, how) = text_patch(paths, &rows, rfc, errata_id, &base, &edited)?;
+                if let Some(bad) = forbidden_in_patch(&text_patch) {
+                    return Err(format!("the text patch {bad}"));
+                }
+                let text_series = present_text_series(paths, &rows, rfc)?;
+                let rebased_text = rebase(
+                    &published_text(paths, rfc)?,
+                    &text_series,
+                    errata_id,
+                    Some(&text_patch),
+                    text_source(rfc),
+                )
+                .map_err(|f| format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason))?;
+                Some((text_patch, how, text_series, rebased_text))
+            }
+        };
         // The patches first, then the row: the row is the commit point.
         store::write_patch(&paths.errata, rfc, errata_id, &patch).map_err(store_error)?;
-        write_rebased(paths, rfc, errata_id, &series, &rebased)?;
+        if let Some((text_patch, _, _, _)) = &text {
+            store::write_text_patch(&paths.errata, rfc, errata_id, text_patch)
+                .map_err(store_error)?;
+        }
+        write_rebased(paths, rfc, errata_id, &series, &rebased, false)?;
+        if let Some((_, _, text_series, rebased_text)) = &text {
+            write_rebased(paths, rfc, errata_id, text_series, rebased_text, true)?;
+        }
         store::write_ledger(&paths.errata, &new_rows).map_err(store_error)?;
         let hunks = parse_patch(&patch, source)
             .map(|h| h.len())
@@ -1447,6 +1662,12 @@ fn record(
             store::patch_path(&paths.errata, rfc, errata_id).display(),
             if hunks == 1 { "" } else { "s" }
         );
+        if let Some((_, how, _, _)) = &text {
+            println!(
+                "text patch: {} ({how})",
+                store::text_patch_path(&paths.errata, rfc, errata_id).display()
+            );
+        }
         if let Some(e) = erratum {
             flag_far(&base, &patch, source, e);
         }
@@ -1458,7 +1679,25 @@ fn record(
                 Ok((text, source)) => {
                     let rebased = rebase(&text, &series, errata_id, None, source)
                         .map_err(|f| format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason))?;
-                    write_rebased(paths, rfc, errata_id, &series, &rebased)?;
+                    write_rebased(paths, rfc, errata_id, &series, &rebased, false)?;
+                    if source.format == SourceFormat::Xml {
+                        let rebased_text = published_text(paths, rfc).and_then(|text| {
+                            let text_series = present_text_series(paths, &rows, rfc)?;
+                            rebase(&text, &text_series, errata_id, None, text_source(rfc))
+                                .map(|rebased| (text_series, rebased))
+                                .map_err(|f| {
+                                    format!("rfc{rfc} erratum {}: {}", f.errata_id, f.reason)
+                                })
+                        });
+                        match rebased_text {
+                            Ok((text_series, rebased)) => {
+                                write_rebased(paths, rfc, errata_id, &text_series, &rebased, true)?
+                            }
+                            Err(message) => {
+                                println!("WARNING: higher text patches not rebased: {message}");
+                            }
+                        }
+                    }
                 }
                 Err(message) => println!("WARNING: higher patches not rebased: {message}"),
             }
@@ -1471,6 +1710,77 @@ fn record(
 }
 
 // -- check -----------------------------------------------------------------------------------------------------------
+
+/// The problems of an XML RFC's text patches: each patched erratum must have one, the series must apply to the
+/// published `rfcN.txt`, and each text patch must agree with its XML patch ([`agree`]). `series` is the RFC's XML
+/// series, which applies to `xml`.
+fn check_text_series(
+    paths: &Paths,
+    rows: &[Row],
+    rfc: u32,
+    xml: &str,
+    series: &[(u32, String)],
+) -> Vec<String> {
+    let text = match published_text(paths, rfc) {
+        Ok(text) => text,
+        Err(message) => return vec![message],
+    };
+    let text_series = match text_series_of(paths, rows, rfc) {
+        Ok(text_series) => text_series,
+        Err(f) => {
+            return vec![format!(
+                "rfc{rfc} erratum {} is patched but has no usable text patch: {}",
+                f.errata_id, f.reason
+            )];
+        }
+    };
+    let source = text_source(rfc);
+    let mut problems = Vec::new();
+    for (id, patch) in &text_series {
+        if store::patch_format(patch) != Some(SourceFormat::Text) {
+            problems.push(format!(
+                "rfc{rfc} erratum {id}: the text patch is not against rfc{rfc}.txt"
+            ));
+        }
+        if let Err(e) = parse_patch(patch, source) {
+            problems.push(format!("rfc{rfc} erratum {id}: the text patch: {e}"));
+        }
+        if let Some(bad) = forbidden_in_patch(patch) {
+            problems.push(format!("rfc{rfc} erratum {id}: the text patch {bad}"));
+        }
+    }
+    let (mut xml, mut text) = (xml.to_owned(), text);
+    for ((id, patch), (_, text_patch)) in series.iter().zip(&text_series) {
+        let (Ok(next_xml), next_text) = (
+            apply_patch(
+                &xml,
+                patch,
+                Source {
+                    rfc,
+                    format: SourceFormat::Xml,
+                },
+            ),
+            apply_patch(&text, text_patch, source),
+        ) else {
+            break;
+        };
+        let next_text = match next_text {
+            Ok(next_text) => next_text,
+            Err(e) => {
+                problems.push(format!(
+                    "rfc{rfc}: the text patch of erratum {id} does not apply ({e})"
+                ));
+                break;
+            }
+        };
+        if let Err(e) = agree(&xml, &next_xml, &text, &next_text) {
+            problems.push(format!("rfc{rfc} erratum {id}: {e}"));
+        }
+        xml = next_xml;
+        text = next_text;
+    }
+    problems
+}
 
 fn check(paths: &Paths) -> Result<ExitCode, String> {
     let mut problems: Vec<String> = Vec::new();
@@ -1494,8 +1804,10 @@ fn check(paths: &Paths) -> Result<ExitCode, String> {
             key.0, key.1
         ));
     }
+    let text_files = store::scan_text_patches(&paths.errata);
     for path in files
         .iter()
+        .chain(&text_files)
         .filter(|(k, _)| !patched.contains(k))
         .map(|(_, p)| p)
     {
@@ -1503,6 +1815,14 @@ fn check(paths: &Paths) -> Result<ExitCode, String> {
             "{} has no `patched` ledger row (record the erratum again, or delete it)",
             path.display()
         ));
+    }
+    for ((rfc, _), path) in &text_files {
+        if rfc_source(&paths.rfcs, *rfc).is_some_and(|(_, format)| format == SourceFormat::Text) {
+            problems.push(format!(
+                "{}: rfc{rfc} is read as text, so its patches are against rfc{rfc}.txt and it has no text patches",
+                path.display()
+            ));
+        }
     }
     let feed = load_feed(paths).ok();
     for rfc in patched
@@ -1543,6 +1863,8 @@ fn check(paths: &Paths) -> Result<ExitCode, String> {
                 "rfc{rfc}: the patch of erratum {} does not apply ({})",
                 f.errata_id, f.reason
             ));
+        } else if source.format == SourceFormat::Xml {
+            problems.extend(check_text_series(paths, &rows, rfc, &text, &series));
         }
     }
     for row in &rows {

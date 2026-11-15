@@ -1,0 +1,16 @@
+--- a/rfc8702.txt
++++ b/rfc8702.txt
+@@ -167,11 +167,11 @@
+    authentication codes (KMACs) using SHAKE128 and SHAKE256, and we
+    include them here for convenience.
+ 
+-      id-KmacWithSHAKE128 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
++      id-KMACWithSHAKE128 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
+           country(16) us(840) organization(1) gov(101) csor(3)
+           nistAlgorithm(4) 2 19 }
+ 
+-      id-KmacWithSHAKE256 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
++      id-KMACWithSHAKE256 OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
+           country(16) us(840) organization(1) gov(101) csor(3)
+           nistAlgorithm(4) 2 20 }
+ 

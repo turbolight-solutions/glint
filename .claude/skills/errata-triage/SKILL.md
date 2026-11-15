@@ -19,7 +19,7 @@ You work through the queue of Verified RFC errata. For each one you record one d
 corrects ASN.1, in a module or inline, becomes a patch to the document Glint reads for that RFC: `rfcN.xml` for RFCs
 published in RFCXML (8650 on), `rfcN.txt` before. corpus-build applies the patches before it extracts, so the corpus
 holds the corrected modules and each names its errata. The data is `corpus/errata/` (`ledger.tsv` and
-`patches/rfcN/<id>.patch`), and `to-file.md` lists defects still to report; the design is in the spec, "RFC errata",
+`patches/rfcN/<id>.patch`, plus `<id>.txt.patch` for an XML RFC), and `to-file.md` lists defects still to report; the design is in the spec, "RFC errata",
 and `corpus/errata/README.md`.
 
 `glint errata` below stands for `cargo run -q --release -p glint-asn1 -- errata`. It reads the mirror `corpus/fetch.sh`
@@ -109,7 +109,9 @@ Errata to recognise:
 glint errata edit N ID                                        # writes corpus/cache/errata-work/rfcN-ID.{txt,xml}
 ```
 
-Edit that file with the Edit tool. Then prove the edit:
+Edit that file with the Edit tool. For an XML RFC, `edit` also writes `rfcN-ID.txt` (the published text); leave it
+alone unless the XML edit changes more than `<sourcecode>`/`<artwork>` content, then make the same correction there
+too (`record` derives the text patch otherwise, and says when it cannot). Then prove the edit (the `.xml`):
 
 ```bash
 glint errata prove corpus/cache/errata-work/rfcN-ID.txt       # or .xml

@@ -1,0 +1,20 @@
+--- a/rfc9286.txt
++++ b/rfc9286.txt
+@@ -211,7 +211,7 @@
+         thisUpdate      GeneralizedTime,
+         nextUpdate      GeneralizedTime,
+         fileHashAlg     OBJECT IDENTIFIER,
+-        fileList        SEQUENCE SIZE (0..MAX) OF FileAndHash
++        fileList        SEQUENCE SIZE (1..MAX) OF FileAndHash
+         }
+ 
+       FileAndHash ::=     SEQUENCE {
+@@ -751,7 +751,7 @@
+          thisUpdate         GeneralizedTime,
+          nextUpdate         GeneralizedTime,
+          fileHashAlg        OBJECT IDENTIFIER,
+-         fileList           SEQUENCE SIZE (0..MAX) OF FileAndHash
++         fileList           SEQUENCE SIZE (1..MAX) OF FileAndHash
+          }
+ 
+       FileAndHash ::= SEQUENCE {

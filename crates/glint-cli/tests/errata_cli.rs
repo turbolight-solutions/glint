@@ -5,7 +5,8 @@
     clippy::indexing_slicing
 )]
 
-//! `glint errata` over a mirror of two fixture RFCs: RFC 5280's appendix (text) and RFC 8692 (XML).
+//! `glint errata` over a mirror of two fixture RFCs: RFC 5280's appendix (text) and RFC 8692 (XML, with its published
+//! text).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -93,6 +94,21 @@ impl Mirror {
         )
         .ok()
     }
+
+    fn text_patch(&self, rfc: u32, id: u32) -> Option<String> {
+        std::fs::read_to_string(
+            self.corpus()
+                .join(format!("errata/patches/rfc{rfc}/{id}.txt.patch")),
+        )
+        .ok()
+    }
+
+    /// `record ... --decision patched`, expected to fail; its stderr.
+    fn record_fails(&self, rfc: &str, id: &str) -> String {
+        let output = self.errata(&["record", rfc, id, "--decision", "patched", "--note", "x"]);
+        assert!(!output.status.success(), "{}", stdout(&output));
+        stderr(&output)
+    }
 }
 
 fn stdout(output: &Output) -> String {
@@ -118,7 +134,9 @@ const FEED: &str = r#"[
  {"errata_id":"9003","doc-id":"RFC5280","errata_status_code":"Reported","section":"1",
   "orig_text":"ub-organization-name INTEGER ::= 64","correct_text":"x","notes":null},
  {"errata_id":"9004","doc-id":"RFC8692","errata_status_code":"Verified","section":"4.1",
-  "orig_text":"signatureValue       BIT STRING  }","correct_text":"signatureValue BIT STRING (SIZE (1..MAX)) }","notes":null}
+  "orig_text":"signatureValue       BIT STRING  }","correct_text":"signatureValue BIT STRING (SIZE (1..MAX)) }","notes":null},
+ {"errata_id":"9006","doc-id":"RFC8692","errata_status_code":"Verified","section":"4.1",
+  "orig_text":"signatureAlgorithm   AlgorithmIdentifier,","correct_text":"signatureAlgorithm   AlgorithmIdentifier{{SigAlgs}},","notes":null}
 ]"#;
 
 fn mirror(tag: &str) -> Mirror {
@@ -133,6 +151,7 @@ fn mirror(tag: &str) -> Mirror {
     )
     .unwrap();
     std::fs::copy(fixture("xml/rfc8692.xml"), rfcs.join("rfc8692.xml")).unwrap();
+    std::fs::copy(fixture("xml/rfc8692.txt"), rfcs.join("rfc8692.txt")).unwrap();
     std::fs::write(root.join("cache/errata.json"), FEED).unwrap();
     let out = root.join("built");
     glint_corpus_build::run(&glint_corpus_build::Settings {
@@ -180,10 +199,15 @@ fn queue_lists_verified_errata_of_rfcs_with_asn1() {
     let m = mirror("queue");
     let out = m.ok(&["queue"]);
     assert!(
-        out.starts_with("3 errata awaiting triage (2 RFCs in scope)"),
+        out.starts_with("4 errata awaiting triage (2 RFCs in scope)"),
         "{out}"
     );
-    for line in ["rfc5280 9001 new", "rfc5280 9002 new", "rfc8692 9004 new"] {
+    for line in [
+        "rfc5280 9001 new",
+        "rfc5280 9002 new",
+        "rfc8692 9004 new",
+        "rfc8692 9006 new",
+    ] {
         assert!(out.contains(line), "{line}: {out}");
     }
     assert!(
@@ -194,7 +218,7 @@ fn queue_lists_verified_errata_of_rfcs_with_asn1() {
     assert!(!out.contains("sam@example.com"), "{out}");
     let one = m.ok(&["queue", "--rfc", "8692"]);
     assert!(
-        one.starts_with("1 errata awaiting triage for rfc8692"),
+        one.starts_with("2 errata awaiting triage for rfc8692"),
         "{one}"
     );
 }
@@ -521,4 +545,231 @@ fn a_skipped_feed_entry_leaves_the_queue_once_decided() {
     let after = m.ok(&["queue"]);
     assert!(!after.contains("9005"), "{after}");
     assert!(!after.contains("feed entries skipped"), "{after}");
+}
+
+const SIGNATURE_VALUE: &str = "      signatureValue       BIT STRING  }";
+const SIZED_VALUE: &str = "      signatureValue       BIT STRING (SIZE (1..MAX)) }";
+
+/// Edits erratum 9004's XML work file: the inline `Certificate` of section 4.1 gets a SIZE constraint.
+fn edit_9004(m: &Mirror) {
+    m.ok(&["edit", "8692", "9004"]);
+    m.edit_work("rfc8692-9004.xml", SIGNATURE_VALUE, SIZED_VALUE);
+}
+
+#[test]
+fn an_xml_erratum_gets_a_text_patch_mirrored_from_its_xml_patch() {
+    let m = mirror("mirror");
+    edit_9004(&m);
+    let published = std::fs::read_to_string(m.cache().join("rfc/rfc8692.txt")).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(m.work("rfc8692-9004.txt")).unwrap(),
+        published
+    );
+    assert!(m.work("rfc8692-9004.txt.base").exists());
+    let out = m.ok(&[
+        "record",
+        "8692",
+        "9004",
+        "--decision",
+        "patched",
+        "--note",
+        "x",
+    ]);
+    assert!(
+        out.contains("9004.txt.patch (mirrored from the XML change)"),
+        "{out}"
+    );
+    assert!(
+        m.patch(8692, 9004)
+            .unwrap()
+            .starts_with("--- a/rfc8692.xml\n")
+    );
+    let text_patch = m.text_patch(8692, 9004).unwrap();
+    // The text block is indented three more spaces than the XML's content.
+    assert!(
+        text_patch.starts_with("--- a/rfc8692.txt\n+++ b/rfc8692.txt\n"),
+        "{text_patch}"
+    );
+    assert!(
+        text_patch.contains(&format!("\n-   {SIGNATURE_VALUE}\n+   {SIZED_VALUE}\n")),
+        "{text_patch}"
+    );
+    assert!(m.ok(&["check"]).contains("1 patched, OK"));
+}
+
+#[test]
+fn an_xml_change_outside_the_blocks_needs_the_text_work_file() {
+    let m = mirror("outside");
+    edit_9004(&m);
+    m.edit_work(
+        "rfc8692-9004.xml",
+        "a signatureValue attribute that contains the actual signature.",
+        "a signatureValue attribute that holds the actual signature.",
+    );
+    let refused = m.record_fails("8692", "9004");
+    assert!(
+        refused.contains("outside <sourcecode> and <artwork> content")
+            && refused.contains("Make the same correction in")
+            && refused.contains("rfc8692-9004.txt"),
+        "{refused}"
+    );
+    assert!(m.patch(8692, 9004).is_none() && m.ledger().is_empty());
+    // The text work file with the prose corrected but not the block disagrees with the XML change.
+    m.edit_work(
+        "rfc8692-9004.txt",
+        "signatureValue attribute that\n   contains the actual signature.",
+        "signatureValue attribute that\n   holds the actual signature.",
+    );
+    let disagrees = m.record_fails("8692", "9004");
+    assert!(
+        disagrees.contains("the corrected text does not hold the corrected XML's blocks"),
+        "{disagrees}"
+    );
+    m.edit_work(
+        "rfc8692-9004.txt",
+        &format!("   {SIGNATURE_VALUE}"),
+        &format!("   {SIZED_VALUE}"),
+    );
+    let out = m.ok(&[
+        "record",
+        "8692",
+        "9004",
+        "--decision",
+        "patched",
+        "--note",
+        "x",
+    ]);
+    assert!(out.contains("(from the text work file)"), "{out}");
+    assert!(
+        m.text_patch(8692, 9004)
+            .unwrap()
+            .contains("+   holds the actual")
+    );
+    assert!(m.ok(&["check"]).contains("1 patched, OK"));
+}
+
+#[test]
+fn an_edited_text_work_file_must_make_the_mirrored_change() {
+    let m = mirror("disagree");
+    edit_9004(&m);
+    m.edit_work(
+        "rfc8692-9004.txt",
+        &format!("   {SIGNATURE_VALUE}"),
+        "         signatureValue       OCTET STRING  }",
+    );
+    let refused = m.record_fails("8692", "9004");
+    assert!(
+        refused.contains("does not make the change the XML patch makes"),
+        "{refused}"
+    );
+    // The text work file of an XML RFC is not what `prove` compares.
+    let prove = m.errata(&["prove", m.work("rfc8692-9004.txt").to_str().unwrap()]);
+    assert!(
+        stderr(&prove).contains("is the text work file of rfc8692"),
+        "{}",
+        stderr(&prove)
+    );
+}
+
+#[test]
+fn higher_text_patches_are_rebased_and_backed_out_with_their_xml_patches() {
+    let m = mirror("text-rebase");
+    m.ok(&["edit", "8692", "9006"]);
+    m.edit_work(
+        "rfc8692-9006.xml",
+        "      signatureAlgorithm   AlgorithmIdentifier,",
+        "      signatureAlgorithm   AlgorithmIdentifier{{SigAlgs}},",
+    );
+    m.ok(&[
+        "record",
+        "8692",
+        "9006",
+        "--decision",
+        "patched",
+        "--note",
+        "x",
+    ]);
+    let higher = m.text_patch(8692, 9006).unwrap();
+    // 9004 is lower and changes the next line: 9006's patches are rebased onto it.
+    edit_9004(&m);
+    let out = m.ok(&[
+        "record",
+        "8692",
+        "9004",
+        "--decision",
+        "patched",
+        "--note",
+        "x",
+    ]);
+    assert!(
+        out.contains("rebased the patch of rfc8692 erratum 9006"),
+        "{out}"
+    );
+    assert!(
+        out.contains("rebased the text patch of rfc8692 erratum 9006"),
+        "{out}"
+    );
+    assert_ne!(m.text_patch(8692, 9006).unwrap(), higher);
+    assert!(m.ok(&["check"]).contains("2 patched, OK"));
+    let out = m.ok(&[
+        "record",
+        "8692",
+        "9004",
+        "--decision",
+        "not-applicable",
+        "--note",
+        "on second thought",
+    ]);
+    assert!(
+        out.contains("rebased the text patch of rfc8692 erratum 9006"),
+        "{out}"
+    );
+    assert!(m.patch(8692, 9004).is_none() && m.text_patch(8692, 9004).is_none());
+    assert_eq!(m.text_patch(8692, 9006).unwrap(), higher);
+    assert!(m.ok(&["check"]).contains("1 patched, OK"));
+}
+
+#[test]
+fn check_finds_missing_stray_and_wrong_text_patches() {
+    let m = mirror("text-check");
+    edit_9004(&m);
+    m.ok(&[
+        "record",
+        "8692",
+        "9004",
+        "--decision",
+        "patched",
+        "--note",
+        "x",
+    ]);
+    patch_9001(&m);
+    let errata = m.corpus().join("errata/patches");
+    let text_patch = errata.join("rfc8692/9004.txt.patch");
+    let good = std::fs::read_to_string(&text_patch).unwrap();
+    // A text patch that applies but makes another change than the XML patch.
+    std::fs::write(
+        &text_patch,
+        good.replace("(SIZE (1..MAX))", "(SIZE (2..MAX))"),
+    )
+    .unwrap();
+    std::fs::write(errata.join("rfc5280/9001.txt.patch"), "stray\n").unwrap();
+    std::fs::write(errata.join("rfc8692/9006.txt.patch"), "stray\n").unwrap();
+    let output = m.errata(&["check"]);
+    let out = stdout(&output);
+    assert_eq!(output.status.code(), Some(1), "{out}");
+    for expected in [
+        "rfc8692 erratum 9004: the text patch does not make the change the XML patch makes",
+        "9006.txt.patch has no `patched` ledger row",
+        "9001.txt.patch: rfc5280 is read as text",
+    ] {
+        assert!(out.contains(expected), "{expected}: {out}");
+    }
+    std::fs::remove_file(&text_patch).unwrap();
+    let out = stdout(&m.errata(&["check"]));
+    assert!(
+        out.contains("rfc8692 erratum 9004 is patched but has no usable text patch"),
+        "{out}"
+    );
+    let queue = m.ok(&["queue", "--rfc", "8692"]);
+    assert!(queue.contains("rfc8692 9004 patch-fails"), "{queue}");
 }

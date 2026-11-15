@@ -25,6 +25,7 @@ pub use classify::{block_kind, is_inline_asn1, is_smi, looks_like_asn1};
 pub use modules::{ModuleSlice, module_slices};
 pub use notes::{ExtractNote, Severity};
 pub use source_map::{Assembler, Mapped, SourceMap};
+pub use xml::{CodeElement, code_elements};
 
 use sink::{Candidate, Marking, Sink};
 

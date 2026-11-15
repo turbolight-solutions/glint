@@ -1306,6 +1306,28 @@ fn a_patch_for_the_other_format_is_not_applied() {
     let _ = std::fs::remove_dir_all(fixture.dir);
 }
 
+#[test]
+fn text_patches_are_not_read() {
+    // The text patches of an XML RFC are for the text a reader sees; the corpus is built from the XML and its patches.
+    let fixture = errata_fixture("text-patch");
+    std::fs::write(
+        glint_errata::store::text_patch_path(&fixture.errata, 8692, 9002),
+        "not a patch the build reads\n",
+    )
+    .unwrap();
+    run_ok(&fixture, &errata_args(&fixture));
+    let report = std::fs::read_to_string(fixture.dir.join("out/report.md")).unwrap();
+    assert!(!report.contains("built as published"), "{report}");
+    assert!(
+        documents(&fixture.dir.join("out"))
+            .get("rfc8692")
+            .unwrap()
+            .0
+            .contains("BIT STRING (SIZE (1..MAX)) }")
+    );
+    let _ = std::fs::remove_dir_all(fixture.dir);
+}
+
 /// Breaks an errata fixture in one way.
 type Damage = fn(&ErrataFixture);
 

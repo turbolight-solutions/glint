@@ -1,0 +1,11 @@
+--- a/rfc9881.txt
++++ b/rfc9881.txt
+@@ -747,7 +747,7 @@
+ 
+    nistAlgorithms OBJECT IDENTIFIER ::= { joint-iso-itu-t(2)
+      country(16) us(840) organization(1) gov(101) csor(3)
+-     nistAlgorithms(4) }
++     nistAlgorithm(4) }
+ 
+    sigAlgs OBJECT IDENTIFIER ::= { nistAlgorithms 3 }
+ 

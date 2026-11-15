@@ -1,0 +1,11 @@
+--- a/rfc8894.txt
++++ b/rfc8894.txt
+@@ -971,7 +971,7 @@
+    this specification.  The messageData for this type consists of an
+    IssuerAndSubject:
+ 
+-   issuerAndSubject ::= SEQUENCE {
++   IssuerAndSubject ::= SEQUENCE {
+        issuer     Name,
+        subject    Name
+        }

@@ -1,5 +1,7 @@
 //! The committed errata data on disk: `<dir>/ledger.tsv` and `<dir>/patches/rfcN/<errata_id>.patch`, in Glint
-//! `corpus/errata`. Symbolic links are refused everywhere, and every read has a size limit.
+//! `corpus/errata`, and for an RFC whose source is XML, `<dir>/patches/rfcN/<errata_id>.txt.patch` too: the same
+//! correction to the published `rfcN.txt`, which a reader sees (see [`crate::mirror_patch`]). Symbolic links are
+//! refused everywhere, and every read has a size limit.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -112,6 +114,13 @@ pub fn patch_path(dir: &Path, rfc: u32, errata_id: u32) -> PathBuf {
         .join(format!("{errata_id}.patch"))
 }
 
+/// The text patch of an erratum of an RFC whose source is XML: its correction to the published `rfcN.txt`.
+pub fn text_patch_path(dir: &Path, rfc: u32, errata_id: u32) -> PathBuf {
+    dir.join(PATCHES_DIR)
+        .join(format!("rfc{rfc}"))
+        .join(format!("{errata_id}.txt.patch"))
+}
+
 /// The ledger rows; a missing ledger is an empty one.
 pub fn read_ledger(dir: &Path) -> Result<Vec<Row>, StoreError> {
     let path = ledger_path(dir);
@@ -136,11 +145,26 @@ fn name_number(text: &str) -> Option<u32> {
     (n.to_string() == text).then_some(n)
 }
 
-/// The committed patch files, `{(rfc, errata_id): path}`, and every entry of `patches/` that is not one: names other
-/// than `rfc<N>/<N>.patch`, symbolic links, anything but directories and regular files.
+/// The committed patch files of the RFCs' sources, `{(rfc, errata_id): path}`, and every entry of `patches/` that is
+/// neither one nor a text patch ([`scan_text_patches`]): names other than `rfc<N>/<N>.patch` and
+/// `rfc<N>/<N>.txt.patch`, symbolic links, anything but directories and regular files.
 pub fn scan_patches(dir: &Path) -> (BTreeMap<(u32, u32), PathBuf>, Vec<String>) {
+    let (found, _, problems) = scan(dir);
+    (found, problems)
+}
+
+/// The committed text patches, `{(rfc, errata_id): path}` of every `rfc<N>/<N>.txt.patch` that is a regular file. The
+/// problems of `patches/` are [`scan_patches`]'s.
+pub fn scan_text_patches(dir: &Path) -> BTreeMap<(u32, u32), PathBuf> {
+    scan(dir).1
+}
+
+type PatchFiles = BTreeMap<(u32, u32), PathBuf>;
+
+fn scan(dir: &Path) -> (PatchFiles, PatchFiles, Vec<String>) {
     let root = dir.join(PATCHES_DIR);
     let mut found = BTreeMap::new();
+    let mut text_found = BTreeMap::new();
     let mut problems = Vec::new();
     let entries =
         |path: &Path, problems: &mut Vec<String>| -> Vec<(String, PathBuf, fs::FileType)> {
@@ -164,11 +188,12 @@ pub fn scan_patches(dir: &Path) -> (BTreeMap<(u32, u32), PathBuf>, Vec<String>) 
             list
         };
     match fs::symlink_metadata(&root) {
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return (found, problems),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return (found, text_found, problems),
         Ok(m) if m.file_type().is_dir() => {}
         _ => {
             return (
                 found,
+                text_found,
                 vec![format!("{} is not a directory", root.display())],
             );
         }
@@ -186,9 +211,11 @@ pub fn scan_patches(dir: &Path) -> (BTreeMap<(u32, u32), PathBuf>, Vec<String>) 
             continue;
         }
         for (file, file_path, file_kind) in entries(&path, &mut problems) {
-            let Some(id) = file.strip_suffix(".patch").and_then(name_number) else {
+            let text_id = file.strip_suffix(".txt.patch").and_then(name_number);
+            let Some(id) = text_id.or_else(|| file.strip_suffix(".patch").and_then(name_number))
+            else {
                 problems.push(format!(
-                    "{}: not an <errata_id>.patch file",
+                    "{}: not an <errata_id>.patch or <errata_id>.txt.patch file",
                     file_path.display()
                 ));
                 continue;
@@ -200,10 +227,14 @@ pub fn scan_patches(dir: &Path) -> (BTreeMap<(u32, u32), PathBuf>, Vec<String>) 
                 ));
                 continue;
             }
-            found.insert((rfc, id), file_path);
+            if text_id.is_some() {
+                text_found.insert((rfc, id), file_path);
+            } else {
+                found.insert((rfc, id), file_path);
+            }
         }
     }
-    (found, problems)
+    (found, text_found, problems)
 }
 
 pub fn read_patch(path: &Path) -> Result<String, StoreError> {
@@ -218,16 +249,33 @@ fn patch_dirs(dir: &Path, rfc: u32) -> [PathBuf; 2] {
 }
 
 pub fn write_patch(dir: &Path, rfc: u32, errata_id: u32, patch: &str) -> Result<(), StoreError> {
+    write_patch_file(dir, rfc, &patch_path(dir, rfc, errata_id), patch)
+}
+
+pub fn write_text_patch(
+    dir: &Path,
+    rfc: u32,
+    errata_id: u32,
+    patch: &str,
+) -> Result<(), StoreError> {
+    write_patch_file(dir, rfc, &text_patch_path(dir, rfc, errata_id), patch)
+}
+
+fn write_patch_file(dir: &Path, rfc: u32, path: &Path, patch: &str) -> Result<(), StoreError> {
     real_dir(dir)?;
     for parent in patch_dirs(dir, rfc) {
         real_dir(&parent)?;
     }
-    atomic_write(&patch_path(dir, rfc, errata_id), patch.as_bytes())
+    atomic_write(path, patch.as_bytes())
 }
 
-/// Removes a patch file, and its RFC's directory when that is left empty.
+/// Removes an erratum's patch file and its text patch, and its RFC's directory when that is left empty.
 pub fn remove_patch(dir: &Path, rfc: u32, errata_id: u32) -> Result<(), StoreError> {
-    let path = patch_path(dir, rfc, errata_id);
+    remove_patch_file(dir, rfc, &text_patch_path(dir, rfc, errata_id))?;
+    remove_patch_file(dir, rfc, &patch_path(dir, rfc, errata_id))
+}
+
+fn remove_patch_file(dir: &Path, rfc: u32, path: &Path) -> Result<(), StoreError> {
     for parent in patch_dirs(dir, rfc) {
         match fs::symlink_metadata(&parent) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
@@ -240,8 +288,8 @@ pub fn remove_patch(dir: &Path, rfc: u32, errata_id: u32) -> Result<(), StoreErr
             }
         }
     }
-    match fs::remove_file(&path) {
-        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(io_error(&path)(e)),
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(io_error(path)(e)),
         _ => {}
     }
     if let Some(parent) = path.parent() {
@@ -270,6 +318,13 @@ pub fn rfc_source(rfc_dir: &Path, rfc: u32) -> Option<(PathBuf, SourceFormat)> {
     }
 }
 
+/// The published `rfcN.txt` of RFC `rfc` in `rfc_dir`, if the mirror has it: for an RFC whose source is XML, what
+/// its text patches apply to.
+pub fn rfc_text(rfc_dir: &Path, rfc: u32) -> Option<PathBuf> {
+    let txt = rfc_dir.join(format!("rfc{rfc}.txt"));
+    txt.exists().then_some(txt)
+}
+
 /// An RFC source as corpus-build reads it: bytes that are not UTF-8 become U+FFFD.
 pub fn read_source(path: &Path) -> Result<String, StoreError> {
     Ok(String::from_utf8_lossy(&read_regular_file(path, MAX_SOURCE_BYTES)?).into_owned())
@@ -294,6 +349,24 @@ pub fn patched_series(
     rows: &[Row],
     files: &BTreeMap<(u32, u32), PathBuf>,
 ) -> BTreeMap<u32, Result<Vec<(u32, String)>, SeriesFailure>> {
+    series_from(rows, files, |rfc, id| patch_path(dir, rfc, id))
+}
+
+/// [`patched_series`] for the text patches ([`scan_text_patches`]): for an RFC whose source is XML, the corrections
+/// to its published `rfcN.txt`.
+pub fn patched_text_series(
+    dir: &Path,
+    rows: &[Row],
+    files: &BTreeMap<(u32, u32), PathBuf>,
+) -> BTreeMap<u32, Result<Vec<(u32, String)>, SeriesFailure>> {
+    series_from(rows, files, |rfc, id| text_patch_path(dir, rfc, id))
+}
+
+fn series_from(
+    rows: &[Row],
+    files: &BTreeMap<(u32, u32), PathBuf>,
+    expected: impl Fn(u32, u32) -> PathBuf,
+) -> BTreeMap<u32, Result<Vec<(u32, String)>, SeriesFailure>> {
     let mut series: BTreeMap<u32, Result<Vec<(u32, String)>, SeriesFailure>> = BTreeMap::new();
     let mut patched: Vec<&Row> = rows
         .iter()
@@ -306,7 +379,7 @@ pub fn patched_series(
         let read = match files.get(&row.key()) {
             None => Err(format!(
                 "{} is missing",
-                patch_path(dir, row.rfc, row.errata_id).display()
+                expected(row.rfc, row.errata_id).display()
             )),
             Some(path) => read_patch(path).map_err(|e| e.to_string()),
         };
@@ -360,8 +433,16 @@ mod tests {
         assert!(read_ledger(&dir).is_ok_and(|read| read == rows));
         assert!(write_patch(&dir, 5, 1, "p1").is_ok());
         assert!(write_patch(&dir, 5, 2, "p2").is_ok());
+        assert!(write_text_patch(&dir, 5, 2, "t2").is_ok());
         let (files, problems) = scan_patches(&dir);
         assert!(problems.is_empty());
+        let text_files = scan_text_patches(&dir);
+        assert_eq!(text_files.keys().collect::<Vec<_>>(), [&(5, 2)]);
+        let text_series = patched_text_series(&dir, &rows, &text_files);
+        assert!(text_series.get(&5).is_some_and(|s| {
+            s.as_ref()
+                .is_err_and(|f| f.errata_id == 1 && f.reason.ends_with("1.txt.patch is missing"))
+        }));
         let series = patched_series(&dir, &rows, &files);
         assert_eq!(
             series.get(&5),
@@ -373,6 +454,7 @@ mod tests {
                 .is_some_and(|s| s.as_ref().is_err_and(|f| f.errata_id == 3))
         );
         assert!(remove_patch(&dir, 5, 1).is_ok() && remove_patch(&dir, 5, 2).is_ok());
+        assert!(scan_text_patches(&dir).is_empty());
         assert!(!dir.join("patches/rfc5").exists());
         let _ = fs::remove_dir_all(&dir);
     }
@@ -385,13 +467,22 @@ mod tests {
         let _ = fs::create_dir_all(patches.join("rfc7"));
         let _ = fs::write(patches.join("rfc7/01.patch"), "x");
         let _ = fs::write(patches.join("rfc7/notes.txt"), "x");
+        let _ = fs::write(patches.join("rfc7/02.txt.patch"), "x");
+        let _ = fs::write(patches.join("rfc7/3.txt.patch"), "x");
         let _ = fs::write(patches.join("README"), "x");
         #[cfg(unix)]
         let _ = std::os::unix::fs::symlink("/etc/hostname", patches.join("rfc7/2.patch"));
         let (files, problems) = scan_patches(&dir);
         assert!(files.is_empty());
+        // A text patch is neither a patch of the source nor a problem.
+        assert_eq!(
+            scan_text_patches(&dir).keys().collect::<Vec<_>>(),
+            [&(7, 3)]
+        );
         let joined = problems.join("\n");
+        assert!(!joined.contains("3.txt.patch"), "{joined}");
         for expected in [
+            "02.txt.patch: not an",
             "rfc05: not an rfc<N>",
             "README: not an rfc<N>",
             "01.patch: not an",

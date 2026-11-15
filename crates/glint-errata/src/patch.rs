@@ -76,7 +76,7 @@ pub struct Hunk {
 }
 
 /// The lines of `text` with their `\n`. Only `\n` ends a line (`str::lines` would also drop a `\r`).
-fn split_lines(text: &str) -> Vec<&str> {
+pub(crate) fn split_lines(text: &str) -> Vec<&str> {
     text.split_inclusive('\n').collect()
 }
 
