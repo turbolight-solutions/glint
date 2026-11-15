@@ -453,8 +453,10 @@ pub(crate) fn string(content: &[u8], kind: StringKind) -> (Option<Rendered>, Vec
                 ));
             }
             let units: Vec<u16> = content
-                .chunks_exact(2)
-                .map(|c| u16::from_be_bytes([*c.first().unwrap_or(&0), *c.get(1).unwrap_or(&0)]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_be_bytes(*c))
                 .collect();
             char::decode_utf16(units.iter().copied())
                 .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
@@ -467,13 +469,11 @@ pub(crate) fn string(content: &[u8], kind: StringKind) -> (Option<Rendered>, Vec
                 ));
             }
             content
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|c| {
-                    let mut word = [0u8; 4];
-                    for (slot, b) in word.iter_mut().zip(c) {
-                        *slot = *b;
-                    }
-                    char::from_u32(u32::from_be_bytes(word)).unwrap_or(char::REPLACEMENT_CHARACTER)
+                    char::from_u32(u32::from_be_bytes(*c)).unwrap_or(char::REPLACEMENT_CHARACTER)
                 })
                 .collect()
         }
