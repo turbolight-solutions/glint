@@ -49,6 +49,7 @@ The dashed box runs offline every day (the data); everything inside the shaded c
 | --- | --- | --- |
 | `glint-syntax` | Lexer, parser, lossless CST, typed AST views, spans | `logos` (lexer), `rowan` (CST) |
 | `glint-sema` | Symbol tables, import resolution, type/value/class checking, tagging | — |
+| `glint-ir` | The IR the decoder and code generators read: one root type's closure, lowered by `glint-sema` | `serde` |
 | `glint-extract` | Pull ASN.1 blocks out of RFCXML, Markdown and text, with source maps | `roxmltree` or `quick-xml`, `pulldown-cmark` |
 | `glint-corpus` | Corpus data model, `CorpusProvider` trait, the data files (`corpus.json`, `documents.bin`, `latest.json`), the OID label table | `serde`, `serde_json` |
 | `glint-check` | Snippet consistency, lint rules, diagnostic codes, config | — |

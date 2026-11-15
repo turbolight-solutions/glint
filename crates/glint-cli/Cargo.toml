@@ -20,6 +20,7 @@ glint-corpus-build = { workspace = true }
 glint-errata = { workspace = true }
 glint-diag = { workspace = true }
 glint-extract = { workspace = true }
+glint-ir = { workspace = true }
 glint-sema = { workspace = true }
 glint-syntax = { workspace = true }
 rayon = { workspace = true }

@@ -5,6 +5,7 @@ members = [
     "crates/glint-diag",
     "crates/glint-extract",
     "crates/glint-corpus",
+    "crates/glint-ir",
     "crates/glint-sema",
     "crates/glint-check",
     "crates/glint-errata",
@@ -24,6 +25,7 @@ glint-syntax = { path = "crates/glint-syntax" }
 glint-diag = { path = "crates/glint-diag" }
 glint-extract = { path = "crates/glint-extract" }
 glint-corpus = { path = "crates/glint-corpus" }
+glint-ir = { path = "crates/glint-ir" }
 glint-sema = { path = "crates/glint-sema" }
 glint-check = { path = "crates/glint-check" }
 glint-errata = { path = "crates/glint-errata" }

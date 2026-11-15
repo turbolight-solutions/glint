@@ -108,15 +108,20 @@ pub enum ElementSet {
     Size(Box<Constraint>),
     From(Box<Constraint>),                   // permitted alphabet
     Pattern(String),
-    ContainedSubtype(TypeId),
+    ContainedSubtype(Box<Type>),
     WithComponent(Box<Constraint>),
     WithComponents { partial: bool, items: Vec<ComponentConstraint> },
-    Contents { ty: Option<TypeId>, encoded_by: Option<Value> },
-    Table { set: ObjectSetId, field: String, relation: Vec<AtPath> },
+    Contents { ty: Option<Box<Type>>, encoded_by: Option<Value> },
+    Table(TableRef),                         // { set: ObjectSetId, field, relation: Vec<at-path> }
+    Settings(String),                        // SETTINGS of the time types
     UserDefined(String),
     Opaque(String),                          // evaluation failed; the text, for a comment and a finding
 }
 ```
+
+Contained and contents types are inline `Type`s (usually a reference to a named type), so a `CONTAINING` an open type keeps its table in place. A table constraint on an open type is not repeated as a constraint: it is the open type's `table`, the dispatch. `DEFAULT` values written by component (`sha1Identifier`) are evaluated to `Value::Record`.
+
+`glint ir <module> <Type> [FILE...] [--json]` (a development command) prints the IR of a root type: a corpus module as `source#Name` or a bare name only one document defines, or a module of the given files. The text form lists every type definition, every object set table, the OID constants and the notes; `--json` prints the `IrSet` itself.
 
 The IR also computes an **effective summary** per type, so backends never have to do set arithmetic just to pick a native type:
 

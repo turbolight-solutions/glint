@@ -7,6 +7,7 @@ mod corpus_cmd;
 mod errata_cmd;
 mod explain_cmd;
 mod extract_cmd;
+mod ir_cmd;
 mod net;
 mod parse_cmd;
 
@@ -56,6 +57,13 @@ enum Command {
     Explain(explain_cmd::Args),
     /// Extract ASN.1 modules from an RFCXML, Markdown or plain-text document
     Extract(extract_cmd::Args),
+    /// Print the IR of a type and everything it reaches, as the decoder and code generators see it (development
+    /// command)
+    ///
+    /// Takes a corpus module (`rfc5912#PKIX1Explicit-2009`, or a name only one document defines) or, with FILES, a
+    /// module of user ASN.1. The text form lists each type definition, then each object set table, then the OID
+    /// constants and anything the lowering could not represent; `--json` prints the IR itself.
+    Ir(ir_cmd::Args),
     /// Parse ASN.1 modules and report syntax errors (development command)
     Parse(parse_cmd::Args),
 }
@@ -69,6 +77,7 @@ fn main() -> ExitCode {
         Command::Errata(args) => errata_cmd::run(&args),
         Command::Explain(args) => explain_cmd::run(&args),
         Command::Extract(args) => extract_cmd::run(&args),
+        Command::Ir(args) => ir_cmd::run(&args),
         Command::Parse(args) => parse_cmd::run(&args),
     }
 }

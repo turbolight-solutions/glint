@@ -1,0 +1,26 @@
+---
+source: crates/glint-sema/tests/ir.rs
+expression: "glint_ir::dump(&set)"
+---
+root #0
+
+#0 T (M)
+  SEQUENCE {
+    a: [0] IMPLICIT auto INTEGER ((0..10 | 20<..<30), ...)  { value=0..29,... }
+    b: [1] IMPLICIT auto INTEGER ((1..100 EXCEPT 50))  { value=1..100 }
+    c: [2] IMPLICIT auto IA5String ((SIZE (1..8) ^ FROM ("a".."z")))  { size=1..8 alphabet=61-7A }
+    d: [3] IMPLICIT auto PrintableString (SIZE (2))  { size=2..2 }
+    e: [4] IMPLICIT auto -> #1 Small (5..MAX)  { value=5..7 }
+    f: [5] IMPLICIT auto SEQUENCE (SIZE (1..4))  { size=1..4 } OF INTEGER
+    g: [6] IMPLICIT auto -> #2 S (WITH COMPONENTS { ..., x Present })
+    h: [7] IMPLICIT auto INTEGER ((ALL EXCEPT 0))  { value=MIN..MAX }
+  }
+
+#1 Small (M)
+  INTEGER (0..7)  { value=0..7 }
+
+#2 S (M)
+  SEQUENCE {
+    x OPTIONAL: [0] IMPLICIT auto INTEGER
+    y OPTIONAL: [1] IMPLICIT auto BOOLEAN
+  }

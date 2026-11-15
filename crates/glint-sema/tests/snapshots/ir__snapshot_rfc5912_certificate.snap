@@ -1,0 +1,866 @@
+---
+source: crates/glint-sema/tests/ir.rs
+expression: "glint_ir::dump(&set)"
+---
+root #0
+
+#0 Certificate (PKIX1Explicit-2009)
+  -> #98 SIGNEDTBSCertificate
+
+#1 TBSCertificate (PKIX1Explicit-2009)
+  SEQUENCE { ...
+    version DEFAULT 0: [0] EXPLICIT -> #2 Version
+    serialNumber: -> #3 CertificateSerialNumber
+    signature: -> #12 AlgorithmIdentifierSignatureAlgorithms
+    issuer: -> #13 Name
+    validity: -> #23 Validity
+    subject: -> #13 Name
+    subjectPublicKeyInfo: -> #25 SubjectPublicKeyInfo
+    issuerUniqueID OPTIONAL +ext [[0 v2]]: [1] IMPLICIT -> #41 UniqueIdentifier
+    subjectUniqueID OPTIONAL +ext [[0 v2]]: [2] IMPLICIT -> #41 UniqueIdentifier
+    extensions OPTIONAL +ext [[1 v3]]: [3] EXPLICIT -> #96 ExtensionsCertExtensions  { size=1..MAX }
+  }
+
+#2 Version (PKIX1Explicit-2009)
+  INTEGER { v1(0), v2(1), v3(2) }
+
+#3 CertificateSerialNumber (PKIX1Explicit-2009)
+  INTEGER
+
+#4 ParamOptions (AlgorithmInformation-2009)
+  ENUMERATED { required(0), preferredPresent(1), preferredAbsent(2), absent(3), inheritable(4), optional(5), ... }
+
+#5 DSA-Sig-Value (PKIXAlgs-2009)
+  SEQUENCE {
+    r: INTEGER
+    s: INTEGER
+  }
+
+#6 ECDSA-Sig-Value (PKIXAlgs-2009)
+  SEQUENCE {
+    r: INTEGER
+    s: INTEGER
+  }
+
+#7 RSASSA-PSS-params (PKIX1-PSS-OAEP-Algorithms-2009)
+  SEQUENCE {
+    hashAlgorithm DEFAULT { algorithm oid 1.3.14.3.2.26, parameters NULL }: [0] EXPLICIT -> #8 HashAlgorithm
+    maskGenAlgorithm DEFAULT { algorithm oid 1.2.840.113549.1.1.8, parameters { algorithm oid 1.3.14.3.2.26, parameters NULL } }: [1] EXPLICIT -> #10 MaskGenAlgorithm
+    saltLength DEFAULT 20: [2] EXPLICIT INTEGER
+    trailerField DEFAULT 1: [3] EXPLICIT INTEGER
+  }
+
+#8 HashAlgorithm (PKIX1-PSS-OAEP-Algorithms-2009)
+  -> #9 AlgorithmIdentifierHashAlgorithms
+
+#9 AlgorithmIdentifierHashAlgorithms (AlgorithmInformation-2009) = AlgorithmIdentifier{DIGEST-ALGORITHM, { HashAlgorithms }}
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER (table(set#1 &id))
+    parameters OPTIONAL: open type DIGEST-ALGORITHM.&Params table(set#1 &Params @algorithm)
+  }
+
+#10 MaskGenAlgorithm (PKIX1-PSS-OAEP-Algorithms-2009)
+  -> #11 AlgorithmIdentifierPKCS1MGFAlgorithms
+
+#11 AlgorithmIdentifierPKCS1MGFAlgorithms (AlgorithmInformation-2009) = AlgorithmIdentifier{ALGORITHM, { PKCS1MGFAlgorithms }}
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER (table(set#2 &id))
+    parameters OPTIONAL: open type ALGORITHM.&Params table(set#2 &Params @algorithm)
+  }
+
+#12 AlgorithmIdentifierSignatureAlgorithms (AlgorithmInformation-2009) = AlgorithmIdentifier{SIGNATURE-ALGORITHM, { SignatureAlgorithms }}
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER (table(set#0 &id))
+    parameters OPTIONAL: open type SIGNATURE-ALGORITHM.&Params table(set#0 &Params @algorithm)
+  }
+
+#13 Name (PKIX1Explicit-2009)
+  CHOICE {
+    rdnSequence: -> #14 RDNSequence
+  }
+
+#14 RDNSequence (PKIX1Explicit-2009)
+  SEQUENCE OF -> #15 RelativeDistinguishedName  { size=1..MAX }
+
+#15 RelativeDistinguishedName (PKIX1Explicit-2009)
+  SET (SIZE (1..MAX))  { size=1..MAX } OF -> #22 SingleAttributeSupportedAttributes
+
+#16 X520name (PKIX1Explicit-2009)
+  -> #17 DirectoryStringUbName
+
+#17 DirectoryStringUbName (PKIX1Explicit-2009) = DirectoryString{ub-name}
+  CHOICE {
+    teletexString: TeletexString (SIZE (1..32768))  { size=1..32768 per: none }
+    printableString: PrintableString (SIZE (1..32768))  { size=1..32768 }
+    bmpString: BMPString (SIZE (1..32768))  { size=1..32768 }
+    universalString: UniversalString (SIZE (1..32768))  { size=1..32768 }
+    uTF8String: UTF8String (SIZE (1..32768))  { size=1..32768 per: none }
+  }
+
+#18 X520CommonName (PKIX1Explicit-2009)
+  -> #19 DirectoryStringUbCommonName
+
+#19 DirectoryStringUbCommonName (PKIX1Explicit-2009) = DirectoryString{ub-common-name}
+  CHOICE {
+    teletexString: TeletexString (SIZE (1..64))  { size=1..64 per: none }
+    printableString: PrintableString (SIZE (1..64))  { size=1..64 }
+    bmpString: BMPString (SIZE (1..64))  { size=1..64 }
+    universalString: UniversalString (SIZE (1..64))  { size=1..64 }
+    uTF8String: UTF8String (SIZE (1..64))  { size=1..64 per: none }
+  }
+
+#20 X520LocalityName (PKIX1Explicit-2009)
+  -> #21 DirectoryStringUbLocalityName
+
+#21 DirectoryStringUbLocalityName (PKIX1Explicit-2009) = DirectoryString{ub-locality-name}
+  CHOICE {
+    teletexString: TeletexString (SIZE (1..128))  { size=1..128 per: none }
+    printableString: PrintableString (SIZE (1..128))  { size=1..128 }
+    bmpString: BMPString (SIZE (1..128))  { size=1..128 }
+    universalString: UniversalString (SIZE (1..128))  { size=1..128 }
+    uTF8String: UTF8String (SIZE (1..128))  { size=1..128 per: none }
+  }
+
+#22 SingleAttributeSupportedAttributes (PKIX-CommonTypes-2009) = SingleAttribute{{ SupportedAttributes }}
+  SEQUENCE {
+    type: OBJECT IDENTIFIER (table(set#3 &id))
+    value: open type ATTRIBUTE.&Type table(set#3 &Type @type)
+  }
+
+#23 Validity (PKIX1Explicit-2009)
+  SEQUENCE {
+    notBefore: -> #24 Time
+    notAfter: -> #24 Time
+  }
+
+#24 Time (PKIX1Explicit-2009)
+  CHOICE {
+    utcTime: UTCTime
+    generalTime: GeneralizedTime
+  }
+
+#25 SubjectPublicKeyInfo (PKIX1Explicit-2009)
+  SEQUENCE {
+    algorithm: -> #40 AlgorithmIdentifierPublicKeyAlgorithms
+    subjectPublicKey: BIT STRING
+  }
+
+#26 RSAPublicKey (PKIXAlgs-2009)
+  SEQUENCE {
+    modulus: INTEGER
+    publicExponent: INTEGER
+  }
+
+#27 KeyUsage (PKIX1Implicit-2009)
+  BIT STRING { digitalSignature(0), nonRepudiation(1), keyEncipherment(2), dataEncipherment(3), keyAgreement(4), keyCertSign(5), cRLSign(6), encipherOnly(7), decipherOnly(8) }
+
+#28 DSAPublicKey (PKIXAlgs-2009)
+  INTEGER
+
+#29 DSA-Params (PKIXAlgs-2009)
+  SEQUENCE {
+    p: INTEGER
+    q: INTEGER
+    g: INTEGER
+  }
+
+#30 DHPublicKey (PKIXAlgs-2009)
+  INTEGER
+
+#31 DomainParameters (PKIXAlgs-2009)
+  SEQUENCE {
+    p: INTEGER
+    g: INTEGER
+    q: INTEGER
+    j OPTIONAL: INTEGER
+    validationParams OPTIONAL: -> #32 ValidationParams
+  }
+
+#32 ValidationParams (PKIXAlgs-2009)
+  SEQUENCE {
+    seed: BIT STRING
+    pgenCounter: INTEGER
+  }
+
+#33 KEA-Params-Id (PKIXAlgs-2009)
+  OCTET STRING
+
+#34 ECPoint (PKIXAlgs-2009)
+  OCTET STRING
+
+#35 ECParameters (PKIXAlgs-2009)
+  CHOICE {
+    namedCurve: OBJECT IDENTIFIER (table(set#5 &id))
+  }
+
+#36 RSAES-OAEP-params (PKIX1-PSS-OAEP-Algorithms-2009)
+  SEQUENCE {
+    hashFunc DEFAULT { algorithm oid 1.3.14.3.2.26, parameters NULL }: [0] EXPLICIT -> #8 HashAlgorithm
+    maskGenFunc DEFAULT { algorithm oid 1.2.840.113549.1.1.8, parameters { algorithm oid 1.3.14.3.2.26, parameters NULL } }: [1] EXPLICIT -> #10 MaskGenAlgorithm
+    pSourceFunc DEFAULT { algorithm oid 1.2.840.113549.1.1.9, parameters ''H }: [2] EXPLICIT -> #37 PSourceAlgorithm
+  }
+
+#37 PSourceAlgorithm (PKIX1-PSS-OAEP-Algorithms-2009)
+  -> #39 AlgorithmIdentifierPSSSourceAlgorithms
+
+#38 EncodingParameters (PKIX1-PSS-OAEP-Algorithms-2009)
+  OCTET STRING (SIZE (0..MAX))  { size=0..MAX }
+
+#39 AlgorithmIdentifierPSSSourceAlgorithms (AlgorithmInformation-2009) = AlgorithmIdentifier{ALGORITHM, { PSS-SourceAlgorithms }}
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER (table(set#6 &id))
+    parameters OPTIONAL: open type ALGORITHM.&Params table(set#6 &Params @algorithm)
+  }
+
+#40 AlgorithmIdentifierPublicKeyAlgorithms (AlgorithmInformation-2009) = AlgorithmIdentifier{PUBLIC-KEY, { PublicKeyAlgorithms }}
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER (table(set#4 &id))
+    parameters OPTIONAL: open type PUBLIC-KEY.&Params table(set#4 &Params @algorithm)
+  }
+
+#41 UniqueIdentifier (PKIX1Explicit-2009)
+  BIT STRING
+
+#42 AuthorityKeyIdentifier (PKIX1Implicit-2009)
+  SEQUENCE {
+    keyIdentifier OPTIONAL: [0] IMPLICIT -> #43 KeyIdentifier
+    authorityCertIssuer OPTIONAL: [1] IMPLICIT -> #44 GeneralNames  { size=1..MAX }
+    authorityCertSerialNumber OPTIONAL: [2] IMPLICIT -> #3 CertificateSerialNumber
+  } ((WITH COMPONENTS { ..., authorityCertIssuer Present, authorityCertSerialNumber Present } | WITH COMPONENTS { ..., authorityCertIssuer Absent, authorityCertSerialNumber Absent }))
+
+#43 KeyIdentifier (PKIX1Implicit-2009)
+  OCTET STRING
+
+#44 GeneralNames (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #45 GeneralName
+
+#45 GeneralName (PKIX1Implicit-2009)
+  CHOICE {
+    otherName: [0] IMPLICIT [UNIVERSAL 8] IMPLICIT SEQUENCE {
+      type-id: OBJECT IDENTIFIER
+      value: [0] EXPLICIT open type OTHER-NAME.&Type
+    }
+    rfc822Name: [1] IMPLICIT IA5String
+    dNSName: [2] IMPLICIT IA5String
+    x400Address: [3] IMPLICIT -> #46 ORAddress
+    directoryName: [4] EXPLICIT -> #13 Name
+    ediPartyName: [5] IMPLICIT -> #67 EDIPartyName
+    uniformResourceIdentifier: [6] IMPLICIT IA5String
+    iPAddress: [7] IMPLICIT OCTET STRING
+    registeredID: [8] IMPLICIT OBJECT IDENTIFIER
+  }
+
+#46 ORAddress (PKIX-X400Address-2009)
+  SEQUENCE {
+    built-in-standard-attributes: -> #47 BuiltInStandardAttributes
+    built-in-domain-defined-attributes OPTIONAL: -> #59 BuiltInDomainDefinedAttributes  { size=1..4 }
+    extension-attributes OPTIONAL: -> #61 ExtensionAttributes  { size=1..256 }
+  }
+
+#47 BuiltInStandardAttributes (PKIX-X400Address-2009)
+  SEQUENCE {
+    country-name OPTIONAL: -> #48 CountryName
+    administration-domain-name OPTIONAL: -> #49 AdministrationDomainName
+    network-address OPTIONAL: [0] IMPLICIT -> #50 NetworkAddress  { size=1..16 }
+    terminal-identifier OPTIONAL: [1] IMPLICIT -> #52 TerminalIdentifier  { size=1..24 }
+    private-domain-name OPTIONAL: [2] EXPLICIT -> #53 PrivateDomainName
+    organization-name OPTIONAL: [3] IMPLICIT -> #54 OrganizationName  { size=1..64 }
+    numeric-user-identifier OPTIONAL: [4] IMPLICIT -> #55 NumericUserIdentifier  { size=1..32 }
+    personal-name OPTIONAL: [5] IMPLICIT -> #56 PersonalName
+    organizational-unit-names OPTIONAL: [6] IMPLICIT -> #57 OrganizationalUnitNames  { size=1..4 }
+  }
+
+#48 CountryName (PKIX-X400Address-2009)
+  [APPLICATION 1] EXPLICIT CHOICE {
+    x121-dcc-code: NumericString (SIZE (3))  { size=3..3 }
+    iso-3166-alpha2-code: PrintableString (SIZE (2))  { size=2..2 }
+  }
+
+#49 AdministrationDomainName (PKIX-X400Address-2009)
+  [APPLICATION 2] EXPLICIT CHOICE {
+    numeric: NumericString (SIZE (0..16))  { size=0..16 }
+    printable: PrintableString (SIZE (0..16))  { size=0..16 }
+  }
+
+#50 NetworkAddress (PKIX-X400Address-2009)
+  -> #51 X121Address  { size=1..16 }
+
+#51 X121Address (PKIX-X400Address-2009)
+  NumericString (SIZE (1..16))  { size=1..16 }
+
+#52 TerminalIdentifier (PKIX-X400Address-2009)
+  PrintableString (SIZE (1..24))  { size=1..24 }
+
+#53 PrivateDomainName (PKIX-X400Address-2009)
+  CHOICE {
+    numeric: NumericString (SIZE (1..16))  { size=1..16 }
+    printable: PrintableString (SIZE (1..16))  { size=1..16 }
+  }
+
+#54 OrganizationName (PKIX-X400Address-2009)
+  PrintableString (SIZE (1..64))  { size=1..64 }
+
+#55 NumericUserIdentifier (PKIX-X400Address-2009)
+  NumericString (SIZE (1..32))  { size=1..32 }
+
+#56 PersonalName (PKIX-X400Address-2009)
+  SET {
+    surname: [0] IMPLICIT PrintableString (SIZE (1..40))  { size=1..40 }
+    given-name OPTIONAL: [1] IMPLICIT PrintableString (SIZE (1..16))  { size=1..16 }
+    initials OPTIONAL: [2] IMPLICIT PrintableString (SIZE (1..5))  { size=1..5 }
+    generation-qualifier OPTIONAL: [3] IMPLICIT PrintableString (SIZE (1..3))  { size=1..3 }
+  }
+
+#57 OrganizationalUnitNames (PKIX-X400Address-2009)
+  SEQUENCE (SIZE (1..4))  { size=1..4 } OF -> #58 OrganizationalUnitName  { size=1..32 }
+
+#58 OrganizationalUnitName (PKIX-X400Address-2009)
+  PrintableString (SIZE (1..32))  { size=1..32 }
+
+#59 BuiltInDomainDefinedAttributes (PKIX-X400Address-2009)
+  SEQUENCE (SIZE (1..4))  { size=1..4 } OF -> #60 BuiltInDomainDefinedAttribute
+
+#60 BuiltInDomainDefinedAttribute (PKIX-X400Address-2009)
+  SEQUENCE {
+    type: PrintableString (SIZE (1..8))  { size=1..8 }
+    value: PrintableString (SIZE (1..128))  { size=1..128 }
+  }
+
+#61 ExtensionAttributes (PKIX-X400Address-2009)
+  SET (SIZE (1..256))  { size=1..256 } OF -> #62 ExtensionAttribute
+
+#62 ExtensionAttribute (PKIX-X400Address-2009)
+  SEQUENCE {
+    extension-attribute-type: [0] IMPLICIT INTEGER (0..256) (table(set#8 &id))  { value=0..256 }
+    extension-attribute-value: [1] EXPLICIT open type EXTENSION-ATTRIBUTE.&Type table(set#8 &Type @extension-attribute-type)
+  }
+
+#63 TeletexOrganizationalUnitName (PKIX-X400Address-2009)
+  TeletexString (SIZE (1..32))  { size=1..32 per: none }
+
+#64 PDSParameter (PKIX-X400Address-2009)
+  SET {
+    printable-string OPTIONAL: PrintableString (SIZE (1..30))  { size=1..30 }
+    teletex-string OPTIONAL: TeletexString (SIZE (1..30))  { size=1..30 per: none }
+  }
+
+#65 PresentationAddress (PKIX-X400Address-2009)
+  SEQUENCE {
+    pSelector OPTIONAL: [0] EXPLICIT OCTET STRING
+    sSelector OPTIONAL: [1] EXPLICIT OCTET STRING
+    tSelector OPTIONAL: [2] EXPLICIT OCTET STRING
+    nAddresses: [3] EXPLICIT SET (SIZE (1..MAX))  { size=1..MAX } OF OCTET STRING
+  }
+
+#66 TeletexDomainDefinedAttribute (PKIX-X400Address-2009)
+  SEQUENCE {
+    type: TeletexString (SIZE (1..8))  { size=1..8 per: none }
+    value: TeletexString (SIZE (1..128))  { size=1..128 per: none }
+  }
+
+#67 EDIPartyName (PKIX1Implicit-2009)
+  SEQUENCE {
+    nameAssigner OPTIONAL: [0] IMPLICIT -> #17 DirectoryStringUbName
+    partyName: [1] IMPLICIT -> #17 DirectoryStringUbName
+  }
+
+#68 PrivateKeyUsagePeriod (PKIX1Implicit-2009)
+  SEQUENCE {
+    notBefore OPTIONAL: [0] IMPLICIT GeneralizedTime
+    notAfter OPTIONAL: [1] IMPLICIT GeneralizedTime
+  } ((WITH COMPONENTS { ..., notBefore Present } | WITH COMPONENTS { ..., notAfter Present }))
+
+#69 CertificatePolicies (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #70 PolicyInformation
+
+#70 PolicyInformation (PKIX1Implicit-2009)
+  SEQUENCE {
+    policyIdentifier: -> #71 CertPolicyId
+    policyQualifiers OPTIONAL: SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #72 PolicyQualifierInfo
+  }
+
+#71 CertPolicyId (PKIX1Implicit-2009)
+  OBJECT IDENTIFIER
+
+#72 PolicyQualifierInfo (PKIX1Implicit-2009)
+  SEQUENCE {
+    policyQualifierId: OBJECT IDENTIFIER (table(set#9 &id))
+    qualifier: open type TYPE-IDENTIFIER.&Type table(set#9 &Type @policyQualifierId)
+  }
+
+#73 CPSuri (PKIX1Implicit-2009)
+  IA5String
+
+#74 UserNotice (PKIX1Implicit-2009)
+  SEQUENCE {
+    noticeRef OPTIONAL: -> #75 NoticeReference
+    explicitText OPTIONAL: -> #76 DisplayText
+  }
+
+#75 NoticeReference (PKIX1Implicit-2009)
+  SEQUENCE {
+    organization: -> #76 DisplayText
+    noticeNumbers: SEQUENCE OF INTEGER
+  }
+
+#76 DisplayText (PKIX1Implicit-2009)
+  CHOICE {
+    ia5String: IA5String (SIZE (1..200))  { size=1..200 }
+    visibleString: VisibleString (SIZE (1..200))  { size=1..200 }
+    bmpString: BMPString (SIZE (1..200))  { size=1..200 }
+    utf8String: UTF8String (SIZE (1..200))  { size=1..200 per: none }
+  }
+
+#77 PolicyMappings (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF SEQUENCE {
+    issuerDomainPolicy: -> #71 CertPolicyId
+    subjectDomainPolicy: -> #71 CertPolicyId
+  }
+
+#78 SubjectDirectoryAttributes (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #79 AttributeSetSupportedAttributes
+
+#79 AttributeSetSupportedAttributes (PKIX-CommonTypes-2009) = AttributeSet{{ SupportedAttributes }}
+  SEQUENCE {
+    type: OBJECT IDENTIFIER (table(set#3 &id))
+    values: SET (SIZE (1..MAX))  { size=1..MAX } OF open type ATTRIBUTE.&Type table(set#3 &Type @type)
+  }
+
+#80 BasicConstraints (PKIX1Implicit-2009)
+  SEQUENCE {
+    cA DEFAULT FALSE: BOOLEAN
+    pathLenConstraint OPTIONAL: INTEGER (0..MAX)  { value=0..MAX }
+  }
+
+#81 NameConstraints (PKIX1Implicit-2009)
+  SEQUENCE {
+    permittedSubtrees OPTIONAL: [0] IMPLICIT -> #82 GeneralSubtrees  { size=1..MAX }
+    excludedSubtrees OPTIONAL: [1] IMPLICIT -> #82 GeneralSubtrees  { size=1..MAX }
+  }
+
+#82 GeneralSubtrees (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #83 GeneralSubtree
+
+#83 GeneralSubtree (PKIX1Implicit-2009)
+  SEQUENCE {
+    base: -> #45 GeneralName
+    minimum DEFAULT 0: [0] IMPLICIT -> #84 BaseDistance  { value=0..MAX }
+    maximum OPTIONAL: [1] IMPLICIT -> #84 BaseDistance  { value=0..MAX }
+  }
+
+#84 BaseDistance (PKIX1Implicit-2009)
+  INTEGER (0..MAX)  { value=0..MAX }
+
+#85 PolicyConstraints (PKIX1Implicit-2009)
+  SEQUENCE {
+    requireExplicitPolicy OPTIONAL: [0] IMPLICIT -> #86 SkipCerts  { value=0..MAX }
+    inhibitPolicyMapping OPTIONAL: [1] IMPLICIT -> #86 SkipCerts  { value=0..MAX }
+  }
+
+#86 SkipCerts (PKIX1Implicit-2009)
+  INTEGER (0..MAX)  { value=0..MAX }
+
+#87 ExtKeyUsageSyntax (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #88 KeyPurposeId
+
+#88 KeyPurposeId (PKIX1Implicit-2009)
+  OBJECT IDENTIFIER
+
+#89 CRLDistributionPoints (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #90 DistributionPoint
+
+#90 DistributionPoint (PKIX1Implicit-2009)
+  SEQUENCE {
+    distributionPoint OPTIONAL: [0] EXPLICIT -> #91 DistributionPointName
+    reasons OPTIONAL: [1] IMPLICIT -> #92 ReasonFlags
+    cRLIssuer OPTIONAL: [2] IMPLICIT -> #44 GeneralNames  { size=1..MAX }
+  }
+
+#91 DistributionPointName (PKIX1Implicit-2009)
+  CHOICE {
+    fullName: [0] IMPLICIT -> #44 GeneralNames  { size=1..MAX }
+    nameRelativeToCRLIssuer: [1] IMPLICIT -> #15 RelativeDistinguishedName  { size=1..MAX }
+  }
+
+#92 ReasonFlags (PKIX1Implicit-2009)
+  BIT STRING { unused(0), keyCompromise(1), cACompromise(2), affiliationChanged(3), superseded(4), cessationOfOperation(5), certificateHold(6), privilegeWithdrawn(7), aACompromise(8) }
+
+#93 AuthorityInfoAccessSyntax (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #94 AccessDescription
+
+#94 AccessDescription (PKIX1Implicit-2009)
+  SEQUENCE {
+    accessMethod: OBJECT IDENTIFIER
+    accessLocation: -> #45 GeneralName
+  }
+
+#95 SubjectInfoAccessSyntax (PKIX1Implicit-2009)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #94 AccessDescription
+
+#96 ExtensionsCertExtensions (PKIX-CommonTypes-2009) = Extensions{{ CertExtensions }}
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #97 ExtensionCertExtensions
+
+#97 ExtensionCertExtensions (PKIX-CommonTypes-2009) = Extension{{ { CertExtensions } }}
+  SEQUENCE {
+    extnID: OBJECT IDENTIFIER (table(set#7 &id))
+    critical DEFAULT FALSE: BOOLEAN
+    extnValue: OCTET STRING (CONTAINING open type EXTENSION.&ExtnType table(set#7 &ExtnType @extnID))
+  }
+
+#98 SIGNEDTBSCertificate (PKIX1Explicit-2009) = SIGNED{TBSCertificate}
+  SEQUENCE {
+    toBeSigned: -> #1 TBSCertificate
+    algorithmIdentifier: SEQUENCE {
+      algorithm: OBJECT IDENTIFIER (table(set#0 &id))
+      parameters OPTIONAL: open type SIGNATURE-ALGORITHM.&Params table(set#0 &Params @algorithmIdentifier.algorithm)
+    }
+    signature: BIT STRING (CONTAINING open type SIGNATURE-ALGORITHM.&Value table(set#0 &Value @algorithmIdentifier.algorithm))
+  }
+
+set#0 SignatureAlgorithms (PKIX1Explicit-2009) SIGNATURE-ALGORITHM key &id ...
+  sa-rsaWithMD2 oid 1.2.840.113549.1.1.2 (md2WithRSAEncryption)
+    &Params: NULL
+    &paramPresence = required
+  sa-rsaWithMD5 oid 1.2.840.113549.1.1.4 (md5WithRSAEncryption)
+    &Params: NULL
+    &paramPresence = required
+  sa-rsaWithSHA1 oid 1.2.840.113549.1.1.5 (sha1WithRSAEncryption)
+    &Params: NULL
+    &paramPresence = required
+  sa-dsaWithSHA1 oid 1.2.840.10040.4.3 (dsa-with-sha1)
+    &Params: NULL
+    &Value: -> #5 DSA-Sig-Value
+    &paramPresence = absent
+  sa-ecdsaWithSHA1 oid 1.2.840.10045.4.1 (ecdsa-with-SHA1)
+    &Params: NULL
+    &Value: -> #6 ECDSA-Sig-Value
+    &paramPresence = absent
+  sa-dsaWithSHA224 oid 2.16.840.1.101.3.4.3.1 (dsa-with-sha224)
+    &Params: NULL
+    &Value: -> #5 DSA-Sig-Value
+    &paramPresence = absent
+  sa-dsaWithSHA256 oid 2.16.840.1.101.3.4.3.2 (dsa-with-sha256)
+    &Params: NULL
+    &Value: -> #5 DSA-Sig-Value
+    &paramPresence = absent
+  sa-ecdsaWithSHA224 oid 1.2.840.10045.4.3.1 (ecdsa-with-SHA224)
+    &Params: NULL
+    &Value: -> #6 ECDSA-Sig-Value
+    &paramPresence = absent
+  sa-ecdsaWithSHA256 oid 1.2.840.10045.4.3.2 (ecdsa-with-SHA256)
+    &Params: NULL
+    &Value: -> #6 ECDSA-Sig-Value
+    &paramPresence = absent
+  sa-ecdsaWithSHA384 oid 1.2.840.10045.4.3.3 (ecdsa-with-SHA384)
+    &Params: NULL
+    &Value: -> #6 ECDSA-Sig-Value
+    &paramPresence = absent
+  sa-ecdsaWithSHA512 oid 1.2.840.10045.4.3.4 (ecdsa-with-SHA512)
+    &Params: NULL
+    &Value: -> #6 ECDSA-Sig-Value
+    &paramPresence = absent
+  sa-rsaSSA-PSS oid 1.2.840.113549.1.1.10 (id-RSASSA-PSS)
+    &Params: -> #7 RSASSA-PSS-params
+    &paramPresence = required
+
+set#1 HashAlgorithms (PKIX1-PSS-OAEP-Algorithms-2009) DIGEST-ALGORITHM key &id
+  {inline} oid 1.3.14.3.2.26 (id-sha1)
+    &Params: NULL
+    &paramPresence = preferredPresent
+  {inline} oid 2.16.840.1.101.3.4.2.4 (id-sha224)
+    &Params: NULL
+    &paramPresence = preferredPresent
+  {inline} oid 2.16.840.1.101.3.4.2.1 (id-sha256)
+    &Params: NULL
+    &paramPresence = preferredPresent
+  {inline} oid 2.16.840.1.101.3.4.2.2 (id-sha384)
+    &Params: NULL
+    &paramPresence = preferredPresent
+  {inline} oid 2.16.840.1.101.3.4.2.3 (id-sha512)
+    &Params: NULL
+    &paramPresence = preferredPresent
+
+set#2 PKCS1MGFAlgorithms (PKIX1-PSS-OAEP-Algorithms-2009) ALGORITHM key &id ...
+  {inline} oid 1.2.840.113549.1.1.8 (id-mgf1)
+    &Params: -> #8 HashAlgorithm
+    &paramPresence = required
+
+set#3 SupportedAttributes (PKIX1Explicit-2009) ATTRIBUTE key &id ...
+  at-name oid 2.5.4.41 (id-at-name)
+    &Type: -> #16 X520name
+  at-surname oid 2.5.4.4 (id-at-surname)
+    &Type: -> #16 X520name
+  at-givenName oid 2.5.4.42 (id-at-givenName)
+    &Type: -> #16 X520name
+  at-initials oid 2.5.4.43 (id-at-initials)
+    &Type: -> #16 X520name
+  at-generationQualifier oid 2.5.4.44 (id-at-generationQualifier)
+    &Type: -> #16 X520name
+  at-x520CommonName oid 2.5.4.3 (id-at-commonName)
+    &Type: -> #18 X520CommonName
+  at-x520LocalityName oid 2.5.4.7 (id-at-localityName)
+    &Type: -> #20 X520LocalityName
+  at-x520StateOrProvinceName oid 2.5.4.8 (id-at-stateOrProvinceName)
+    &Type: -> #21 DirectoryStringUbLocalityName
+  at-x520OrganizationName oid 2.5.4.10 (id-at-organizationName)
+    &Type: -> #19 DirectoryStringUbCommonName
+  at-x520OrganizationalUnitName oid 2.5.4.11 (id-at-organizationalUnitName)
+    &Type: -> #19 DirectoryStringUbCommonName
+  at-x520Title oid 2.5.4.12 (id-at-title)
+    &Type: -> #19 DirectoryStringUbCommonName
+  at-x520dnQualifier oid 2.5.4.46 (id-at-dnQualifier)
+    &Type: PrintableString
+  at-x520countryName oid 2.5.4.6 (id-at-countryName)
+    &Type: PrintableString (SIZE (2))  { size=2..2 }
+  at-x520SerialNumber oid 2.5.4.5 (id-at-serialNumber)
+    &Type: PrintableString (SIZE (1..64))  { size=1..64 }
+  at-x520Pseudonym oid 2.5.4.65 (id-at-pseudonym)
+    &Type: -> #21 DirectoryStringUbLocalityName
+  at-domainComponent oid 0.9.2342.19200300.100.1.25 (id-domainComponent)
+    &Type: IA5String
+  at-emailAddress oid 1.2.840.113549.1.9.1 (id-emailAddress)
+    &Type: IA5String (SIZE (1..255))  { size=1..255 }
+
+set#4 PublicKeyAlgorithms (PKIX1Explicit-2009) PUBLIC-KEY key &id ...
+  pk-rsa oid 1.2.840.113549.1.1.1 (rsaEncryption)
+    &KeyValue: -> #26 RSAPublicKey
+    &Params: NULL
+    &keyUsage = {digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment, keyCertSign, cRLSign}
+    &paramPresence = absent
+  pk-dsa oid 1.2.840.10040.4.1 (id-dsa)
+    &KeyValue: -> #28 DSAPublicKey
+    &Params: -> #29 DSA-Params
+    &keyUsage = {digitalSignature, nonRepudiation, keyCertSign, cRLSign}
+    &paramPresence = inheritable
+  pk-dh oid 1.2.840.10046.2.1 (dhpublicnumber)
+    &KeyValue: -> #30 DHPublicKey
+    &Params: -> #31 DomainParameters
+    &keyUsage = {keyAgreement, encipherOnly, decipherOnly}
+    &paramPresence = inheritable
+  pk-kea oid 2.16.840.1.101.2.1.1.22 (id-keyExchangeAlgorithm)
+    &Params: -> #33 KEA-Params-Id
+    &keyUsage = {keyAgreement, encipherOnly, decipherOnly}
+    &paramPresence = required
+  pk-ec oid 1.2.840.10045.2.1 (id-ecPublicKey)
+    &KeyValue: -> #34 ECPoint
+    &Params: -> #35 ECParameters
+    &keyUsage = {digitalSignature, nonRepudiation, keyAgreement, keyCertSign, cRLSign}
+    &paramPresence = required
+  pk-ecDH oid 1.3.132.1.12 (id-ecDH)
+    &KeyValue: -> #34 ECPoint
+    &Params: -> #35 ECParameters
+    &keyUsage = {keyAgreement, encipherOnly, decipherOnly}
+    &paramPresence = required
+  pk-ecMQV oid 1.3.132.1.13 (id-ecMQV)
+    &KeyValue: -> #34 ECPoint
+    &Params: -> #35 ECParameters
+    &keyUsage = {keyAgreement, encipherOnly, decipherOnly}
+    &paramPresence = required
+  pk-rsaSSA-PSS oid 1.2.840.113549.1.1.10 (id-RSASSA-PSS)
+    &KeyValue: -> #26 RSAPublicKey
+    &Params: -> #7 RSASSA-PSS-params
+    &keyUsage = {nonRepudiation, digitalSignature, keyCertSign, cRLSign}
+    &paramPresence = optional
+  pk-rsaES-OAEP oid 1.2.840.113549.1.1.7 (id-RSAES-OAEP)
+    &KeyValue: -> #26 RSAPublicKey
+    &Params: -> #36 RSAES-OAEP-params
+    &keyUsage = {keyEncipherment, dataEncipherment}
+    &paramPresence = optional
+
+set#5 NamedCurve (PKIXAlgs-2009) CURVE key &id ...
+  {inline} oid 1.2.840.10045.3.1.1 (secp192r1)
+  {inline} oid 1.3.132.0.1 (sect163k1)
+  {inline} oid 1.3.132.0.15 (sect163r2)
+  {inline} oid 1.3.132.0.33 (secp224r1)
+  {inline} oid 1.3.132.0.26 (sect233k1)
+  {inline} oid 1.3.132.0.27 (sect233r1)
+  {inline} oid 1.2.840.10045.3.1.7 (secp256r1)
+  {inline} oid 1.3.132.0.16 (sect283k1)
+  {inline} oid 1.3.132.0.17 (sect283r1)
+  {inline} oid 1.3.132.0.34 (secp384r1)
+  {inline} oid 1.3.132.0.36 (sect409k1)
+  {inline} oid 1.3.132.0.37 (sect409r1)
+  {inline} oid 1.3.132.0.35 (secp521r1)
+  {inline} oid 1.3.132.0.38 (sect571k1)
+  {inline} oid 1.3.132.0.39 (sect571r1)
+
+set#6 PSS-SourceAlgorithms (PKIX1-PSS-OAEP-Algorithms-2009) ALGORITHM key &id ...
+  {inline} oid 1.2.840.113549.1.1.9 (id-pSpecified)
+    &Params: -> #38 EncodingParameters  { size=0..MAX }
+    &paramPresence = required
+
+set#7 CertExtensions (PKIX1Implicit-2009) EXTENSION key &id ...
+  ext-AuthorityKeyIdentifier oid 2.5.29.35 (id-ce-authorityKeyIdentifier)
+    &ExtnType: -> #42 AuthorityKeyIdentifier
+  ext-SubjectKeyIdentifier oid 2.5.29.14 (id-ce-subjectKeyIdentifier)
+    &ExtnType: -> #43 KeyIdentifier
+  ext-KeyUsage oid 2.5.29.15 (id-ce-keyUsage)
+    &ExtnType: -> #27 KeyUsage
+  ext-PrivateKeyUsagePeriod oid 2.5.29.16 (id-ce-privateKeyUsagePeriod)
+    &ExtnType: -> #68 PrivateKeyUsagePeriod
+  ext-CertificatePolicies oid 2.5.29.32 (id-ce-certificatePolicies)
+    &ExtnType: -> #69 CertificatePolicies  { size=1..MAX }
+  ext-PolicyMappings oid 2.5.29.33 (id-ce-policyMappings)
+    &ExtnType: -> #77 PolicyMappings  { size=1..MAX }
+  ext-SubjectAltName oid 2.5.29.17 (id-ce-subjectAltName)
+    &ExtnType: -> #44 GeneralNames  { size=1..MAX }
+  ext-IssuerAltName oid 2.5.29.18 (id-ce-issuerAltName)
+    &ExtnType: -> #44 GeneralNames  { size=1..MAX }
+  ext-SubjectDirectoryAttributes oid 2.5.29.9 (id-ce-subjectDirectoryAttributes)
+    &ExtnType: -> #78 SubjectDirectoryAttributes  { size=1..MAX }
+  ext-BasicConstraints oid 2.5.29.19 (id-ce-basicConstraints)
+    &ExtnType: -> #80 BasicConstraints
+  ext-NameConstraints oid 2.5.29.30 (id-ce-nameConstraints)
+    &ExtnType: -> #81 NameConstraints
+  ext-PolicyConstraints oid 2.5.29.36 (id-ce-policyConstraints)
+    &ExtnType: -> #85 PolicyConstraints
+  ext-ExtKeyUsage oid 2.5.29.37 (id-ce-extKeyUsage)
+    &ExtnType: -> #87 ExtKeyUsageSyntax  { size=1..MAX }
+  ext-CRLDistributionPoints oid 2.5.29.31 (id-ce-cRLDistributionPoints)
+    &ExtnType: -> #89 CRLDistributionPoints  { size=1..MAX }
+  ext-InhibitAnyPolicy oid 2.5.29.54 (id-ce-inhibitAnyPolicy)
+    &ExtnType: -> #86 SkipCerts  { value=0..MAX }
+  ext-FreshestCRL oid 2.5.29.46 (id-ce-freshestCRL)
+    &ExtnType: -> #89 CRLDistributionPoints  { size=1..MAX }
+  ext-AuthorityInfoAccess oid 1.3.6.1.5.5.7.1.1 (id-pe-authorityInfoAccess)
+    &ExtnType: -> #93 AuthorityInfoAccessSyntax  { size=1..MAX }
+  ext-SubjectInfoAccessSyntax oid 1.3.6.1.5.5.7.1.11 (id-pe-subjectInfoAccess)
+    &ExtnType: -> #95 SubjectInfoAccessSyntax  { size=1..MAX }
+
+set#8 SupportedExtensionAttributes (PKIX-X400Address-2009) EXTENSION-ATTRIBUTE key &id ...
+  ea-commonName 1
+    &Type: PrintableString (SIZE (1..64))  { size=1..64 }
+  ea-teletexCommonName 2
+    &Type: TeletexString (SIZE (1..64))  { size=1..64 per: none }
+  ea-teletexOrganizationName 3
+    &Type: TeletexString (SIZE (1..64))  { size=1..64 per: none }
+  ea-teletexPersonalName 4
+    &Type: SET {
+      surname: [0] IMPLICIT TeletexString (SIZE (1..40))  { size=1..40 per: none }
+      given-name OPTIONAL: [1] IMPLICIT TeletexString (SIZE (1..16))  { size=1..16 per: none }
+      initials OPTIONAL: [2] IMPLICIT TeletexString (SIZE (1..5))  { size=1..5 per: none }
+      generation-qualifier OPTIONAL: [3] IMPLICIT TeletexString (SIZE (1..3))  { size=1..3 per: none }
+    }
+  ea-teletexOrganizationalUnitNames 5
+    &Type: SEQUENCE (SIZE (1..4))  { size=1..4 } OF -> #63 TeletexOrganizationalUnitName  { size=1..32 per: none }
+  ea-pDSName 7
+    &Type: PrintableString (SIZE (1..16))  { size=1..16 }
+  ea-physicalDeliveryCountryName 8
+    &Type: CHOICE {
+      x121-dcc-code: NumericString (SIZE (3))  { size=3..3 }
+      iso-3166-alpha2-code: PrintableString (SIZE (2))  { size=2..2 }
+    }
+  ea-postalCode 9
+    &Type: CHOICE {
+      numeric-code: NumericString (SIZE (1..16))  { size=1..16 }
+      printable-code: PrintableString (SIZE (1..16))  { size=1..16 }
+    }
+  ea-physicalDeliveryOfficeName 10
+    &Type: -> #64 PDSParameter
+  ea-physicalDeliveryOfficeNumber 11
+    &Type: -> #64 PDSParameter
+  ea-extensionORAddressComponents 12
+    &Type: -> #64 PDSParameter
+  ea-physicalDeliveryPersonalName 13
+    &Type: -> #64 PDSParameter
+  ea-physicalDeliveryOrganizationName 14
+    &Type: -> #64 PDSParameter
+  ea-extensionPhysicalDeliveryAddressComponents 15
+    &Type: -> #64 PDSParameter
+  ea-unformattedPostalAddress 16
+    &Type: SET {
+      printable-address OPTIONAL: SEQUENCE (SIZE (1..6))  { size=1..6 } OF PrintableString (SIZE (1..30))  { size=1..30 }
+      teletex-string OPTIONAL: TeletexString (SIZE (1..180))  { size=1..180 per: none }
+    }
+  ea-streetAddress 17
+    &Type: -> #64 PDSParameter
+  ea-postOfficeBoxAddress 18
+    &Type: -> #64 PDSParameter
+  ea-posteRestanteAddress 19
+    &Type: -> #64 PDSParameter
+  ea-uniquePostalName 20
+    &Type: -> #64 PDSParameter
+  ea-localPostalAttributes 21
+    &Type: -> #64 PDSParameter
+  ea-extendedNetworkAddress 22
+    &Type: CHOICE {
+      e163-4-address: SEQUENCE {
+        number: [0] IMPLICIT NumericString (SIZE (1..15))  { size=1..15 }
+        sub-address OPTIONAL: [1] IMPLICIT NumericString (SIZE (1..40))  { size=1..40 }
+      }
+      psap-address: [0] IMPLICIT -> #65 PresentationAddress
+    }
+  ea-terminalType 23
+    &Type: INTEGER { telex(3), teletex(4), g3-facsimile(5), g4-facsimile(6), ia5-terminal(7), videotex(8) } (0..256)  { value=0..256 }
+  ea-teletexDomainDefinedAttributes 6
+    &Type: SEQUENCE (SIZE (1..4))  { size=1..4 } OF -> #66 TeletexDomainDefinedAttribute
+
+set#9 PolicyQualifierId (PKIX1Implicit-2009) TYPE-IDENTIFIER key &id ...
+  pqid-cps oid 1.3.6.1.5.5.7.2.1 (id-qt-cps)
+    &Type: -> #73 CPSuri
+  pqid-unotice oid 1.3.6.1.5.5.7.2.2 (id-qt-unotice)
+    &Type: -> #74 UserNotice
+
+oids
+  id-RSAES-OAEP = 1.2.840.113549.1.1.7 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-RSASSA-PSS = 1.2.840.113549.1.1.10 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-mgf1 = 1.2.840.113549.1.1.8 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-pSpecified = 1.2.840.113549.1.1.9 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-sha224 = 2.16.840.1.101.3.4.2.4 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-sha256 = 2.16.840.1.101.3.4.2.1 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-sha384 = 2.16.840.1.101.3.4.2.2 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-sha512 = 2.16.840.1.101.3.4.2.3 (PKIX1-PSS-OAEP-Algorithms-2009)
+  id-qt-cps = 1.3.6.1.5.5.7.2.1 (PKIX1Explicit-2009)
+  id-qt-unotice = 1.3.6.1.5.5.7.2.2 (PKIX1Explicit-2009)
+  id-ce-authorityKeyIdentifier = 2.5.29.35 (PKIX1Implicit-2009)
+  id-ce-basicConstraints = 2.5.29.19 (PKIX1Implicit-2009)
+  id-ce-cRLDistributionPoints = 2.5.29.31 (PKIX1Implicit-2009)
+  id-ce-certificatePolicies = 2.5.29.32 (PKIX1Implicit-2009)
+  id-ce-extKeyUsage = 2.5.29.37 (PKIX1Implicit-2009)
+  id-ce-freshestCRL = 2.5.29.46 (PKIX1Implicit-2009)
+  id-ce-inhibitAnyPolicy = 2.5.29.54 (PKIX1Implicit-2009)
+  id-ce-issuerAltName = 2.5.29.18 (PKIX1Implicit-2009)
+  id-ce-keyUsage = 2.5.29.15 (PKIX1Implicit-2009)
+  id-ce-nameConstraints = 2.5.29.30 (PKIX1Implicit-2009)
+  id-ce-policyConstraints = 2.5.29.36 (PKIX1Implicit-2009)
+  id-ce-policyMappings = 2.5.29.33 (PKIX1Implicit-2009)
+  id-ce-privateKeyUsagePeriod = 2.5.29.16 (PKIX1Implicit-2009)
+  id-ce-subjectAltName = 2.5.29.17 (PKIX1Implicit-2009)
+  id-ce-subjectDirectoryAttributes = 2.5.29.9 (PKIX1Implicit-2009)
+  id-ce-subjectKeyIdentifier = 2.5.29.14 (PKIX1Implicit-2009)
+  id-pe-authorityInfoAccess = 1.3.6.1.5.5.7.1.1 (PKIX1Implicit-2009)
+  id-pe-subjectInfoAccess = 1.3.6.1.5.5.7.1.11 (PKIX1Implicit-2009)
+  dhpublicnumber = 1.2.840.10046.2.1 (PKIXAlgs-2009)
+  dsa-with-sha1 = 1.2.840.10040.4.3 (PKIXAlgs-2009)
+  dsa-with-sha224 = 2.16.840.1.101.3.4.3.1 (PKIXAlgs-2009)
+  dsa-with-sha256 = 2.16.840.1.101.3.4.3.2 (PKIXAlgs-2009)
+  ecdsa-with-SHA1 = 1.2.840.10045.4.1 (PKIXAlgs-2009)
+  ecdsa-with-SHA224 = 1.2.840.10045.4.3.1 (PKIXAlgs-2009)
+  ecdsa-with-SHA256 = 1.2.840.10045.4.3.2 (PKIXAlgs-2009)
+  ecdsa-with-SHA384 = 1.2.840.10045.4.3.3 (PKIXAlgs-2009)
+  ecdsa-with-SHA512 = 1.2.840.10045.4.3.4 (PKIXAlgs-2009)
+  id-dsa = 1.2.840.10040.4.1 (PKIXAlgs-2009)
+  id-ecDH = 1.3.132.1.12 (PKIXAlgs-2009)
+  id-ecMQV = 1.3.132.1.13 (PKIXAlgs-2009)
+  id-ecPublicKey = 1.2.840.10045.2.1 (PKIXAlgs-2009)
+  id-keyExchangeAlgorithm = 2.16.840.1.101.2.1.1.22 (PKIXAlgs-2009)
+  id-sha1 = 1.3.14.3.2.26 (PKIXAlgs-2009)
+  md2WithRSAEncryption = 1.2.840.113549.1.1.2 (PKIXAlgs-2009)
+  md5WithRSAEncryption = 1.2.840.113549.1.1.4 (PKIXAlgs-2009)
+  rsaEncryption = 1.2.840.113549.1.1.1 (PKIXAlgs-2009)
+  secp192r1 = 1.2.840.10045.3.1.1 (PKIXAlgs-2009)
+  secp224r1 = 1.3.132.0.33 (PKIXAlgs-2009)
+  secp256r1 = 1.2.840.10045.3.1.7 (PKIXAlgs-2009)
+  secp384r1 = 1.3.132.0.34 (PKIXAlgs-2009)
+  secp521r1 = 1.3.132.0.35 (PKIXAlgs-2009)
+  sect163k1 = 1.3.132.0.1 (PKIXAlgs-2009)
+  sect163r2 = 1.3.132.0.15 (PKIXAlgs-2009)
+  sect233k1 = 1.3.132.0.26 (PKIXAlgs-2009)
+  sect233r1 = 1.3.132.0.27 (PKIXAlgs-2009)
+  sect283k1 = 1.3.132.0.16 (PKIXAlgs-2009)
+  sect283r1 = 1.3.132.0.17 (PKIXAlgs-2009)
+  sect409k1 = 1.3.132.0.36 (PKIXAlgs-2009)
+  sect409r1 = 1.3.132.0.37 (PKIXAlgs-2009)
+  sect571k1 = 1.3.132.0.38 (PKIXAlgs-2009)
+  sect571r1 = 1.3.132.0.39 (PKIXAlgs-2009)
+  sha1WithRSAEncryption = 1.2.840.113549.1.1.5 (PKIXAlgs-2009)

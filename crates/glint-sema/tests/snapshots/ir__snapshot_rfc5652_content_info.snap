@@ -1,0 +1,14 @@
+---
+source: crates/glint-sema/tests/ir.rs
+expression: "glint_ir::dump(&set)"
+---
+root #0
+
+#0 ContentInfo (CryptographicMessageSyntax2004)
+  SEQUENCE {
+    contentType: -> #1 ContentType
+    content: [0] EXPLICIT open type DEFINED BY contentType
+  }
+
+#1 ContentType (CryptographicMessageSyntax2004)
+  OBJECT IDENTIFIER

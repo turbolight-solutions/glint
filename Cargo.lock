@@ -628,6 +628,7 @@ dependencies = [
  "glint-diag",
  "glint-errata",
  "glint-extract",
+ "glint-ir",
  "glint-sema",
  "glint-syntax",
  "rayon",
@@ -723,11 +724,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "glint-ir"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "glint-sema"
 version = "0.1.0"
 dependencies = [
  "glint-corpus",
  "glint-diag",
+ "glint-ir",
  "glint-syntax",
  "insta",
  "serde",
