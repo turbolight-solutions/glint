@@ -24,6 +24,7 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 2254	466	not-applicable	claude	47aaf390067f6de1	asn1	string representation grammar in section 4, not ASN.1
 2268	465	patched	claude	6a369c5f026915a8	asn1	RC2Version comment range 1-1024 -> 0-1024 in section 6 inline ASN.1, and the same range in the prose below it
 2459	432	not-applicable	claude	0cf771a687c544a1	asn1	Appendix D.3 hex dump annotation, not ASN.1
+2459	8911	not-applicable	human	0000000000000000	asn1	ignored: the feed entry holds a control or bidi character; RFC 2459 is obsoleted by RFC 3280
 2560	2253	patched	claude	ec35cce46fe8b36c	asn1	drop the comment after UnknownInfo ::= NULL in the module OCSP and in the inline copy of section 4.2.1
 2560	2329	not-applicable	claude	921a1fdce0023e88	asn1	typo in prose of section 4.2.2.2.1
 2560	3417	not-applicable	claude	12bac5dddbbddb10	asn1	id-ad-ocspSigning -> id-kp-OCSPSigning in prose of section 4.2.2.2
@@ -58,7 +59,7 @@ rfc	errata_id	decision	by	fingerprint	rule	note
 3161	1879	not-applicable	claude	558095874a60a332	asn1	prose in section 3.6 (media type name)
 3161	2931	patched	claude	a4edcf9bdf06cccf	asn1	comment syntax in PKIStatus (-- on continuation lines, -- before }) in the section 2.4.2 inline ASN.1 and the Appendix C module
 3161	2932	patched	claude	61e2574369bfa316	asn1	comment syntax (-- before }) after systemFailure in the section 2.4.2 inline ASN.1 and the Appendix C module
-3183	3757	needs-human	claude	c6dadb35800da494	asn1	adds id-aa-signatureType inline in section 3.1.2, but its OID { ... pkcs(1) pkcs9(9) 2 28 } lacks smime(16): the IANA S/MIME Attributes registry has id-aa-signatureType at 1.2.840.113549.1.9.16.2.28 (citing this erratum); the erratum looks wrong itself
+3183	3757	patched	human	c6dadb35800da494	asn1	adds id-aa-signatureType inline in section 3.1.2, applied as written: its OID { ... pkcs(1) pkcs9(9) 2 28 } lacks smime(16) (IANA: 1.2.840.113549.1.9.16.2.28), in to-file.md; loss W301, no module defines it
 3217	639	not-applicable	claude	5048855f53d0f5cf	asn1	test vectors and prose in section 4.4
 3279	307	not-applicable	claude	2b373ea94c201c0b	asn1	prose and reference label (X.660 -> X.690)
 3279	2048	patched	claude	cb4163392b8f4583	asn1	basisType(1) -> basisType(3) in id-characteristic-two-basis, section 2.3.5 inline ASN.1 (the section 3 module already has it)

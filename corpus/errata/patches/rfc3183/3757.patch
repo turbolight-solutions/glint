@@ -1,0 +1,17 @@
+--- a/rfc3183.txt
++++ b/rfc3183.txt
+@@ -460,7 +460,13 @@
+    containing the signature type attribute is received it triggers the
+    software to verify that the correct naming convention has been used.
+ 
+-   The ASN.1 [4] notation of this attribute is: -
++   The following object identifier identifies the SignatureType
++   attribute:
++
++      id-aa-signatureType OBJECT IDENTIFIER ::= { iso(1)
++          member-body(2) us(840) rsadsi(113549) pkcs(1) pkcs9(9) 2 28 }
++
++   The ASN.1 [4] notation of this attribute is:
+ 
+       SignatureType ::= SEQUENCE OF OBJECT IDENTIFIER
+ 

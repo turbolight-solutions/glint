@@ -102,7 +102,7 @@ Known errata: 6443, 6444, 6445.
 
 A comment wraps: `identifier` on the next line falls outside the `--` comment. Glint `E001`. Also, Section 3.1.2:
 erratum 3757 adds `id-aa-signatureType` as `{ ... pkcs(1) pkcs9(9) 2 28 }`, without `smime(16)`; IANA's S/MIME
-Attributes registry has it at `1.2.840.113549.1.9.16.2.28`, citing that erratum (3757 is `needs-human` for this).
+Attributes registry has it at `1.2.840.113549.1.9.16.2.28`, citing that erratum (3757 is patched as written, so the corpus has the wrong OID until it is corrected).
 Fix: a corrected erratum with `pkcs9(9) smime(16) 2 28`.
 Known errata: 3757.
 
