@@ -9,9 +9,6 @@ inputs:
   version:
     description: Release of Glint to use, such as v0.1.0, or `latest`.
     default: latest
-  data-build:
-    description: Build of the corpus data to check against, such as 2026-11-05.0123abcd. By default the latest one the Glint site publishes for this version of Glint.
-    default: ""
   config:
     description: Path to glint.toml. By default the nearest one above each document is used.
     default: ""
@@ -57,7 +54,7 @@ runs:
           Windows/X64)  target=x86_64-pc-windows-msvc;    ext=zip ;;
           *) echo "::error::Glint has no release for $RUNNER_OS_NAME/$RUNNER_ARCH_NAME"; exit 1 ;;
         esac
-        base="https://github.com/glint-asn1/glint/releases"
+        base="https://github.com/turbolight-solutions/glint/releases"
         if [ "$GLINT_VERSION" = latest ]; then url="$base/latest/download"; else url="$base/download/$GLINT_VERSION"; fi
         dir="$RUNNER_TEMP/glint"
         mkdir -p "$dir"
@@ -73,11 +70,10 @@ runs:
       id: data
       shell: bash
       env:
-        DATA_BUILD: ${{ inputs.data-build }}
         GLINT_CACHE_DIR: ${{ runner.temp }}/glint-cache
       run: |
         set -euo pipefail
-        if [ -n "$DATA_BUILD" ]; then glint corpus update --build "$DATA_BUILD"; else glint corpus update; fi
+        glint corpus update
         build="$(glint corpus list 2>&1 >/dev/null | sed -n 's/^glint .*, data \(.*\)$/\1/p' | tail -n 1)"
         echo "Corpus data build: $build"
         echo "build=$build" >> "$GITHUB_OUTPUT"

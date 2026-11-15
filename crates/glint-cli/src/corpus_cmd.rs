@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use clap::{Args as ClapArgs, Subcommand};
 use glint_corpus::{
     CORPUS_FILE, Corpus, CorpusData, CorpusProvider, ModuleRecord, Oid, ParseStatus, Pointer,
-    build_dir, latest_path, valid_build_id,
+    build_dir, latest_path,
 };
 use glint_diag::Versions;
 
@@ -49,9 +49,6 @@ enum Sub {
         /// The site to download from; the data is read from `<URL>/data/v<schema>/`
         #[arg(long, default_value = DEFAULT_SITE)]
         url: String,
-        /// Download this build (`YYYY-MM-DD.<hash>`) instead of the latest
-        #[arg(long, value_name = "ID", conflicts_with = "from")]
-        build: Option<String>,
         /// Install a `corpus.json` file instead of downloading one
         #[arg(long, conflicts_with = "url")]
         from: Option<PathBuf>,
@@ -68,8 +65,8 @@ fn status_name(status: ParseStatus) -> &'static str {
 }
 
 pub fn run(args: &Args) -> ExitCode {
-    if let Sub::Update { url, build, from } = &args.command {
-        return match update(url, build.as_deref(), from.as_deref()) {
+    if let Sub::Update { url, from } = &args.command {
+        return match update(url, from.as_deref()) {
             Ok(message) => {
                 println!("{message}");
                 ExitCode::from(EXIT_OK)
@@ -274,7 +271,7 @@ fn oid_info(corpus: &Corpus, text: &str, out: &mut impl Write) -> u8 {
     EXIT_OK
 }
 
-fn update(site: &str, build: Option<&str>, from: Option<&Path>) -> Result<String, String> {
+fn update(site: &str, from: Option<&Path>) -> Result<String, String> {
     let destination = cached_corpus_path()
         .ok_or_else(|| "cannot tell where the user cache is; set GLINT_CACHE_DIR".to_owned())?;
     if let Some(path) = from {
@@ -283,23 +280,13 @@ fn update(site: &str, build: Option<&str>, from: Option<&Path>) -> Result<String
         return install(&bytes, None, None, &destination);
     }
     let site = site.trim_end_matches('/');
-    let build = match build {
-        Some(build) if valid_build_id(build) => build.to_owned(),
-        Some(build) => {
-            return Err(format!(
-                "`{build}` is not a build id; it looks like `2026-11-05.0123abcd`"
-            ));
-        }
-        None => {
-            let url = format!("{site}/{}", latest_path());
-            let bytes = fetch_data(&url)?.ok_or_else(|| {
-                format!("{url}: not found; the site publishes no data for this version of Glint")
-            })?;
-            Pointer::from_json(&bytes)
-                .map_err(|e| format!("{url}: {e}"))?
-                .build
-        }
-    };
+    let url = format!("{site}/{}", latest_path());
+    let bytes = fetch_data(&url)?.ok_or_else(|| {
+        format!("{url}: not found; the site publishes no data for this version of Glint")
+    })?;
+    let build = Pointer::from_json(&bytes)
+        .map_err(|e| format!("{url}: {e}"))?
+        .build;
     if installed_build(&destination).as_deref() == Some(build.as_str()) {
         return Ok(format!(
             "the corpus data is up to date (build {build}) at {}",
@@ -353,7 +340,7 @@ fn install(
         && data.info.build != build
     {
         return Err(format!(
-            "the download is build {}, not the build {build} that was asked for",
+            "the download is build {}, not the build {build} that latest.json names",
             data.info.build
         ));
     }
