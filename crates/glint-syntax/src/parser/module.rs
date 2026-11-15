@@ -73,6 +73,7 @@ impl Parser<'_> {
         self.start_node(SyntaxKind::ModuleDefinition);
         self.parse_module_identifier();
         self.expect_kw("DEFINITIONS");
+        self.default_encoding = None;
         self.parse_module_defaults();
         self.expect(SyntaxKind::Assign, "`::=`");
         self.expect_kw("BEGIN");
@@ -81,6 +82,7 @@ impl Parser<'_> {
             self.parse_encoding_control_section();
         }
         self.expect_kw("END");
+        self.default_encoding = None;
         self.finish_node();
     }
 
@@ -101,6 +103,22 @@ impl Parser<'_> {
     fn parse_module_defaults(&mut self) {
         if self.at(SyntaxKind::UpperName) && self.nth_kw(1, "INSTRUCTIONS") {
             self.start_node(SyntaxKind::EncodingReferenceDefault);
+            // X.680 13.5: the module's default encoding reference, which an encoding prefix without a reference uses
+            // (31.3.3). `TAG` is the default anyway: a bracket without a reference is then a tag (31.2.2).
+            let name = self.nth_text(0);
+            if name != "TAG" {
+                self.default_encoding = Some(name);
+                if !is_known_encoding_reference(name) {
+                    let range = self.current_range();
+                    self.errors.push(SyntaxError::new(
+                        "W136",
+                        format!(
+                            "unknown encoding reference `{name}`; the encoding prefixes that use it by default are ignored"
+                        ),
+                        range,
+                    ));
+                }
+            }
             self.bump();
             self.bump_kw();
             self.finish_node();

@@ -263,15 +263,23 @@ impl Parser<'_> {
 
     // X.680 31.1 TaggedType, 31.3 EncodingPrefixedType
     fn parse_prefixed_type(&mut self) -> bool {
-        let is_encoding_prefix = self.nth_is(1, SyntaxKind::UpperName)
+        let named = self.nth_is(1, SyntaxKind::UpperName)
             && self.nth_is(2, SyntaxKind::Colon)
-            && self.nth_text(1) != "TAG"
             && crate::reserved::is_all_upper(self.nth_text(1));
-        if is_encoding_prefix {
+        let explicit_tag = named && self.nth_text(1) == "TAG";
+        // A prefix with its own reference, or one without, which then takes the module's default when that is not
+        // `TAG` (X.680 31.2.2, 31.3.3).
+        let with_reference = named && !explicit_tag;
+        let by_default = !named && self.default_encoding.is_some();
+        if with_reference || by_default {
             self.start_node(SyntaxKind::EncodingPrefixedType);
             self.start_node(SyntaxKind::EncodingPrefix);
             let name = self.nth_text(1);
-            if !super::module::is_known_encoding_reference(name) {
+            // An unknown default is reported once, at the module header.
+            if with_reference
+                && Some(name) != self.default_encoding
+                && !super::module::is_known_encoding_reference(name)
+            {
                 let range = self.current_range();
                 self.errors.push(SyntaxError::new(
                     "W136",

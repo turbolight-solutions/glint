@@ -134,6 +134,9 @@ pub(crate) struct Parser<'t> {
     options: ParseOptions,
     shadowed: Vec<&'t str>,
     last_error_at: Option<usize>,
+    /// The default encoding reference of the module being parsed (X.680 13.5), when it is not `TAG`: an encoding
+    /// prefix may then leave out its reference (`[ATTRIBUTE]` for `[RXER:ATTRIBUTE]`, X.680 31.3.3).
+    default_encoding: Option<&'t str>,
 }
 
 impl<'t> Parser<'t> {
@@ -168,6 +171,7 @@ impl<'t> Parser<'t> {
             options,
             shadowed: Vec::new(),
             last_error_at: None,
+            default_encoding: None,
         };
         parser.any_builtin = parser.compute_any_builtin();
         parser.shadowed = parser.compute_shadowed();

@@ -342,6 +342,39 @@ fn x680_31_3_encoding_prefixed_types_are_opaque() {
 }
 
 #[test]
+fn x680_31_3_3_a_prefix_without_reference_takes_the_module_default() {
+    // RFC 4912: `RXER INSTRUCTIONS` makes RXER the default (X.680 13.5), so `[ATTRIBUTE]` is `[RXER:ATTRIBUTE]`
+    // and a tag must say `TAG:` (31.2.2). RXER is not in Annex E: one W136, at the header.
+    let rxer = "M DEFINITIONS RXER INSTRUCTIONS AUTOMATIC TAGS ::= BEGIN\n\
+                T ::= [HOLLOW-INSERTIONS] SEQUENCE {\n\
+                  name [ATTRIBUTE] UTF8String OPTIONAL,\n\
+                  ref [RXER:TYPE-REF { namespace-name \"urn:x\", local-name \"y\" }] OCTET STRING,\n\
+                  tagged [TAG: 3] INTEGER }\n\
+                END\n";
+    let prefixed = parse(rxer);
+    assert_eq!(
+        prefixed.errors().iter().map(|e| e.code).collect::<Vec<_>>(),
+        vec!["W136"]
+    );
+    assert_eq!(count(&prefixed, SyntaxKind::EncodingPrefixedType), 3);
+    assert_eq!(count(&prefixed, SyntaxKind::TaggedType), 1);
+    // `TAG INSTRUCTIONS`, or no default at all: a bracket without a reference is a tag.
+    let tag = parse("M DEFINITIONS TAG INSTRUCTIONS ::= BEGIN\nT ::= [0] INTEGER\nEND\n");
+    assert!(tag.errors().is_empty(), "{:?}", tag.errors());
+    assert_eq!(count(&tag, SyntaxKind::TaggedType), 1);
+    let plain = clean_type("[0] INTEGER");
+    assert_eq!(count(&plain, SyntaxKind::EncodingPrefixedType), 0);
+    // The default ends with its module.
+    let two = parse(
+        "A DEFINITIONS XER INSTRUCTIONS ::= BEGIN\nT ::= [ATTRIBUTE] INTEGER\nEND\n\
+         B DEFINITIONS ::= BEGIN\nU ::= [1] INTEGER\nEND\n",
+    );
+    assert!(two.errors().is_empty(), "{:?}", two.errors());
+    assert_eq!(count(&two, SyntaxKind::EncodingPrefixedType), 1);
+    assert_eq!(count(&two, SyntaxKind::TaggedType), 1);
+}
+
+#[test]
 fn x680_instance_of_and_class_field_types() {
     clean_type("INSTANCE OF TYPE-IDENTIFIER");
     clean_type("TYPE-IDENTIFIER.&Type");

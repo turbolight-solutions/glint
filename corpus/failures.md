@@ -4,35 +4,30 @@ The errors corpus-build and `glint check` still report once every Verified RFC e
 and what would fix them. `corpus/errata/to-file.md` lists the defects to report to the RFC Editor; this file is the
 wider picture, Glint's own gaps included. Update it when a fix lands (see "How to update").
 
-As of 2026-11-14: corpus build `cd95a0b2` (482 modules) from the `corpus/errata` of `9b3bd59` and a mirror of
-2026-11-07.
+As of 2026-11-15: corpus build `3a7080be` (482 modules) from a mirror of 2026-11-07.
 
 ## Summary
 
-With every Verified erratum triaged (369 decisions, 111 applied), Glint still reports **1,248 errors in 69 RFC
-modules from 57 RFCs**, plus 239 inline mismatches (E300). Most of the module errors are not separate defects: four
-modules hold 414 errors that look like a Glint parser gap, and two single defects repeated line after line account
-for 240 more.
+With every Verified erratum triaged (369 decisions, 111 applied), Glint still reports **834 errors in 65 RFC modules
+from 54 RFCs**, plus 239 inline mismatches (E300). Many of the module errors are not separate defects: two single
+defects repeated line after line account for 240 of them.
 
 | Where | Errors | Modules or RFCs | Notes |
 | --- | --- | --- | --- |
-| RFC modules, maintained | 960 | 52 modules | A current RFC, or still imported by one |
+| RFC modules, maintained | 546 | 48 modules | A current RFC, or still imported by one |
 | RFC modules, unmaintained | 288 | 17 modules | Obsoleted RFC that no maintained module imports |
 | Internet-Draft modules | 66 | 19 modules | Drafts can be fixed in their next revision |
 | ITU-T and other modules | 12 | 5 modules | From `corpus/sources.toml` |
 | Inline ASN.1 in RFCs (E300) | 239 | 298 RFCs checked | A snippet differs from its module; syntax errors in snippets are not reported |
 
-Warnings are left out throughout. Applying the errata removed 25 RFC module errors (1,273 to 1,248) and 11 inline
-E300 (250 to 239), and made 14 modules clean.
+Warnings are left out throughout.
 
 ## Why the errors remain
 
-Over half the RFC module errors come from two causes that are not many separate defects: a likely Glint parser gap,
-and two defects repeated line after line.
+The largest cause is two defects repeated line after line, which are two errata away from 240 fewer errors.
 
 | Cause | Modules | Errors | Of which unmaintained | What it is | Examples | Fix |
 | --- | --- | --- | --- | --- | --- | --- |
-| Likely Glint parser gap | 4 | 414 | 0 | X.680 encoding instructions (`[RXER: ...]`, `[XER: ...]`) that Glint does not parse; every one sets off further errors | RFC 4912, 4913, 4914 | Glint, if confirmed |
 | One defect repeated | 7 | 240 | 0 | The same mistake on every line: OIDs written with dots inside braces, or every assignment ending in `;` | RFC 4534 (five modules), RFC 2524 (two) | One erratum per RFC |
 | Pre-X.680 or non-standard notation | 22 | 208 | 97 | Written before or outside X.680: `OCTETSTRING`, `SEQUENCE` as a name, macros, X.208 forms | RFC 1507, 1142, 1487, the GSS-API modules | Mostly none: historic or obsoleted |
 | Cascade from one syntax error | 10 | 196 | 179 | One broken clause (often `IMPORTS`) makes the rest of the module fail | RFC 3126 (two modules), 4683, 2797 | One fix per module |
@@ -41,23 +36,20 @@ and two defects repeated line after line.
 
 ## Every RFC module with errors
 
-The 69 RFC modules that still have errors, worst first. Cause is assigned from each module's first findings and
+The 65 RFC modules that still have errors, worst first. Cause is assigned from each module's first findings and
 needs confirming for the smaller entries; "To file" is the section of `corpus/errata/to-file.md` the defect
 sits in, blank when no entry exists yet.
 
 | RFC | Module | Status | Maintained | Errors | Main codes | Cause | To file |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4912 | `AbstractSyntaxNotation-X` | Exp | yes | 316 | E001 223, E110 93 | Parser gap? |  |
 | 1801 | `MHS-DS-Definitions` | Exp | yes | 104 | E110 63, E001 38, E111 2, E011 1 | Missing import |  |
 | 3126 | `ETS-ElectronicSignatureFormats-88syntax` | Info (obs. by 5126) | no | 90 | E001 67, E010 14, E101 4, E131 3 | Cascade | low value |
 | 4534 | `GSAKMPv1RekeySA` | PS | yes | 88 | E131 88 | Repeated defect | worth filing |
 | 3126 | `ETS-ElectronicSignatureFormats-97Syntax` | Info (obs. by 5126) | no | 73 | E001 72, E010 1 | Cascade | low value |
-| 4914 | `XER-EncodingInstructionNotation` | Exp | yes | 62 | E001 45, E110 17 | Parser gap? |  |
 | 2524 | `EMSD-SubmissionAndDeliveryProtocol` | Info | yes | 58 | E001 58 | Repeated defect |  |
 | 1507 | `CCITT` | Exp | yes | 51 | E001 19, E110 9, E011 7, E111 5 | Old notation |  |
 | 1142 | `ISO10589-ISIS` | Hist (obs. by 7142) | no | 49 | E110 21, E001 12, E131 12, E010 3 | Old notation |  |
 | 4534 | `GSAKMPv1RegistrationSA` | PS | yes | 31 | E131 31 | Repeated defect | worth filing |
-| 4914 | `TargetListNotation` | Exp | yes | 29 | E001 20, E110 9 | Parser gap? |  |
 | 4534 | `GenericDataSA` | PS | yes | 24 | E131 24 | Repeated defect | worth filing |
 | 2510 | `PKIXCMP` | PS (obs. by 4210) | yes | 22 | E110 19, E001 3 | Missing import | worth filing |
 | 1487 | `Lightweight-Directory-Access-Protocol` | Hist (obs. by 1777, 3494) | no | 20 | E001 12, E011 4, E131 3, E110 1 | Old notation |  |
@@ -71,7 +63,6 @@ sits in, blank when no entry exists yet.
 | 4683 | `PKIXSIM` | PS | yes | 9 | E001 9 | Cascade | worth filing |
 | 4534 | `PolicyToken` | PS | yes | 8 | E131 8 | Repeated defect | worth filing |
 | 3211 | `PasswordRecipientInfo-97` | PS (obs. by 3369, 3370) | no | 7 | E110 6, E001 1 | Missing import | low value |
-| 4913 | `GSER-EncodingInstructionNotation` | Exp | yes | 7 | E001 5, E110 2 | Parser gap? |  |
 | 1507 | `Dass` | Exp | yes | 6 | E001 4, E130 2 | Old notation |  |
 | 1508 | `GSS-API` | PS (obs. by 2078) | no | 5 | E001 5 | Old notation |  |
 | 1777 | `Lightweight-Directory-Access-Protocol` | Hist (obs. by 3494) | no | 5 | E001 3, E110 2 | Old notation |  |
@@ -168,17 +159,14 @@ types), not defects in the Recommendations; worth confirming before reporting an
 
 ## What to do next
 
-The two biggest levers are a Glint parser check (414 errors) and one erratum for RFC 4534 (167 errors).
+The biggest lever is one erratum for RFC 4534 (167 errors).
 
 Glint
 
-- [ ] Check whether RFCs 4912, 4913 and 4914 use valid X.680 encoding instructions (`[RXER: ...]`) that Glint does
-  not parse; if so, fix the parser (414 errors).
 - [ ] Find which X.500 modules RFC 1801 and RFC 2510 import that the corpus lacks, and add them to
   `corpus/sources.toml` (about 80 E110).
 - [ ] Stop page numbers from entering extracted inline ASN.1 (RFC 1801, 16 E300).
 - [ ] Treat an `OID` type alias as `OBJECT IDENTIFIER` when comparing snippets (RFC 9688, 32 E300).
-- [ ] Merge the report change (branch `report-unmaintained`), so `report.md` gives totals without unmaintained modules.
 
 Errata to file
 
@@ -197,16 +185,13 @@ Decisions for a person
 
 ## Method and data
 
-Counts come from the corpus build of 2026-11-14 (build `cd95a0b2`, 482 modules), from the 2026-11-07 mirror of RFCs
-and drafts, with the `corpus/errata` of `9b3bd59`. "Maintained" comes from the `report-unmaintained`
-change, which marks a module unmaintained when its RFC is obsoleted and no maintained module of another document
-imports it.
+Counts come from the corpus build named under the title. "Maintained" is as `report.md` marks it: a module is
+unmaintained when its RFC is obsoleted and no maintained module of another document imports it.
 
 - Module errors are corpus-build's findings of severity error, one row per finding. One defect can produce many
   findings, and a syntax error can hide later ones, so counts are not defect counts.
 - Inline counts come from `glint check` on each RFC's text with its errata applied, keeping E300, W301 and W302: the
   checks Glint makes on inline ASN.1.
-- "Before errata" figures come from the same build with `--no-errata`.
 - Cause groups were assigned by reading each module's first findings; the small entries (5 errors or fewer) need
   confirming.
 
@@ -223,12 +208,11 @@ recount:
        --iana corpus/cache/smi-numbers.xml --out corpus/out --dump-findings corpus/cache/findings.tsv
    ```
 
-   Add `--no-errata` (and another `--out`) for the "before errata" figures.
 2. Module errors: the rows of `corpus/cache/findings.tsv` (document, module, code, line, message) whose code starts with `E`,
-   counted per module. With the `report-unmaintained` change, `report.md` also gives the totals without
-   unmaintained modules and marks them under "Modules needing attention".
-3. Inline findings: apply each RFC's patches from `corpus/errata/patches/rfcN/` to a copy of its source, in id
-   order, run `cargo run --release -p glint-asn1 -- check --format json --corpus corpus/out/data/v4/<build>/corpus.json
+   counted per module. `report.md` gives the totals without unmaintained modules and marks them under "Modules
+   needing attention".
+3. Inline findings: apply each RFC's source patches from `corpus/errata/patches/rfcN/` (`<id>.patch`, not the
+   `.txt.patch` ones) to a copy of its source, in id order, run `cargo run --release -p glint-asn1 -- check --format json --corpus corpus/out/data/v4/<build>/corpus.json
    <copy>`, and count E300, W301 and W302.
 4. Update the tables and the as-of line, and tick the items in "What to do next". Drop a row when its module is
    clean; move a module to another cause when a fix shows the first diagnosis was wrong.
