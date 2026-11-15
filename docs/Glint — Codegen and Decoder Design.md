@@ -1,0 +1,424 @@
+# Glint — Codegen and Decoder Design
+
+Nov 15, 2026 · @C B
+
+## Purpose and scope
+
+Glint has a complete ASN.1 frontend: parser, import resolution against the corpus, semantic checks and a resolved type model (`glint_sema::typemodel`). This spec adds two backends on top of it:
+
+1. **Codegen.** Emit the types reachable from a chosen root type as source for four libraries: **rasn**, **RustCrypto `der`**, **pyasn1** and **Go cryptobyte**. Each output carries a vendored runtime file with the helpers the generated code needs (constraint checks, tag reading, time parsing).
+2. **Schema-driven decoder.** Given a module, a type and an encoding (PEM, base64 or DER), show every TLV of the input the way `openssl asn1parse` does, enriched with field names, type names, rendered values, OID labels from the corpus, constraint violations and DER violations.
+
+3. **Example artifacts.** Extract the PEM examples published in RFCs and drafts, identify their types, and serve them for download, each ready to open in the decoder. Decoding every published example also makes the corpus a test suite for the decoder.
+
+All three are available from the CLI and from the static web app.
+
+### Goals
+
+1. **Full fidelity.** Constraints, tags, extensibility, `DEFAULT` values, named numbers and bits, and open types bound by information object sets survive into generated code. Whatever a target cannot express is reported, never silently dropped.
+2. **One model, many consumers.** Every backend and the decoder read the same IR, so they cannot disagree about tags or constraints.
+3. **The decoder is the oracle.** Generated code is tested by decoding the same vectors as `glint-decode` and comparing the trees.
+4. **Same entry points as `check`.** Modules come from the corpus (`source#Name`) or from user ASN.1 (a local file or the checker editor), with imports resolved the way `glint check` resolves them.
+5. **Open to new targets.** Adding a backend means writing one emitter module and registering it. The shared layers (IR, naming, constraint planning, runtime contract, tests) don't change, and the CLI and web pick it up from the registry.
+
+### Non-goals (this spec)
+
+- PER, OER, XER and JER. The IR keeps PER-visible constraints separate so a PER/OER decoder can be added later.
+- Macro-notation modules (X.208 `MACRO`). Their types stay opaque, as in the type model.
+- Published runtime packages (crates.io, PyPI, Go modules). The runtime is vendored per output; it is written as a self-contained library so it can be published later.
+
+## Decisions
+
+| Topic | Decision |
+| --- | --- |
+| Module source | Corpus modules and user ASN.1 (local file, stdin or the checker editor); imports resolved as `check` resolves them |
+| Emit scope | One root type, tree-shaken: the type plus everything it reaches, across modules |
+| Open types | Typed dispatch enums generated from the object set's table, with an `Unknown` variant when the set is extensible |
+| Decoder encodings | BER accepted; each TLV that breaks DER is flagged |
+| Constraint enforcement | On decode and encode: a value held by generated code is always valid |
+| Direction | Generated code decodes and encodes |
+| Runtime delivery | A vendored, version-stamped `glint_rt.{rs,py,go}` per output |
+| Web layout | One `#/workbench` route: a shared picker, then Decode, Artifacts and Codegen tabs |
+| Decoder on mismatch | Best effort: mark the TLV, decode its subtree without a schema, carry on with its siblings |
+| Parameterized types | Monomorphized per instantiation (the type model already expands them, X.683 9.8) |
+| Target library versions | The latest release of each library, recorded in backend metadata and bumped deliberately |
+| New targets | A backend registry plus a shared middle layer; adding a target needs no change outside its own module |
+| Runtime license | MIT-0, so users can vendor the runtime without carrying notices |
+| Conventions | Glint's own; no compatibility with rasn-compiler's output |
+| 1988 modules without tables | The decoder (not codegen) falls back to OID-keyed hints from the corpus, marked as heuristic |
+| Examples in drafts | `check` decodes the PEM examples in a draft against the draft's types and reports findings |
+| Artifacts | PEM blocks from every RFC and active draft, extracted at corpus-build time, identified by try-decode, published as a data file, served from an Artifacts tab |
+| Build order | IR → decoder → artifacts → rasn → pyasn1 → der → Go |
+
+## Architecture
+
+```
+glint-sema ── typemodel ──lower──▶ glint-ir (data types only, serde, no deps on sema)
+                                        │
+                     ┌──────────────────┴──────────────────┐
+               glint-codegen                          glint-decode ◀── glint-extract::artifacts
+               registry + middle layer                BER/DER walker      (PEM scanner)
+               rasn | der | pyasn1 | go | ...         → TLV tree + findings       │
+                     │                                       │             corpus-build:
+          glint codegen (CLI)                  glint decode / artifacts    artifacts.json
+                     └──── glint-wasm: codegen(), decode(), artifacts() ──────┘
+```
+
+- **`glint-ir`** holds the IR types only. Backends and the decoder depend on it, not on `glint-sema`, so they never touch the CST.
+- **Lowering** lives in `glint-sema` (a new `ir` module next to `typemodel`), because it needs `Evaluator`, `Sem` and the tagger. It extends the type model's builder rather than duplicating it. `ConstraintNode` stays the display form; the IR constraint is derived from the same nodes.
+- **`glint-codegen`** has a backend registry, a shared middle layer (below) and one module per backend. Emitters are hand-written pretty printers, with no template engine, to keep the wasm small.
+- **`glint-decode`** has no I/O. Input sniffing (PEM, base64, DER) lives here too, so the CLI and wasm share it.
+- **`glint-extract::artifacts`** finds PEM blocks in document text and XML. It sits next to the module extraction and reuses its line model (page breaks, RFC 8792 folding).
+
+## The IR
+
+### Type set
+
+An `IrSet` is the closure of one root type: a map from stable type ids to definitions, with cycles allowed (`Name ::= SEQUENCE { next Name OPTIONAL }`). Each definition records:
+
+- its origin: module name, module OID, document id, and the ASN.1 name;
+- its **kind**: `Boolean`, `Integer`, `Enumerated`, `Real`, `Null`, `BitString`, `OctetString`, `ObjectIdentifier`, `RelativeOid`, the string types, the time types, `Sequence`, `Set`, `Choice`, `SequenceOf`, `SetOf`, `OpenType`, `Reference`, `Opaque(reason)`;
+- its effective **tags** and tagging mode, already resolved (`IMPLICIT`/`EXPLICIT`/`AUTOMATIC`, X.680 31.2);
+- named numbers and named bits;
+- **components**: name, optional, `DEFAULT` value, root or extension-addition region, version group;
+- **constraints** (below);
+- an **extensible** flag (the `...` marker or `EXTENSIBILITY IMPLIED`).
+
+Each instantiation of a parameterized type gets its own type id, named after the definition and its actual parameters (`AlgorithmIdentifier{DIGEST-ALGORITHM, {HashAlgs}}` → `AlgorithmIdentifierHashAlgs`). The original name is kept for display.
+
+### Constraints
+
+The full algebra of X.680 51 and X.682, evaluated:
+
+```rust
+pub struct Constraint {
+    pub root: ElementSet,
+    pub extensible: bool,
+    pub additions: Option<ElementSet>,
+    pub exception: Option<Value>,
+}
+
+pub enum ElementSet {
+    All,
+    Union(Vec<ElementSet>),
+    Intersection(Vec<ElementSet>),
+    Except(Box<ElementSet>, Box<ElementSet>),
+    Value(Value),
+    Range { lo: Bound, hi: Bound },          // Bound: Min | Max | Inclusive(v) | Exclusive(v)
+    Size(Box<Constraint>),
+    From(Box<Constraint>),                   // permitted alphabet
+    Pattern(String),
+    ContainedSubtype(TypeId),
+    WithComponent(Box<Constraint>),
+    WithComponents { partial: bool, items: Vec<ComponentConstraint> },
+    Contents { ty: Option<TypeId>, encoded_by: Option<Value> },
+    Table { set: ObjectSetId, field: String, relation: Vec<AtPath> },
+    UserDefined(String),
+    Opaque(String),                          // evaluation failed; the text, for a comment and a finding
+}
+```
+
+The IR also computes an **effective summary** per type, so backends never have to do set arithmetic just to pick a native type:
+
+- integer value range (selects `u8`/`i32`/`i64`/bignum and the Go and Python equivalents);
+- size range for strings and `SEQUENCE OF`;
+- effective permitted alphabet;
+- the PER-visible subset (X.691 8.3), kept for a later PER/OER decoder.
+
+The summary is advisory; the full constraint is what is enforced.
+
+### Information object sets
+
+Object sets that bind open types are lowered to tables. Each row holds the value of the unique field (usually an OID, possibly an integer) and the type of each type field (`&Type`, `&Params`, `&ExtnType`, ...). Rows come from every object reachable from the set, including imported ones and those inside `CONTAINING` (X.682 11.1, as in `extnValue OCTET STRING (CONTAINING EXTENSION.&ExtnType({ExtensionSet}{@extnID}))`). The table records whether the set is extensible, and records `@` relations as paths from the open type to the key component.
+
+An open type gets a **dispatch type** per (class field, object set) pair. Codegen emits it as an enum keyed by the unique field; the decoder looks the key up in the table.
+
+### Values
+
+OID values, integers, named values and `DEFAULT`s are constants in the IR. Codegen emits named OID constants (`id-ce-keyUsage` → `ID_CE_KEY_USAGE`) for every OID reachable from the root, the table keys included.
+
+### Naming
+
+Every backend has its own namer with three jobs: case conversion (`Rust: UpperCamel types, snake fields; Python: UpperCamel classes, lowerCamel field names kept as in ASN.1; Go: UpperCamel exported`), keyword escaping, and a collision pass over the whole set. Names are deterministic (no hash suffixes), so regenerating gives a clean diff. Each ASN.1 module maps to one output module; imports become module paths.
+
+## Decoder
+
+### Input
+
+`sniff(bytes) -> Vec<Input>`:
+
+1. PEM armor: base64-decode each block and keep its label. Several blocks become several inputs; the CLI decodes all of them and the web lets the user pick.
+2. Base64 alphabet only (whitespace ignored): decode it.
+3. Otherwise the bytes are DER/BER.
+
+`--input` (CLI) or a dropdown (web) overrides sniffing. A PEM label suggests a default type (`CERTIFICATE` → `Certificate`, `PRIVATE KEY` → `OneAsymmetricKey`, ... per RFC 7468), used when no type is given.
+
+### Output
+
+```rust
+pub struct Tlv {
+    pub offset: usize,
+    pub header_len: usize,
+    pub len: Length,                 // Definite(n) | Indefinite
+    pub tag: Tag,                    // class, number, constructed
+    pub field: Option<String>,       // component name, or CHOICE alternative
+    pub type_name: Option<String>,   // Module.Type as declared
+    pub value: Option<Rendered>,
+    pub children: Vec<Tlv>,
+    pub findings: Vec<DecodeFinding>,
+    pub schema: SchemaState,         // Matched | Unmatched (decoded without a schema)
+}
+```
+
+`Rendered` values:
+- integers: decimal, plus hex for large ones, plus the named number;
+- `ENUMERATED`: the name;
+- bit strings: the set bits by name, plus unused bits;
+- OIDs: dotted form plus labels and the assigning module from the corpus label table (`oid_nodes`);
+- times: parsed and normalized;
+- strings: decoded text, with a finding when it is not valid for the type;
+- octet strings: hex, with `CONTAINING` and open-type contents decoded as children.
+
+`DecodeFinding` reports:
+- DER violations: non-minimal length, indefinite length, constructed string, unsorted `SET OF`, an encoded `DEFAULT`, non-minimal integer, BOOLEAN not `00`/`FF`;
+- constraint violations;
+- tag mismatches;
+- unknown extension additions (fine when the type is extensible, otherwise an error);
+- unresolved open-type keys;
+- trailing data.
+
+Findings carry codes in the existing diagnostics scheme, documented in `explain`.
+
+### Mismatch behaviour
+
+When a TLV does not match the expected type, it is marked `Unmatched`, its subtree is decoded without a schema (asn1parse-style), and decoding continues with its siblings. A schema-less decode (no type given) is the same walk with every node `Unmatched`.
+
+### OID hints for tables the module doesn't have
+
+1988-syntax modules carry no information object sets: RFC 5280's `extnValue` is a plain `OCTET STRING`, and `AlgorithmIdentifier.parameters` is `ANY DEFINED BY algorithm`. In that situation the decoder looks up the sibling OID in a **hint table** and decodes the contents as the type the table names. The table is built by corpus-build from the object sets of 2002-syntax modules: rows of (OID, class field) → (module, type). It is published in `corpus.json`.
+
+A hinted decode is marked `SchemaState::Hinted { from: "rfc5912#PKIX1Implicit-2009" }`. The web and CLI show it as heuristic (a distinct badge, `~` in the text output), and its findings are capped at warning severity. `ANY DEFINED BY` also uses hints when the module's own text does not resolve the key. Codegen never uses hints: generated code reflects only the selected modules.
+
+### Selecting types
+
+A decode is driven by a **root type**. Besides the CLI and web picker, roots come from the PEM label map and from artifact identification (below). The label map (RFC 7468 labels plus the common de-facto labels) is code. Each entry maps to a list of corpus roots in preference order (`CERTIFICATE` → `rfc5912#PKIX1Explicit-2009.Certificate`, then `rfc5280#PKIX1Explicit88.Certificate`).
+
+### CLI
+
+```
+glint decode <module> <Type> [FILE|-] [--input auto|pem|base64|der] [--json]
+```
+
+`<module>` is `source#Name` (`rfc5912#PKIX1Explicit-2009`), a bare module name resolved as an import would be, or `--file x.asn` for user ASN.1. Text output extends asn1parse's columns:
+
+```
+    0:d=0  hl=4 l=1234 cons: SEQUENCE                    Certificate
+    4:d=1  hl=4 l= 954 cons:  SEQUENCE                   tbsCertificate: TBSCertificate
+    8:d=2  hl=2 l=   3 cons:   [0] EXPLICIT              version: Version
+   10:d=3  hl=2 l=   1 prim:    INTEGER                  2 (v3)
+   ...
+  512:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER      extnID: 2.5.29.15 id-ce-keyUsage
+  517:d=5  hl=2 l=   4 prim:      OCTET STRING           extnValue: CONTAINING KeyUsage
+  519:d=6  hl=2 l=   2 prim:       BIT STRING            digitalSignature, keyCertSign
+         ! W3xx DER: ...
+```
+
+`--json` prints the `Tlv` tree. The exit code is non-zero on errors (not on DER notes alone, unless `--strict-der`).
+
+## Codegen
+
+### Backends and the registry
+
+```rust
+pub trait Backend: Sync {
+    fn meta(&self) -> &BackendMeta;
+    fn capabilities(&self) -> &Capabilities;
+    fn namer(&self) -> &dyn Namer;
+    fn emit(&self, plan: &EmitPlan, opts: &Options) -> Output;
+    fn runtime(&self) -> File;                    // the vendored helper file
+}
+
+pub struct BackendMeta {
+    pub id: &'static str,                         // "rasn", "der", "pyasn1", "go-cryptobyte"
+    pub display_name: &'static str,
+    pub language: Language,                       // picks the CodeMirror mode and file extensions
+    pub library: &'static str,                    // "rasn", "golang.org/x/crypto/cryptobyte"
+    pub library_version: &'static str,            // the release the output is tested against
+}
+
+pub struct Output {
+    pub files: Vec<File>,                         // one per ASN.1 module, plus the runtime file
+    pub findings: Vec<Finding>,                   // everything not expressible on this target
+}
+
+pub fn backends() -> &'static [&'static dyn Backend];
+```
+
+The CLI's `--backend` values, the web dropdown, `explain`'s list and the CI compile matrix all come from `backends()`. Nothing outside `glint-codegen` names a backend.
+
+### Middle layer
+
+Each backend states what its library handles natively in `Capabilities`: constraint kinds, open types, extensibility, `SET OF` ordering, high tag numbers, integer widths, `DEFAULT` handling. The shared middle layer turns the `IrSet` into an `EmitPlan` that covers whatever the target lacks:
+
+- **Constraint plan.** Each constraint the target cannot express natively becomes a small language-neutral check program: range, size, alphabet, pattern, presence, and/or/not, recursion into components and elements. Backends only print it, so a new target gets full constraint fidelity by implementing a printer of about a dozen ops.
+- **Dispatch plan.** The open-type tables become enums with their variants, key constants and `Unknown` handling.
+- **Naming.** A collision pass runs over the backend's `Namer` (case rules, keyword list, reserved runtime names).
+- **Gaps.** A finding is attached for every construct no capability or plan covers.
+
+### Adding a target
+
+A new backend is one module in `glint-codegen` that:
+- implements `Backend` and is listed in `backends()`;
+- ships a runtime file that implements the runtime contract: tag and length reading, check-program primitives, DER `SET OF` sorting where the library lacks it, and time parsing;
+- provides fixture snapshots and a CI job that compiles the output and runs the differential test (see Testing).
+
+No change to the IR, decoder, CLI or web is needed. Likely next targets are TypeScript (`@peculiar/asn1-schema`), Java (Bouncy Castle) and Go `encoding/asn1` structs; none is in scope here.
+
+### Library versions
+
+Each backend targets the latest release of its library when its milestone starts, recorded in `BackendMeta::library_version` and in every generated file's header. A version bump is a deliberate change: update the constant, regenerate snapshots, and the CI compile job proves the output still builds and round-trips. A scheduled job reports when a newer release exists.
+
+### File headers
+
+Every generated file has a header with the Glint code version, the data build ID, the backend and library version, the root type and the source modules. The runtime file carries its own version so a stale vendored copy can be spotted. Its license is MIT-0, stated in its header.
+
+### Per-library mapping
+
+| ASN.1 | rasn | RustCrypto `der` | pyasn1 | Go cryptobyte |
+| --- | --- | --- | --- | --- |
+| `SEQUENCE` | `#[derive(AsnType, Decode, Encode)]` struct | `#[derive(Sequence)]` struct | `univ.Sequence` + `namedtype.NamedTypes` | struct + generated `Unmarshal`/`Marshal` |
+| `CHOICE` | `#[rasn(choice)]` enum | `#[derive(Choice)]` enum | `univ.Choice` | interface or tagged struct + peek dispatch |
+| `OPTIONAL` / `DEFAULT` | `Option<T>` / `#[rasn(default = ...)]` | `optional = "true"` / `default = ...` | `OptionalNamedType` / `DefaultedNamedType` | pointer / zero-value check in runtime |
+| Tags | `#[rasn(tag(explicit(context, 0)))]` | `context_specific`, `tag_mode` | `.subtype(implicitTag=..., explicitTag=...)` | runtime tag helpers (high tag numbers included) |
+| `INTEGER` | width from summary, else `Integer` | width from summary, else `Int`/`Uint` | `univ.Integer` + `namedval` | `int64` or `*big.Int` |
+| Constraints | `size`, `value`, `from`, `extensible` attributes; runtime for the rest | generated `validate()`, called from the decode and encode hooks | `subtypeSpec` with `ConstraintsUnion`/`Intersection`/`Exclusion`, `WithComponentsConstraint` | generated `Validate()` |
+| `SET OF` | `SetOf<T>` | `SetOfVec<T>` (DER order) | `univ.SetOf` | slice, sorted on marshal by the runtime |
+| Open types | dispatch enum + `Unknown(Any)` | dispatch enum + `Unknown(Any)` | `opentype.OpenType` mapping | dispatch interface + `Unknown` raw |
+| Extensibility | `#[rasn(extensible)]` | runtime skips unknown trailing components | native | runtime skips unknown trailing components |
+
+Known target gaps, each reported as a finding plus a comment in the output:
+- `der` has no constraints, extensibility or open types of its own: everything goes through generated hooks and the runtime.
+- cryptobyte's `asn1.Tag` is a `uint8`, so it cannot express tag numbers above 30; the runtime reads those itself.
+- pyasn1 has no `PATTERN` constraint: the runtime supplies one built on `re`, approximating X.680 Annex A regular expressions.
+- `REAL` and `EMBEDDED PDV` have uneven support; types the target lacks become runtime types.
+
+### Constraint enforcement
+
+Values are checked on decode and on encode. In rasn and pyasn1 the native checks run, and the runtime adds what they lack. In `der` and Go, the generated `validate()`/`Validate()` runs inside the generated decode and encode paths, so hand-built values are rejected at encode time. Errors name the ASN.1 path (`tbsCertificate.extensions[3].extnValue`) and the constraint as written.
+
+### CLI
+
+```
+glint codegen <module> <Type> --backend rasn|der|pyasn1|go-cryptobyte [--out DIR] [--file x.asn]
+```
+
+With no `--out`, the module files and runtime go to stdout, separated by file-name headers.
+
+## Example artifacts
+
+### Extraction
+
+`glint-extract::artifacts` scans a document for PEM blocks (`-----BEGIN <label>-----` … `-----END <label>-----`):
+
+- **Text:** it works on the same line model as module extraction, so page headers and footers, form feeds and indentation inside a block are dropped. RFC 8792 folding (`\` and `\\`) is undone before base64 decoding.
+- **XML:** it reads the content of `<sourcecode>` and `<artwork>` elements; a block that spans elements is not joined.
+- **Validation:** a block is kept only if its base64 decodes and its bytes form complete BER. Anything else gets an extraction finding with the location (a broken example is worth reporting too).
+
+Each artifact records:
+- the document;
+- an id, stable while the document doesn't change (`rfc9500-4`: the n-th artifact in text order);
+- the section, line, and figure caption when there is one;
+- the label, the DER bytes and their SHA-256.
+
+Other textual forms (bare base64, hex dumps, dumpasn1 listings) are out of scope. The scanner is a list of recognizers, so one can be added later with its own validation rule.
+
+### Identification
+
+Each artifact gets a root type, chosen in this order:
+
+1. **Label.** A label in the PEM label map gives the candidate roots; the first that decodes cleanly wins. Confidence: `label`.
+2. **Try-decode.** Otherwise, or if no label candidate decodes cleanly, candidates are tried in order: the document's own module types (only top-level types that are not referenced by another type of the module), then the common corpus roots (`Certificate`, `CertificateList`, `CertificationRequest`, `ContentInfo`, `OneAsymmetricKey`, `SubjectPublicKeyInfo`, `OCSPResponse`, `TimeStampResp`, ...). A candidate is accepted when every TLV is `Matched` (hints allowed) with no error findings. Ties go to the earlier candidate, then to the one with fewer warnings. Confidence: `decoded`.
+3. **None.** No candidate fits. Confidence: `unknown`; the artifact is still served.
+
+Identification runs at corpus-build time with that day's code, so the results are data and are refreshed daily, like the OID label table.
+
+### Serving format
+
+An artifact whose label is in the PEM label map is served as PEM, re-armored with its canonical label and 64-column lines. An artifact whose label is not in the map is served as base64 of the DER, with the original label shown beside it. The raw DER is always available too.
+
+### Data file
+
+corpus-build writes `artifacts.json` into `data/v<schema>/<build-id>/`, next to `corpus.json`, with a `.sha256` and precompressed copies, under the same schema and build-ID rules. It holds the artifact index (the fields above plus identification and decode-finding codes) and the DER bytes as base64. The web fetches it lazily when the Artifacts tab opens. `glint corpus update` downloads it with the rest of the data. Adding it bumps the data schema.
+
+### Corpus self-audit
+
+Decoding every published example is the decoder's broadest test suite. corpus-build's `report.md` gains an *Example artifacts* section listing:
+- counts by confidence and by label;
+- every artifact that fails to decode under its label's type;
+- every artifact with constraint or DER findings.
+
+A golden file in the repo, `corpus/artifacts.expected` (artifact id → root type, confidence, finding codes), is diffed in CI. A change is either a decoder fix (update the file) or a decoder regression. When the decoder is correct and the RFC's example is wrong, the report lists it as an **erratum candidate**, as input to errata triage.
+
+### Examples in a checked draft
+
+`glint check` (CLI, web and Action) extracts the PEM blocks in the draft and identifies them the same way, trying the draft's own modules first. It then reports:
+- an error when a block's base64 or BER is malformed;
+- a warning when no candidate decodes cleanly, naming the closest candidate and its first mismatch;
+- a warning for constraint violations in a decoded example;
+- a note for DER violations;
+- an info note naming the type each example was identified as (off by default, like other resolution notes).
+
+These are new diagnostic codes, documented in `explain`. Drafts stay in the browser as before.
+
+### CLI
+
+```
+glint artifacts list [<document>] [--label L] [--type T] [--json]
+glint artifacts get <artifact-id> [--format pem|base64|der] [-o FILE]
+glint artifacts extract FILE           # scan a local document, no corpus data needed
+```
+
+`glint decode --artifact rfc9500-4` decodes an artifact with its identified type.
+
+## Web: `#/workbench`
+
+- **Picker:** module (corpus search like the corpus browser, or "modules from the checker document"), then type (types of that module, searchable). Route state is in the hash (`#/workbench/rfc5912/PKIX1Explicit-2009/Certificate`), so links can be shared.
+- **Decode tab:** a textarea for PEM or base64 that is also a drop target for files in any of the three encodings, plus an input-format override. The TLV tree has collapsible nodes showing field, type, value and finding badges. A hex pane is linked both ways: hovering or selecting a node highlights its header and contents bytes, and clicking a byte selects its node. A PEM with several blocks gets a block selector.
+- **Artifacts tab:** browse by document, or filter by label, identified type and confidence. Each row shows the document and section (linking to the checker's view of it), the label, type, confidence, size and finding badges. Actions: download (PEM when the label is known, otherwise base64; DER always available), copy, and **Open in Decode**, which sets the picker to the identified type and loads the bytes into the Decode tab. A document opened in the checker links to its artifacts here.
+- **Codegen tab:** a backend dropdown filled from the registry, plus a read-only CodeMirror view with one tab per output file (the runtime file included), each with copy and download buttons; the whole output can also be downloaded as a zip. Codegen findings are listed under the editor.
+- **wasm API:** `decode(request) -> json`, `codegen(request) -> json`, `load_artifacts(bytes)` and `artifacts(query) -> json`, behind `web/src/api.ts` like `check_document`. Nothing leaves the browser.
+- **Size:** measure the wasm growth. If the backends add too much, split them into a second wasm module loaded lazily when the Codegen tab opens.
+
+## Testing
+
+- **IR:** insta snapshots of the lowered IR for a fixed set of corpus roots: `Certificate` (RFC 5280 and RFC 5912 modules), `ContentInfo` (RFC 5652/6268), `OneAsymmetricKey` (RFC 5958), `TimeStampResp` (RFC 3161), `OCSPResponse` (RFC 6960). Unit tests for constraint evaluation: set arithmetic, extensibility, `WITH COMPONENTS`.
+- **Decoder:** golden text and JSON trees for a hand-picked set of RFC vectors (RFC 4134 CMS examples, RFC 8410 keys, RFC 9500 test keys) and synthetic BER edge cases. Every published artifact is checked through `corpus/artifacts.expected` (Example artifacts, Corpus self-audit).
+- **Extraction:** fixtures for page breaks inside a block, RFC 8792 folding, indented blocks, XML `<sourcecode>`, truncated and malformed blocks. Proptest: decoding random bytes never panics, and every byte is attributed to exactly one TLV.
+- **Codegen:** snapshots of each backend's output for the fixture roots. In CI, compile the output: `cargo check` for rasn and `der`, `python -c import` plus a decode run for pyasn1, `go vet` and `go build` for cryptobyte.
+- **Differential:** each backend's generated code decodes every vector, including every artifact identified as `label` or `decoded`, and prints a normalized JSON tree, which must equal `glint-decode`'s. Every vector is re-encoded and must round-trip byte-for-byte for DER inputs. Constraint-violating vectors must be rejected by every backend.
+
+## Milestones
+
+1. **IR and lowering.** Constraint algebra, effective summaries, object-set tables, monomorphization, naming inputs. *Accept:* IR snapshots for the fixture roots with no `Opaque` constraints in the RFC 5912 `Certificate` closure.
+2. **Decoder, CLI.** Sniffing, BER walk, rendering, DER and constraint findings, mismatch fallback, OID hint table, `glint decode`. *Accept:* a real certificate decoded with the RFC 5912 modules shows every extension's contents decoded through the `ExtensionSet` table, with OID labels. The same certificate decoded with the RFC 5280 modules shows its extensions decoded through hints, marked heuristic.
+3. **Artifacts.** PEM extraction, identification, `artifacts.json`, the report section, `corpus/artifacts.expected`, `glint artifacts`, example checks in `check`. *Accept:* every PEM example in the corpus is extracted or has an extraction finding; every decode failure is triaged as a decoder bug (fixed) or an erratum candidate (listed).
+4. **Workbench web route: Decode and Artifacts tabs.** *Accept:* drag-and-drop of PEM, base64 and DER files; tree and hex linked both ways; a shareable hash route; artifact download in the right format; Open in Decode.
+5. **Codegen middle layer, registry, rasn backend + runtime.** *Accept:* fixture roots compile, the differential test passes over the vectors and artifacts, round-trip passes.
+6. **pyasn1 backend.**
+7. **RustCrypto `der` backend.**
+8. **Go cryptobyte backend.**
+9. **Codegen tab in the workbench.**
+
+Milestones 6–8 have the same acceptance criteria as milestone 5. They also confirm that a backend needs no change outside its own module; any change the shared layers need goes back into them.
+
+## Decided questions
+
+- **Hint conflicts:** when two 2002-syntax modules map one OID to different types, the module of the most recent current RFC wins, and the conflict is listed in the corpus-build report.
+- **Erratum candidates:** an artifact the decoder rejects because the RFC's example is wrong stays in the Artifacts tab with its findings and an "example has errors" badge.
+- **Artifacts in obsoleted RFCs:** kept and marked obsoleted.
+- **Artifact size:** measure `artifacts.json` at milestone 3. If it is large, split the bytes into a separate `artifacts.bin`, fetched when a download or decode first needs it.
+- **Library versions:** the latest release of each, recorded in backend metadata (Codegen, Library versions).
+- **Runtime license:** MIT-0.
+- **1988 modules without tables:** decoder-only OID hints (Decoder, OID hints).
+- **rasn-compiler:** no compatibility; Glint's conventions.
+- **Examples in drafts:** `check` decodes them, and every published example becomes a decoder test (Example artifacts).
