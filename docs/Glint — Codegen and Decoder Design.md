@@ -331,12 +331,13 @@ With no `--out`, the module files and runtime go to stdout, separated by file-na
 
 - **Text:** it works on the same line model as module extraction, so page headers and footers, form feeds and indentation inside a block are dropped. RFC 8792 folding (`\` and `\\`) is undone before base64 decoding.
 - **XML:** it reads the content of `<sourcecode>` and `<artwork>` elements; a block that spans elements is not joined.
-- **Validation:** a block is kept only if its base64 decodes and its bytes form complete BER. Anything else gets an extraction finding with the location (a broken example is worth reporting too).
+- **Validation:** a block is kept only if its base64 decodes and its bytes form complete BER. Anything else gets an extraction finding with the location (a broken example is worth reporting too): no `END` line before the next `BEGIN`, a section heading or the end; an `END` line with another label; a body that is not base64 (an example elided with `...`); octets that are not one BER encoding.
+- **OpenPGP armor** (RFC 4880, `-----BEGIN PGP ...-----`) looks like PEM but is not DER: it is counted and left out, with no finding.
 
 Each artifact records:
 - the document;
 - an id, stable while the document doesn't change (`rfc9500-4`: the n-th artifact in text order);
-- the section, line, and figure caption when there is one;
+- the section, line (in the document's source: its RFCXML when it has one), and figure caption when there is one (the `<figure>`'s name, or a `Figure N: ...` line right after the block);
 - the label, the DER bytes and their SHA-256.
 
 Other textual forms (bare base64, hex dumps, dumpasn1 listings) are out of scope. The scanner is a list of recognizers, so one can be added later with its own validation rule.
@@ -347,7 +348,9 @@ Each artifact gets a root type, chosen in this order:
 
 1. **Label.** A label in the PEM label map gives the candidate roots; the first that decodes cleanly wins. Confidence: `label`.
 2. **Try-decode.** Otherwise, or if no label candidate decodes cleanly, candidates are tried in order: the document's own module types (only top-level types that are not referenced by another type of the module), then the common corpus roots (`Certificate`, `CertificateList`, `CertificationRequest`, `ContentInfo`, `OneAsymmetricKey`, `SubjectPublicKeyInfo`, `OCSPResponse`, `TimeStampResp`, ...). A candidate is accepted when every TLV is `Matched` (hints allowed) with no error findings. Ties go to the earlier candidate, then to the one with fewer warnings. Confidence: `decoded`.
-3. **None.** No candidate fits. Confidence: `unknown`; the artifact is still served.
+3. **None.** No candidate fits. Confidence: `unknown`; the artifact is still served, with the closest candidate (the most TLVs decoded with a schema) and its first mismatch.
+
+A candidate *fits* when the structure matches: no `E400`, `E403`, `E404`, `E405` or `E409` outside the decoded contents of an octet or bit string. Errors that remain (invalid contents, constraints, a broken `extnValue`) are the example's errors, reported with the type. A candidate that decodes with no error at all wins at once; otherwise the first that fits. A label candidate that fits with errors is kept only when no later candidate decodes cleanly.
 
 Identification runs at corpus-build time with that day's code, so the results are data and are refreshed daily, like the OID label table.
 
@@ -357,27 +360,30 @@ An artifact whose label is in the PEM label map is served as PEM, re-armored wit
 
 ### Data file
 
-corpus-build writes `artifacts.json` into `data/v<schema>/<build-id>/`, next to `corpus.json`, with a `.sha256` and precompressed copies, under the same schema and build-ID rules. It holds the artifact index (the fields above plus identification and decode-finding codes) and the DER bytes as base64. The web fetches it lazily when the Artifacts tab opens. `glint corpus update` downloads it with the rest of the data. Adding it bumps the data schema.
+corpus-build writes `artifacts.json` into `data/v<schema>/<build-id>/`, next to `corpus.json`, with a `.sha256`, under the same schema and build-ID rules (the build ID hashes it too). Broken blocks are listed in it as well, without octets. It holds the artifact index (the fields above plus identification and decode-finding codes) and the DER bytes as base64. The web fetches it lazily when the Artifacts tab opens. `glint corpus update` downloads it with the rest of the data. Adding it bumps the data schema.
 
 ### Corpus self-audit
 
 Decoding every published example is the decoder's broadest test suite. corpus-build's `report.md` gains an *Example artifacts* section listing:
 - counts by confidence and by label;
 - every artifact that fails to decode under its label's type;
-- every artifact with constraint or DER findings.
+- every artifact with constraint or DER findings;
+- **erratum candidates**: every artifact identified as a type whose decode has errors, and every artifact that decodes cleanly only as a type its label does not name;
+- every broken block.
 
-A golden file in the repo, `corpus/artifacts.expected` (artifact id → root type, confidence, finding codes), is diffed in CI. A change is either a decoder fix (update the file) or a decoder regression. When the decoder is correct and the RFC's example is wrong, the report lists it as an **erratum candidate**, as input to errata triage.
+A golden file in the repo, `corpus/artifacts.expected` (artifact id → root type, confidence, finding codes; RFCs only, since drafts change daily), is diffed by the data workflow, as a warning that never holds up the data; corpus-build writes the day's copy as `artifacts.expected` beside `report.md`. A change is either a decoder fix (update the file) or a decoder regression. When the decoder is correct and the RFC's example is wrong, the report lists it as an **erratum candidate**, as input to errata triage.
 
 ### Examples in a checked draft
 
 `glint check` (CLI, web and Action) extracts the PEM blocks in the draft and identifies them the same way, trying the draft's own modules first. It then reports:
 - an error when a block's base64 or BER is malformed;
 - a warning when no candidate decodes cleanly, naming the closest candidate and its first mismatch;
+- a warning when a block decodes cleanly only as a type its label does not name;
 - a warning for constraint violations in a decoded example;
 - a note for DER violations;
 - an info note naming the type each example was identified as (off by default, like other resolution notes).
 
-These are new diagnostic codes, documented in `explain`. Drafts stay in the browser as before.
+These are `E410`, `W411`, `W412`, `I413`, `W415` and `I414`, documented in `explain`; `glint.toml` turns them off with `[examples] check = false` and the last on with `[examples] identified = true`. Drafts stay in the browser as before.
 
 ### CLI
 
@@ -387,7 +393,7 @@ glint artifacts get <artifact-id> [--format pem|base64|der] [-o FILE]
 glint artifacts extract FILE           # scan a local document, no corpus data needed
 ```
 
-`glint decode --artifact rfc9500-4` decodes an artifact with its identified type.
+`glint decode --artifact rfc9500-4` decodes an artifact with its identified type (for `unknown`, the closest candidate). The artifacts are read from the `artifacts.json` beside the corpus data, or `--artifacts FILE`.
 
 ## Web: `#/workbench`
 
@@ -410,7 +416,7 @@ glint artifacts extract FILE           # scan a local document, no corpus data n
 
 1. **IR and lowering** (done). Constraint algebra, effective summaries, object-set tables, monomorphization, naming inputs. *Accept:* IR snapshots for the fixture roots with no `Opaque` constraints in the RFC 5912 `Certificate` closure.
 2. **Decoder, CLI** (done). Sniffing, BER walk, rendering, DER and constraint findings, mismatch fallback, OID hint table, `glint decode`. *Accept:* a real certificate decoded with the RFC 5912 modules shows every extension's contents decoded through the `ExtensionSet` table, with OID labels. The same certificate decoded with the RFC 5280 modules shows its extensions decoded through hints, marked heuristic.
-3. **Artifacts.** PEM extraction, identification, `artifacts.json`, the report section, `corpus/artifacts.expected`, `glint artifacts`, example checks in `check`. *Accept:* every PEM example in the corpus is extracted or has an extraction finding; every decode failure is triaged as a decoder bug (fixed) or an erratum candidate (listed).
+3. **Artifacts** (done). PEM extraction, identification, `artifacts.json`, the report section, `corpus/artifacts.expected`, `glint artifacts`, example checks in `check`. *Accept:* every PEM example in the corpus is extracted or has an extraction finding; every decode failure is triaged as a decoder bug (fixed) or an erratum candidate (listed).
 4. **Workbench web route: Decode and Artifacts tabs.** *Accept:* drag-and-drop of PEM, base64 and DER files; tree and hex linked both ways; a shareable hash route; artifact download in the right format; Open in Decode.
 5. **Codegen middle layer, registry, rasn backend + runtime.** *Accept:* fixture roots compile, the differential test passes over the vectors and artifacts, round-trip passes.
 6. **pyasn1 backend.**
@@ -425,7 +431,7 @@ Milestones 6–8 have the same acceptance criteria as milestone 5. They also con
 - **Hint conflicts:** when two 2002-syntax modules map one OID to different types, the module of the most recent current RFC wins, and the conflict is listed in the corpus-build report.
 - **Erratum candidates:** an artifact the decoder rejects because the RFC's example is wrong stays in the Artifacts tab with its findings and an "example has errors" badge.
 - **Artifacts in obsoleted RFCs:** kept and marked obsoleted.
-- **Artifact size:** measure `artifacts.json` at milestone 3. If it is large, split the bytes into a separate `artifacts.bin`, fetched when a download or decode first needs it.
+- **Artifact size:** measured at milestone 3: 551 KB for 368 examples in 70 documents (55 broken blocks, 121 OpenPGP blocks left out). Not split; Pages compresses JSON.
 - **Library versions:** the latest release of each, recorded in backend metadata (Codegen, Library versions).
 - **Runtime license:** MIT-0.
 - **1988 modules without tables:** decoder-only OID hints (Decoder, OID hints).

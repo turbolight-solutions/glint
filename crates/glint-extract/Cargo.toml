@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 glint-syntax = { workspace = true }
+glint-decode = { workspace = true }
 pulldown-cmark = { workspace = true }
 quick-xml = { workspace = true }
 regex = { workspace = true }

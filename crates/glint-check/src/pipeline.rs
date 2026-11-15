@@ -274,6 +274,17 @@ pub fn check_extraction(
         diagnostics.push(to_diagnostic(&mut mapper, &analysis.graph, finding));
     }
 
+    if options.config.examples.check {
+        diagnostics.extend(example_diagnostics(
+            &mut mapper,
+            text,
+            &extraction,
+            &analysis,
+            corpus,
+            options.config.examples.identified,
+        ));
+    }
+
     let line_index = LineIndex::for_document(text);
     let blocks = extraction
         .blocks
@@ -305,6 +316,153 @@ pub fn check_extraction(
         modules,
         data_build: corpus.info().build.clone(),
     }
+}
+
+/// Decodes the PEM examples of the document as the type each is identified as, its own modules' types tried before the
+/// common corpus roots (Codegen and Decoder Design, Example artifacts: Examples in a checked draft).
+fn example_diagnostics(
+    mapper: &mut Mapper<'_>,
+    text: &str,
+    extraction: &Extraction,
+    analysis: &glint_sema::Analysis<'_>,
+    corpus: &dyn CorpusProvider,
+    identified: bool,
+) -> Vec<Diagnostic> {
+    // The text of an RFCXML document checked with its declared blocks is plain text.
+    let format = if extraction.blocks_declared {
+        Format::Text
+    } else {
+        extraction.format
+    };
+    let scan = glint_extract::artifacts::pem_blocks(text, format);
+    if scan.blocks.is_empty() && scan.findings.is_empty() {
+        return Vec::new();
+    }
+    let label = |mapper: &Mapper<'_>, place: &glint_extract::artifacts::Place| {
+        let mut label = Label::new(mapper.document, place.span.clone(), &mapper.document_index);
+        if let Some(section) = &place.section {
+            label = label.with_section(section.to_string());
+        }
+        label
+    };
+    let mut out = Vec::new();
+    for finding in &scan.findings {
+        out.push(Diagnostic::new(
+            "E410",
+            finding.message.clone(),
+            label(mapper, &finding.place),
+        ));
+    }
+    if scan.blocks.is_empty() {
+        return out;
+    }
+    let own: Vec<crate::artifacts::Candidate> = analysis
+        .drafts
+        .iter()
+        .flat_map(|&id| crate::artifacts::module_roots(&analysis.graph, id, ""))
+        .collect();
+    let identifier = crate::artifacts::Identifier::new(corpus);
+    for block in &scan.blocks {
+        let found = identifier.identify(&block.der, &block.label, &own);
+        let at = label(mapper, &block.place);
+        let Some(root) = &found.root else {
+            out.push(Diagnostic::new(
+                "W411",
+                format!("no type decodes the `{}` example", block.label),
+                at,
+            ));
+            continue;
+        };
+        if found.confidence == crate::artifacts::Confidence::Unknown {
+            let mut diagnostic = Diagnostic::new(
+                "W411",
+                format!(
+                    "no type decodes the `{}` example; the closest is {root}",
+                    block.label
+                ),
+                at,
+            );
+            if let Some(mismatch) = found.first_mismatch() {
+                diagnostic =
+                    diagnostic.with_note(format!("{}: {}", mismatch.code, mismatch.message));
+            }
+            out.push(diagnostic);
+            continue;
+        }
+        // A label whose types the corpus has, decoded only as another type.
+        let label_types: Vec<&str> = glint_decode::label_roots(&block.label)
+            .iter()
+            .copied()
+            .filter(|r| identifier.corpus_root(r).is_some())
+            .collect();
+        if found.confidence == crate::artifacts::Confidence::Decoded && !label_types.is_empty() {
+            out.push(
+                Diagnostic::new(
+                    "W415",
+                    format!(
+                        "the `{}` example is a {root}, not a type its label names",
+                        block.label
+                    ),
+                    at.clone(),
+                )
+                .with_note(format!(
+                    "`{}` names {}",
+                    block.label,
+                    label_types.join(", ")
+                )),
+            );
+        }
+        let errors: Vec<_> = found
+            .findings
+            .iter()
+            .filter(|f| f.severity == Severity::Error)
+            .collect();
+        if let Some(first) = errors.first() {
+            let mut diagnostic = Diagnostic::new(
+                "W412",
+                format!(
+                    "the `{}` example has errors as {root}: {}",
+                    block.label, first.message
+                ),
+                at.clone(),
+            );
+            for more in errors.iter().skip(1).take(4) {
+                diagnostic = diagnostic.with_note(format!("{}: {}", more.code, more.message));
+            }
+            out.push(
+                diagnostic.with_help(format!("`glint decode` shows every TLV ({})", first.code)),
+            );
+        }
+        let der: Vec<_> = found.findings.iter().filter(|f| f.code == "W402").collect();
+        if let Some(first) = der.first() {
+            out.push(Diagnostic::new(
+                "I413",
+                format!(
+                    "the `{}` example is not DER: {}{}",
+                    block.label,
+                    first.message,
+                    if der.len() > 1 {
+                        format!(" (and {} more)", der.len().saturating_sub(1))
+                    } else {
+                        String::new()
+                    }
+                ),
+                at.clone(),
+            ));
+        }
+        if identified {
+            out.push(Diagnostic::new(
+                "I414",
+                format!(
+                    "the `{}` example is a {root} ({})",
+                    block.label,
+                    found.confidence.as_str()
+                ),
+                at,
+            ));
+        }
+    }
+    out
 }
 
 fn to_diagnostic(

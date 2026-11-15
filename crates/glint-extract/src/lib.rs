@@ -6,6 +6,7 @@
 //!
 //! The crate does no I/O: callers pass the document text.
 
+pub mod artifacts;
 mod block;
 mod classify;
 mod declared;

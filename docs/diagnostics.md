@@ -2,7 +2,7 @@
 
 Every code has a fixture (a test named after the clause it enforces), an `explain` entry (`crates/glint-diag/explain.md`, shown by `glint explain <code>`; its `bad` and `good` examples are tested by `crates/glint-check/tests/explain.rs`) and a row here. Codes are stable; severities can be remapped in `glint.toml`.
 
-Implemented so far (M1, M2, M3, M4, M5, and the decoder of the codegen and decoder design, its milestone 2):
+Implemented so far (M1, M2, M3, M4, M5, the decoder of the codegen and decoder design (its milestone 2), and its example checks (milestone 3)):
 
 | Code | Default | Meaning | Basis | Fixtures |
 | --- | --- | --- | --- | --- |
@@ -98,6 +98,12 @@ Implemented so far (M1, M2, M3, M4, M5, and the decoder of the codegen and decod
 | `E407` | error | A value outside the constraints of its type (value range, size, permitted alphabet, simple table constraint of a set that is not extensible); extensible constraints are not checked | X.680 49–51; X.682 10 | `tests/decode_cli.rs`, explain example |
 | `W408` | warning | An open type the object set does not resolve: the key component was not decoded, no object has the key, or the object does not set the field; decoded through the OID hint table when it can be. An error when the set is not extensible and has no object with the key | X.682 10 | explain example |
 | `E409` | error | Octets follow the top-level value | X.690 8.1.1 | `tests/decode.rs` |
+| `E410` | error | A PEM example of a checked document that cannot be read: no `END` line, an `END` line with another label, a body that is not base64 (an elided `...` example), or octets that are not one BER encoding. RFC 8792 folding and RFC 1421 headers are undone first; OpenPGP armor is left out | RFC 7468 2–3; X.690 8.1 | `glint-extract/tests/pem_blocks.rs`, explain example |
+| `W411` | warning | A PEM example that no candidate type decodes (the label's types, the document's own top-level types, the common corpus roots); names the closest candidate and its first mismatch | policy | explain example |
+| `W412` | warning | A PEM example with errors as the type it was identified as: invalid contents, constraint violations, or a contained value that is not an encoding of its type | X.690 8; X.680 49–51 | explain example |
+| `I413` | info | A PEM example that is BER but not DER | X.690 10, 11 | explain example |
+| `W415` | warning | A PEM example that decodes cleanly only as a type its label does not name (a PKCS #1 key labelled `PRIVATE KEY`); raised only when the corpus has the label's types | RFC 7468 5–13 | `crates/glint-check/tests/pipeline.rs` |
+| `I414` | info | The type a PEM example was identified as, and how (`label`, `decoded`). Off unless `[examples] identified = true` | policy | `crates/glint-check/src/pipeline.rs` |
 
 ### Snippet comparison (M5)
 

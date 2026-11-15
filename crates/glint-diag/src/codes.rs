@@ -556,6 +556,42 @@ const CODES: &[CodeInfo] = &[
         title: "Octets follow the top-level value",
         basis: "X.690 8.1.1",
     },
+    CodeInfo {
+        code: "E410",
+        severity: Severity::Error,
+        title: "PEM example that cannot be read: no END line, an END line with another label, a body that is not base64, or octets that are not one BER encoding",
+        basis: "RFC 7468 2–3; X.690 8.1",
+    },
+    CodeInfo {
+        code: "W411",
+        severity: Severity::Warning,
+        title: "PEM example that no candidate type decodes: not the types its label names, the document's own top-level types or the common corpus roots",
+        basis: "policy",
+    },
+    CodeInfo {
+        code: "W412",
+        severity: Severity::Warning,
+        title: "PEM example with errors as the type it was identified as: invalid contents, constraint violations, or broken contained values",
+        basis: "X.690 8; X.680 49–51",
+    },
+    CodeInfo {
+        code: "I413",
+        severity: Severity::Info,
+        title: "PEM example that is BER but not DER",
+        basis: "X.690 10, 11",
+    },
+    CodeInfo {
+        code: "W415",
+        severity: Severity::Warning,
+        title: "PEM example that decodes cleanly only as a type its label does not name: the label or the octets are wrong",
+        basis: "RFC 7468 5–13",
+    },
+    CodeInfo {
+        code: "I414",
+        severity: Severity::Info,
+        title: "The type a PEM example was identified as (off unless `[examples] identified = true`)",
+        basis: "policy",
+    },
 ];
 
 /// Every registered code.

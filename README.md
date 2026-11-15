@@ -52,6 +52,8 @@ cargo run -p glint-asn1 -- check --draft draft-ietf-lamps-foo-03          # fetc
 cargo run -p glint-asn1 -- explain E300                   # what a code means, with examples
 cargo run -p glint-asn1 -- decode cert.pem                # asn1parse with names: the PEM label picks the type
 cargo run -p glint-asn1 -- decode rfc5280#PKIX1Explicit88 Certificate cert.der --strict-der
+cargo run -p glint-asn1 -- artifacts list rfc9500           # the PEM examples of RFCs and drafts, each identified as a type
+cargo run -p glint-asn1 -- decode --artifact rfc9500-1     # also: artifacts get <id> --format pem|base64|der
 ```
 
 ```sh

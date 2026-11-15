@@ -11,7 +11,9 @@ use glint_decode::{
 use glint_ir::IrSet;
 use serde::Serialize;
 
-use crate::common::{EXIT_ERRORS, EXIT_FAILURE, EXIT_OK, display_name, load_corpus, read_input};
+use crate::common::{
+    EXIT_ERRORS, EXIT_FAILURE, EXIT_OK, display_name, load_artifacts, load_corpus, read_input,
+};
 use crate::ir_cmd::find_module;
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -47,6 +49,12 @@ pub struct Args {
     /// Corpus data (`corpus.json`) to use instead of the downloaded one
     #[arg(long)]
     corpus: Option<PathBuf>,
+    /// Decode an example artifact (`rfc9500-4`, see `glint artifacts list`) as the type it was identified as
+    #[arg(long, value_name = "ID", conflicts_with_all = ["args", "files", "input"])]
+    artifact: Option<String>,
+    /// Example artifacts (`artifacts.json`) to use instead of the ones beside the corpus data
+    #[arg(long, requires = "artifact")]
+    artifacts: Option<PathBuf>,
 }
 
 fn failure(message: &str) -> ExitCode {
@@ -126,7 +134,63 @@ fn schema_for_label(label: &str, corpus: &Corpus) -> Option<Schema> {
     })
 }
 
+/// The input and schema of `--artifact`: its octets as one input, and the type it was identified as (for `unknown`,
+/// the closest candidate).
+fn artifact_input(
+    args: &Args,
+    id: &str,
+    corpus: &Corpus,
+) -> Result<(Input, Option<Schema>), String> {
+    let data = load_artifacts(args.artifacts.as_deref(), args.corpus.as_deref())?;
+    data.require_build(&corpus.info().build)
+        .map_err(|e| e.to_string())?;
+    let artifact = data
+        .get(id)
+        .ok_or_else(|| format!("no example artifact `{id}` in data {}", data.build))?;
+    let bytes = glint_decode::base64(artifact.der.as_bytes())
+        .ok_or_else(|| format!("the octets of `{id}` are damaged"))?;
+    let schema = match &artifact.root {
+        Some(root) => {
+            if artifact.confidence == glint_corpus::Confidence::Unknown {
+                eprintln!(
+                    "glint: `{id}` was not identified as any type; decoding as the closest candidate, {root}"
+                );
+            }
+            Some(Schema {
+                set: lower_corpus_root(corpus, root)?,
+                name: root.clone(),
+            })
+        }
+        None => None,
+    };
+    let input = Input {
+        encoding: Encoding::Pem,
+        label: Some(artifact.label.clone()),
+        bytes,
+    };
+    Ok((input, schema))
+}
+
 pub fn run(args: &Args) -> ExitCode {
+    if let Some(id) = &args.artifact {
+        let corpus = match load_corpus(args.corpus.as_deref()) {
+            Ok(corpus) => corpus,
+            Err(message) => return failure(&message),
+        };
+        let (input, schema) = match artifact_input(args, id, &corpus) {
+            Ok(found) => found,
+            Err(message) => return failure(&message),
+        };
+        let fixed = if args.no_schema { None } else { schema };
+        let oracle = CorpusOracle::new(&corpus);
+        return finish(
+            args,
+            std::slice::from_ref(&input),
+            fixed.as_ref(),
+            None,
+            &oracle,
+        );
+    }
     let (schema_args, path) = match args.args.as_slice() {
         [] => (None, PathBuf::from("-")),
         [file] => (None, PathBuf::from(file)),
@@ -172,18 +236,31 @@ pub fn run(args: &Args) -> ExitCode {
         Some(corpus) => Box::new(CorpusOracle::new(corpus)),
         None => Box::new(NoOracle),
     };
+    finish(
+        args,
+        &inputs,
+        fixed.as_ref(),
+        corpus.as_ref(),
+        oracle.as_ref(),
+    )
+}
+
+/// Decodes `inputs` as `fixed`, or each as the type its PEM label suggests when `corpus` is given, and prints them.
+fn finish(
+    args: &Args,
+    inputs: &[Input],
+    fixed: Option<&Schema>,
+    corpus: Option<&Corpus>,
+    oracle: &dyn Oracle,
+) -> ExitCode {
     let mut blocks = Vec::new();
-    for input in &inputs {
-        let from_label = match (&fixed, &input.label, &corpus) {
+    for input in inputs {
+        let from_label = match (fixed, &input.label, corpus) {
             (None, Some(label), Some(corpus)) if !args.no_schema => schema_for_label(label, corpus),
             _ => None,
         };
-        let schema = fixed.as_ref().or(from_label.as_ref());
-        let decoded = decode(
-            &input.bytes,
-            schema.map(|s| (&s.set, s.set.root)),
-            oracle.as_ref(),
-        );
+        let schema = fixed.or(from_label.as_ref());
+        let decoded = decode(&input.bytes, schema.map(|s| (&s.set, s.set.root)), oracle);
         blocks.push(Block {
             input,
             root: schema.map(|s| s.name.clone()),

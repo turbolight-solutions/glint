@@ -10,8 +10,8 @@ use std::process::Command;
 
 use glint_check::{CheckOptions, check_document};
 use glint_corpus::{
-    CORPUS_FILE, Corpus, CorpusData, CorpusProvider, DOCUMENTS_FILE, Documents, Pointer, build_dir,
-    latest_path,
+    ARTIFACTS_FILE, ArtifactsData, CORPUS_FILE, Confidence, Corpus, CorpusData, CorpusProvider,
+    DOCUMENTS_FILE, Documents, Pointer, build_dir, latest_path,
 };
 use glint_extract::Format;
 
@@ -38,6 +38,8 @@ fn build(tag: &str, with_override: Option<(&str, &str)>) -> Built {
     )
     .unwrap();
     std::fs::copy(fixture("xml/rfc8692.xml"), rfcs.join("rfc8692.xml")).unwrap();
+    // PEM examples, and no module.
+    std::fs::copy(fixture("pem/paginated.txt"), rfcs.join("rfc9999.txt")).unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_corpus-build"));
     command
         .arg("--rfc-dir")
@@ -1828,4 +1830,50 @@ fn modules_of_obsoleted_rfcs_that_nothing_maintained_imports_are_unmaintained() 
     assert!(!heading("Kept").contains("unmaintained"), "{report}");
     // Each unmaintained module has one E110, left out of the maintained totals.
     assert!(report.contains("| `E110` | 2 | 0 |"), "{report}");
+}
+
+#[test]
+fn every_pem_example_is_identified_and_published_with_the_build() {
+    let built = build("artifacts", None);
+    let out = built.dir.join("out");
+    let pointer = Pointer::from_json(&std::fs::read(out.join(latest_path())).unwrap()).unwrap();
+    let dir = out.join(build_dir(&pointer.build));
+    let digest = std::fs::read_to_string(dir.join(format!("{ARTIFACTS_FILE}.sha256"))).unwrap();
+    assert!(
+        digest.ends_with(&format!("  {ARTIFACTS_FILE}\n")),
+        "{digest}"
+    );
+    let data = ArtifactsData::from_json(&std::fs::read(dir.join(ARTIFACTS_FILE)).unwrap()).unwrap();
+    data.require_build(&pointer.build).unwrap();
+    let ids: Vec<&str> = data.artifacts.iter().map(|a| a.id.as_str()).collect();
+    assert_eq!(ids, ["rfc9999-1", "rfc9999-2", "rfc9999-3"]);
+    // The corpus has only RFC 5280's modules: the label's second root.
+    let first = &data.artifacts[0];
+    assert_eq!(
+        first.root.as_deref(),
+        Some("rfc5280#PKIX1Explicit88.Certificate")
+    );
+    assert_eq!(first.confidence, Confidence::Label);
+    assert_eq!(first.section.as_deref(), Some("2.1"));
+    assert_eq!(first.caption.as_deref(), Some("An EC CA certificate"));
+    assert!(!first.has_errors(), "{first:?}");
+    assert_eq!(data.broken.len(), 4);
+    assert!(
+        built.report.contains("## Example artifacts"),
+        "{}",
+        built.report
+    );
+    assert!(
+        built.report.contains(
+            "3 PEM examples in 1 documents; 4 broken blocks; 1 OpenPGP armor blocks left out."
+        ),
+        "{}",
+        built.report
+    );
+    let expected = std::fs::read_to_string(out.join("artifacts.expected")).unwrap();
+    assert!(
+        expected.contains("rfc9999-1\trfc5280#PKIX1Explicit88.Certificate\tlabel\t"),
+        "{expected}"
+    );
+    assert!(expected.contains("rfc9999-4\tbroken\t-\t-"), "{expected}");
 }

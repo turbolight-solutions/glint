@@ -21,7 +21,10 @@ use serde::Serialize;
 
 pub use ber::{Length, Tag};
 pub use finding::DecodeFinding;
-pub use input::{Encoding, Input, base64, label_roots, pem_blocks, read_as, sniff};
+pub use input::{
+    Encoding, Input, base64, base64_encode, canonical_label, common_roots, label_roots, pem_armor,
+    pem_blocks, read_as, sniff,
+};
 pub use text::render_text;
 pub use value::{OidName, Rendered};
 

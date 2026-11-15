@@ -158,3 +158,106 @@ fn a_published_1988_string_type_definition_is_not_reported() {
     let e123 = new.diagnostics.iter().find(|d| d.code == "E123").unwrap();
     assert_eq!(e123.severity, Severity::Error);
 }
+
+/// A corpus with the type the `PRIVATE KEY` label names (RFC 5958 `OneAsymmetricKey`, cut down).
+fn private_key_corpus() -> Corpus {
+    let text = "AsymmetricKeyPackageModuleV1 DEFINITIONS IMPLICIT TAGS ::= BEGIN
+OneAsymmetricKey ::= SEQUENCE {
+    version INTEGER,
+    privateKeyAlgorithm SEQUENCE { algorithm OBJECT IDENTIFIER },
+    privateKey OCTET STRING }
+END
+";
+    Corpus::from_data(CorpusData {
+        modules: vec![ModuleRecord {
+            name: "AsymmetricKeyPackageModuleV1".to_owned(),
+            oid: None,
+            source: ModuleSource::rfc(5958, None, SourceKind::Extracted),
+            rfc_status: None,
+            obsoleted_by: Vec::new(),
+            syntax_era: SyntaxEra::Neutral,
+            text: text.to_owned(),
+            exports: Exports::All,
+            parse_status: ParseStatus::Clean,
+            sha256: String::new(),
+        }],
+        ..CorpusData::default()
+    })
+}
+
+fn pem_document(body: &str) -> String {
+    format!(
+        "<rfc><middle>
+<section><name>Module</name>
+<sourcecode type=\"asn.1\">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE {{ a INTEGER, b INTEGER (0..9) }}
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type=\"pem\">
+-----BEGIN PRIVATE KEY-----
+{body}
+-----END PRIVATE KEY-----
+</sourcecode>
+</section>
+</middle></rfc>"
+    )
+}
+
+#[test]
+fn an_example_decoded_only_as_a_type_its_label_does_not_name_is_reported() {
+    let corpus = private_key_corpus();
+    let options = CheckOptions::default();
+    let report = check_document(
+        "d.xml",
+        &pem_document("MAYCAQUCAQc="),
+        Format::Xml,
+        &corpus,
+        &options,
+    );
+    let found: Vec<_> = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == "W415")
+        .collect();
+    assert_eq!(found.len(), 1, "{:?}", codes(&report));
+    assert!(
+        found[0].message.contains("Example.Pair"),
+        "{}",
+        found[0].message
+    );
+    assert!(
+        found[0]
+            .notes
+            .iter()
+            .any(|n| n.contains("rfc5958#AsymmetricKeyPackageModuleV1.OneAsymmetricKey")),
+        "{:?}",
+        found[0].notes
+    );
+    // The label's own type: nothing to report.
+    let report = check_document(
+        "d.xml",
+        &pem_document("MAwCAQAwBAYCKgMEAQc="),
+        Format::Xml,
+        &corpus,
+        &options,
+    );
+    assert!(
+        !codes(&report)
+            .iter()
+            .any(|c| c.starts_with("W41") || *c == "E410"),
+        "{:?}",
+        codes(&report)
+    );
+    // Without the label's types in the corpus there is no telling.
+    let report = check_document(
+        "d.xml",
+        &pem_document("MAYCAQUCAQc="),
+        Format::Xml,
+        &EmptyCorpus::default(),
+        &options,
+    );
+    assert!(!codes(&report).contains(&"W415"), "{:?}", codes(&report));
+}

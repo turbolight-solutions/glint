@@ -677,6 +677,7 @@ dependencies = [
  "flate2",
  "glint-check",
  "glint-corpus",
+ "glint-decode",
  "glint-diag",
  "glint-errata",
  "glint-extract",
@@ -729,6 +730,7 @@ dependencies = [
 name = "glint-extract"
 version = "0.1.0"
 dependencies = [
+ "glint-decode",
  "glint-syntax",
  "insta",
  "proptest",

@@ -179,3 +179,102 @@ fn json_and_pem_blocks() {
     assert_eq!(blocks[0]["tlvs"][0]["children"][0]["value"]["decimal"], "5");
     assert_eq!(blocks[1]["tlvs"][0]["tag"]["number"], 5);
 }
+
+/// `artifacts.json` beside the corpus of `corpus_file`, with `PAIR` as `rfc1000-1`.
+fn artifacts_file(dir: &Path) {
+    let data = glint_corpus::ArtifactsData {
+        build: "2026-11-08.0123abcd".to_owned(),
+        artifacts: vec![glint_corpus::Artifact {
+            id: "rfc1000-1".to_owned(),
+            document: "rfc1000".to_owned(),
+            section: Some("3".to_owned()),
+            appendix: false,
+            title: None,
+            caption: None,
+            line: 10,
+            label: "PAIR".to_owned(),
+            sha256: String::new(),
+            der: glint_decode::base64_encode(&PAIR),
+            root: Some("rfc1000#Algs.Pair".to_owned()),
+            confidence: glint_corpus::Confidence::Decoded,
+            findings: Vec::new(),
+            first_error: None,
+            obsoleted: false,
+        }],
+        ..glint_corpus::ArtifactsData::default()
+    };
+    std::fs::write(dir.join("artifacts.json"), data.to_json()).unwrap();
+}
+
+#[test]
+fn artifacts_are_listed_written_and_decoded_as_their_type() {
+    let dir = scratch("artifacts");
+    let corpus = corpus_file(&dir);
+    artifacts_file(&dir);
+    let listed = glint()
+        .args(["artifacts", "list", "--corpus"])
+        .arg(&corpus)
+        .output()
+        .unwrap();
+    let text = String::from_utf8(listed.stdout).unwrap();
+    assert!(text.contains("rfc1000-1"), "{text}");
+    assert!(text.contains("rfc1000#Algs.Pair"), "{text}");
+
+    let der = glint()
+        .args([
+            "artifacts",
+            "get",
+            "rfc1000-1",
+            "--format",
+            "der",
+            "--corpus",
+        ])
+        .arg(&corpus)
+        .output()
+        .unwrap();
+    assert_eq!(der.stdout, PAIR);
+    // A label the label map does not know is written as base64.
+    let base64 = glint()
+        .args(["artifacts", "get", "rfc1000-1", "--corpus"])
+        .arg(&corpus)
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(base64.stdout).unwrap().trim(),
+        glint_decode::base64_encode(&PAIR)
+    );
+
+    let decoded = glint()
+        .args(["decode", "--artifact", "rfc1000-1", "--corpus"])
+        .arg(&corpus)
+        .output()
+        .unwrap();
+    assert!(
+        decoded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&decoded.stderr)
+    );
+    let text = String::from_utf8(decoded.stdout).unwrap();
+    assert!(text.contains("as rfc1000#Algs.Pair"), "{text}");
+    assert!(text.contains("id-alg"), "{text}");
+}
+
+#[test]
+fn artifacts_extract_scans_a_local_document() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../glint-extract/tests/fixtures/pem/paginated.txt");
+    let output = glint()
+        .args(["artifacts", "extract"])
+        .arg(&fixture)
+        .output()
+        .unwrap();
+    // Broken blocks make the exit code 1.
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains("CERTIFICATE              line 16, Section 2.1: 536 octets"),
+        "{text}"
+    );
+    assert!(text.contains("elided"), "{text}");
+    assert!(text.contains("OpenPGP armor"), "{text}");
+}

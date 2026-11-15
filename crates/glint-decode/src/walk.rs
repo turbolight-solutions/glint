@@ -115,11 +115,32 @@ impl Key {
     }
 }
 
+/// What an open type's table says about its value.
+enum Lookup<'s> {
+    /// The type of the value.
+    Found(&'s Type),
+    /// The object with the key leaves the field out: an `OPTIONAL` field with no type for this key.
+    Absent {
+        finding: DecodeFinding,
+        oid: Option<String>,
+    },
+    /// The key was not decoded, or no object has it.
+    Missing {
+        finding: DecodeFinding,
+        oid: Option<String>,
+    },
+    /// No table: `ANY`, `ANY DEFINED BY`, or a type field read without one; the OID to try hints for.
+    Untabled { oid: Option<String> },
+}
+
 /// The components decoded so far of one `SEQUENCE` or `SET`, by path (`algorithm`, `algorithmIdentifier.algorithm`).
 struct Frame {
     /// The number of type references followed when the record was entered: `@a` is resolved in the outermost record
     /// of the type definition that holds the constraint (X.682 10.7).
     level: usize,
+    /// The component of the enclosing record that this record is, for a path into a record still being decoded
+    /// (`@algorithmIdentifier.algorithm` from inside `algorithmIdentifier`, RFC 5912 `SIGNED`).
+    name: Option<String>,
     values: Vec<(String, Key)>,
 }
 
@@ -789,6 +810,26 @@ impl<'b> Walker<'b> {
             range.start = range.start.saturating_add(1);
         }
         if let Some(inner) = ctx.contained() {
+            if let Kind::OpenType(open) = &set.resolve(inner).kind {
+                // The contents of an open type the table does not resolve are octets, not a TLV: a signature whose
+                // algorithm object sets no `&Value` holds bits, not an encoding.
+                match self.lookup(set, open) {
+                    Lookup::Found(_) => {}
+                    Lookup::Absent { oid, .. } | Lookup::Untabled { oid } => {
+                        if !bits && let Some(child) = self.try_hints(oid, range) {
+                            node.children.push(child);
+                        }
+                        return;
+                    }
+                    Lookup::Missing { finding, oid } => {
+                        match self.try_hints(oid, range) {
+                            Some(child) => node.children.push(child),
+                            None => node.findings.push(finding),
+                        }
+                        return;
+                    }
+                }
+            }
             let raws = ber::parse_all(self.bytes, range, 0);
             let mut raws = raws.iter();
             match raws.next() {
@@ -822,24 +863,47 @@ impl<'b> Walker<'b> {
     fn relation(&self, path: &str) -> Option<Key> {
         let dots = path.chars().take_while(|&c| c == '.').count();
         let name = path.get(dots..)?;
-        let frame = if dots == 0 {
-            let mut found = None;
-            for frame in self.frames.iter().rev() {
+        let last = self.frames.len().checked_sub(1)?;
+        let start = if dots == 0 {
+            let mut found = last;
+            for (index, frame) in self.frames.iter().enumerate().rev() {
                 if frame.level != self.level {
                     break;
                 }
-                found = Some(frame);
+                found = index;
             }
-            found.or(self.frames.last())
+            found
         } else {
-            self.frames.iter().rev().nth(dots.saturating_sub(1))
-        }?;
-        frame
-            .values
-            .iter()
-            .rev()
-            .find(|(n, _)| n == name)
-            .map(|(_, k)| k.clone())
+            last.checked_sub(dots.saturating_sub(1))?
+        };
+        let find = |frame: &Frame, name: &str| {
+            frame
+                .values
+                .iter()
+                .rev()
+                .find(|(n, _)| n == name)
+                .map(|(_, k)| k.clone())
+        };
+        if let Some(key) = self.frames.get(start).and_then(|f| find(f, name)) {
+            return Some(key);
+        }
+        // A path into a record that is still open: its values reach the enclosing record only when it closes.
+        let mut prefix = String::new();
+        for frame in self.frames.iter().skip(start.saturating_add(1)) {
+            let component = frame.name.as_deref()?;
+            if !prefix.is_empty() {
+                prefix.push('.');
+            }
+            prefix.push_str(component);
+            if let Some(rest) = name
+                .strip_prefix(prefix.as_str())
+                .and_then(|r| r.strip_prefix('.'))
+                && let Some(key) = find(frame, rest)
+            {
+                return Some(key);
+            }
+        }
+        None
     }
 
     /// The OID of the nearest component decoded before, in the innermost record: what an `ANY` or a plain octet string
@@ -899,7 +963,8 @@ impl<'b> Walker<'b> {
         None
     }
 
-    fn open_type(&mut self, set: &IrSet, open: &OpenType, raw: &Raw, label: Label) -> Tlv {
+    /// What the table of an open type says about its value, from the key decoded so far.
+    fn lookup<'s>(&self, set: &'s IrSet, open: &'s OpenType) -> Lookup<'s> {
         let key = match (&open.table, &open.defined_by) {
             (Some(table), _) if !table.relation.is_empty() => {
                 table.relation.first().and_then(|path| self.relation(path))
@@ -912,56 +977,68 @@ impl<'b> Walker<'b> {
             && let Some(objects) = set.object_set(table.set)
         {
             let Some(key) = key else {
-                let mut node = self.schemaless(raw);
-                node.field = label.field;
-                node.findings.push(DecodeFinding::new(
-                    "W408",
-                    format!("the open type is keyed by `@{path}`, which was not decoded"),
-                ));
-                return node;
+                return Lookup::Missing {
+                    finding: DecodeFinding::new(
+                        "W408",
+                        format!("the open type is keyed by `@{path}`, which was not decoded"),
+                    ),
+                    oid: None,
+                };
             };
             let row = objects
                 .rows
                 .iter()
                 .find(|row| key.matches(row.key.as_ref()));
             if let Some(ty) = row.and_then(|row| row.types.get(&table.field)) {
-                return self.ty(set, ty, None, raw, label, Ctx::default());
+                return Lookup::Found(ty);
             }
-            let has_row = row.is_some();
-            if let Key::Oid(dotted) = &key {
-                let hints = self.oracle.hints(dotted);
-                if let Some(node) = self.hinted_walk(&hints, raw, label.clone()) {
-                    return node;
-                }
+            let oid = match &key {
+                Key::Oid(dotted) => Some(dotted.clone()),
+                Key::Integer(_) => None,
+            };
+            if row.is_some() {
+                return Lookup::Absent {
+                    finding: DecodeFinding::new(
+                        "W408",
+                        format!(
+                            "the object of {} keyed by {} does not set {}",
+                            objects.name,
+                            key.text(),
+                            table.field
+                        ),
+                    ),
+                    oid,
+                };
             }
-            let mut node = self.schemaless(raw);
-            node.field = label.field;
-            let message = if has_row {
-                format!(
-                    "the object of {} keyed by {} does not set {}",
-                    objects.name,
-                    key.text(),
-                    table.field
-                )
-            } else {
+            let mut finding = DecodeFinding::new(
+                "W408",
                 format!(
                     "{} is not the key of an object of {}",
                     key.text(),
                     objects.name
-                )
-            };
-            let mut finding = DecodeFinding::new("W408", message);
-            if !objects.extensible && !has_row {
+                ),
+            );
+            if !objects.extensible {
                 finding = finding.with_severity(Severity::Error);
             }
-            node.findings.push(finding);
-            return node;
+            return Lookup::Missing { finding, oid };
         }
         // ANY, ANY DEFINED BY, or a type field with no table: the hint table, if anything
         let oid = match key {
             Some(Key::Oid(dotted)) => Some(dotted),
             Some(Key::Integer(_)) => None,
             None => self.sibling_oid(),
+        };
+        Lookup::Untabled { oid }
+    }
+
+    fn open_type(&mut self, set: &IrSet, open: &OpenType, raw: &Raw, label: Label) -> Tlv {
+        let (finding, oid) = match self.lookup(set, open) {
+            Lookup::Found(ty) => return self.ty(set, ty, None, raw, label, Ctx::default()),
+            Lookup::Absent { finding, oid } | Lookup::Missing { finding, oid } => {
+                (Some(finding), oid)
+            }
+            Lookup::Untabled { oid } => (None, oid),
         };
         if let Some(oid) = oid {
             let hints = self.oracle.hints(&oid);
@@ -971,6 +1048,7 @@ impl<'b> Walker<'b> {
         }
         let mut node = self.schemaless(raw);
         node.field = label.field;
+        node.findings.extend(finding);
         node
     }
 
@@ -991,9 +1069,11 @@ impl<'b> Walker<'b> {
             }
             return self.mismatch(raw, label, &text);
         }
+        let name = label.field.clone();
         let mut node = self.node(raw, label);
         self.frames.push(Frame {
             level: self.level,
+            name,
             values: Vec::new(),
         });
         let components = &record.components;

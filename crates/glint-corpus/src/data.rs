@@ -1,4 +1,4 @@
-//! The published data files: `corpus.json`, `documents.bin` and the `latest.json` pointer.
+//! The published data files: `corpus.json`, `documents.bin`, `artifacts.json` and the `latest.json` pointer.
 //!
 //! Data carries a schema number and code accepts exactly one. The schema is also in the URL path
 //! (`data/v<schema>/...`), so code of one schema never sees data of another. Each build of the data has an id,
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::CorpusData;
 
 /// The schema of the data this code reads. Bumped whenever the layout of any data file changes.
-pub const SCHEMA: u32 = 4;
+pub const SCHEMA: u32 = 5;
 
 /// The directory of every build of the current schema, relative to the site root.
 pub fn schema_dir() -> String {
@@ -54,7 +54,7 @@ struct SchemaOnly {
     schema: u32,
 }
 
-fn check_schema(json: &[u8]) -> Result<(), DataError> {
+pub(crate) fn check_schema(json: &[u8]) -> Result<(), DataError> {
     let found = serde_json::from_slice::<SchemaOnly>(json)
         .map_err(|e| DataError::Damaged(e.to_string()))?
         .schema;

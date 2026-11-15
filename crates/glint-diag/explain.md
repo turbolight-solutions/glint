@@ -1303,3 +1303,225 @@ Octets follow the top-level value: the input holds more than one value, or junk 
 ```der good
 05 00
 ```
+
+## E410
+
+A PEM example (RFC 7468) that cannot be read: it has no `-----END` line, its `-----END` line names another label, its body is not base64 (often an example shortened with `...`), or its octets are not one complete BER encoding. RFC 8792 folding and RFC 1421 headers (`Proc-Type: ...`) are undone first. OpenPGP armor (`-----BEGIN PGP ...-----`) is not PEM and is not checked.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUC...
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W411
+
+No type decodes the PEM example. Glint tries, in order, the types its label names (`CERTIFICATE` is a `Certificate` of RFC 5912 or RFC 5280, and so on), the top-level types of the document's own modules (constructed types that no other type of the module uses), then common corpus types (`Certificate`, `ContentInfo`, `OneAsymmetricKey`, ...). A type fits when the structure matches: tags, components and lengths. The closest candidate and its first mismatch are given. `glint decode` with the intended type shows where the example goes wrong.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+BAIBAg==
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+The octets are an `OCTET STRING`, not a `Pair`.
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W412
+
+The PEM example has the shape of the type it was identified as, but values that type does not allow: invalid contents (a bad time, a character the string type cannot hold), a constraint violation, or a contained value (an extension's `extnValue`) that is not an encoding of its type. Either the example or the module is wrong.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQo=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+`b` is 10, outside `0..9`.
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## I413
+
+The PEM example is valid BER but not DER (an indefinite length, a `DEFAULT` value encoded, a `SET OF` out of order, ...; see `W402`). Certificates and other signed structures must be DER.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MIACAQUCAQcAAA==
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+The `SEQUENCE` has an indefinite length.
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W415
+
+The PEM example decodes cleanly, but only as a type its label does not name: a PKCS #1 `RSAPrivateKey` labelled `PRIVATE KEY` (which RFC 7468 Section 10 gives to PKCS #8 `OneAsymmetricKey`), a `SubjectPublicKeyInfo` labelled `CERTIFICATE`. Either the label or the octets are wrong; readers' tools go by the label. Only raised when the corpus has the label's types.
+
+```xml bad untested
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PRIVATE KEY-----
+MAYCAQUCAQc=
+-----END PRIVATE KEY-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+With the corpus, the octets are a `Pair`, not the `OneAsymmetricKey` that `PRIVATE KEY` names.
+
+## I414
+
+Names the type each PEM example was identified as, and how: `label` (a type its label names), `decoded` (a type that decodes it, tried without the label's help). Off unless `glint.toml` has `[examples] identified = true`.
+
+```xml good untested
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```

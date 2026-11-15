@@ -280,3 +280,59 @@ END"
     let decoded = decode(&bytes, Some((&set, set.root)), &NoOracle);
     insta::assert_snapshot!(render_text(&decoded));
 }
+
+const SIGNED: &str = "Signed DEFINITIONS ::= BEGIN
+ALG ::= CLASS { &id OBJECT IDENTIFIER UNIQUE, &Params OPTIONAL, &Value OPTIONAL }
+    WITH SYNTAX { IDENTIFIER &id [PARAMS &Params] [VALUE &Value] }
+a-plain ALG ::= { IDENTIFIER { 1 2 3 } PARAMS NULL }
+a-valued ALG ::= { IDENTIFIER { 1 2 4 } VALUE INTEGER }
+Algs ALG ::= { a-plain | a-valued, ... }
+Signed ::= SEQUENCE {
+    data INTEGER,
+    algorithmIdentifier SEQUENCE {
+        algorithm ALG.&id({Algs}),
+        parameters ALG.&Params({Algs}{@algorithmIdentifier.algorithm}) OPTIONAL },
+    signature BIT STRING (CONTAINING ALG.&Value({Algs}{@algorithmIdentifier.algorithm})) }
+END
+";
+
+/// RFC 5912 `SIGNED`: `parameters` is keyed by a path into the record that holds it, still being decoded; and a
+/// signature whose algorithm object sets no `&Value` holds bits, which are not decoded as a TLV.
+#[test]
+fn signed_keys_parameters_by_an_open_record_and_leaves_plain_signatures_alone() {
+    let set = lower_user_type(
+        &[SIGNED.to_owned()],
+        &Corpus::from_data(CorpusData::default()),
+        "Signed",
+        "Signed",
+    )
+    .unwrap();
+    // Algorithm 1.2.3 (NULL parameters, no &Value); the signature's bits would read as a broken TLV.
+    let plain = [
+        0x30, 0x11, 0x02, 0x01, 0x05, 0x30, 0x06, 0x06, 0x02, 0x2A, 0x03, 0x05, 0x00, 0x03, 0x04,
+        0x00, 0x30, 0x7F, 0x01,
+    ];
+    let decoded = decode(&plain, Some((&set, set.root)), &NoOracle);
+    assert!(
+        decoded.all_findings().is_empty(),
+        "{}",
+        render_text(&decoded)
+    );
+    let top = &decoded.tlvs[0];
+    let parameters = &top.children[1].children[1];
+    assert_eq!(parameters.field.as_deref(), Some("parameters"));
+    assert_eq!(parameters.schema, SchemaState::Matched);
+    assert!(top.children[2].children.is_empty());
+    // Algorithm 1.2.4: the signature holds an INTEGER.
+    let valued = [
+        0x30, 0x0F, 0x02, 0x01, 0x05, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x04, 0x03, 0x04, 0x00, 0x02,
+        0x01, 0x07,
+    ];
+    let decoded = decode(&valued, Some((&set, set.root)), &NoOracle);
+    assert!(
+        decoded.all_findings().is_empty(),
+        "{}",
+        render_text(&decoded)
+    );
+    assert_eq!(decoded.tlvs[0].children[2].children.len(), 1);
+}

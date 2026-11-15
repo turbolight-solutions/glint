@@ -24,7 +24,7 @@ fn options(home_document: Option<String>) -> Options {
 
 /// Analyzes the corpus module `index` as `check` resolves it (its imports against the corpus) and hands the analysis
 /// and the module's name to `f`.
-fn with_corpus_module<T>(
+pub(crate) fn with_corpus_module<T>(
     corpus: &dyn CorpusProvider,
     index: usize,
     f: impl FnOnce(&Analysis<'_>, &str) -> Option<T>,

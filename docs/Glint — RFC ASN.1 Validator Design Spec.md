@@ -472,6 +472,10 @@ reverse_check = false
 
 [oid]
 placeholders = ["TBD", "TBD1", "TBD2"]
+
+[examples]          # the PEM examples (Codegen and Decoder Design, Example artifacts)
+check = true        # decode them: E410, W411, W412, I413, W415
+identified = false  # name the type each was identified as (I414)
 ```
 
 Also ship a composite GitHub Action (`glint-action`) that downloads a release binary, runs `glint check --format sarif`, and uploads the result for code-scanning annotations.

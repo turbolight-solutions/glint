@@ -11,6 +11,26 @@ pub struct Config {
     pub severity: BTreeMap<String, SeveritySetting>,
     pub snippets: SnippetsConfig,
     pub oid: OidConfig,
+    pub examples: ExamplesConfig,
+}
+
+/// The PEM examples of the document (Codegen and Decoder Design, Example artifacts: Examples in a checked draft).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ExamplesConfig {
+    /// Decode the PEM examples and report what is wrong with them (E410, W411, W412, I413, W415).
+    pub check: bool,
+    /// Name the type each example was identified as (I414).
+    pub identified: bool,
+}
+
+impl Default for ExamplesConfig {
+    fn default() -> Self {
+        Self {
+            check: true,
+            identified: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

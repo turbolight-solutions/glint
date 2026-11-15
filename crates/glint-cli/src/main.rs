@@ -1,5 +1,6 @@
 //! The `glint` command line.
 
+mod artifacts_cmd;
 mod check_cmd;
 mod closure_cmd;
 mod common;
@@ -29,6 +30,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// List and download the PEM examples of the RFCs and active drafts, each identified as a type
+    ///
+    /// corpus-build extracts every PEM block of every RFC and active Internet-Draft and identifies its type: a root its
+    /// label suggests (`label`), else a type of the document's own modules or a common corpus root that decodes it
+    /// (`decoded`), else none (`unknown`). `glint decode --artifact ID` decodes one as its type.
+    Artifacts(artifacts_cmd::Args),
     /// Check the ASN.1 modules in a document
     Check(check_cmd::Args),
     /// Write a module set and every module it imports, one module per file, for a compiler
@@ -83,6 +90,7 @@ enum Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
+        Command::Artifacts(args) => artifacts_cmd::run(&args),
         Command::Check(args) => check_cmd::run(&args),
         Command::Closure(args) => closure_cmd::run(&args),
         Command::Corpus(args) => corpus_cmd::run(&args),

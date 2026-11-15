@@ -5,10 +5,10 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use glint_corpus::{
-    AllowedOid, AppliedErratum, BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo,
-    DOCUMENTS_FILE, DocumentRecord, DocumentText, Documents, ErrataFailure, ErratumPatch, Exports,
-    HunkLines, ModuleRecord, ModuleSource, Oid, OidAssignment, OidHint, OidLabels, ParseStatus,
-    Pointer, SourceKind, SyntaxEra, build_dir, latest_path,
+    ARTIFACTS_FILE, AllowedOid, AppliedErratum, BODY_RFC, CORPUS_FILE, Corpus, CorpusData,
+    CorpusInfo, DOCUMENTS_FILE, DocumentRecord, DocumentText, Documents, ErrataFailure,
+    ErratumPatch, Exports, HunkLines, ModuleRecord, ModuleSource, Oid, OidAssignment, OidHint,
+    OidLabels, ParseStatus, Pointer, SourceKind, SyntaxEra, build_dir, latest_path,
 };
 use glint_diag::Severity;
 use glint_errata::LineRange;
@@ -21,6 +21,7 @@ use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
 use crate::Settings;
+use crate::artifacts::{ScannedDocument, expected, identify_all};
 use crate::collect::{Candidate, RfcExtraction, extract_draft, extract_rfc};
 use crate::errata::{Errata, Series, read_errata};
 use crate::iana::read_iana;
@@ -76,7 +77,17 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut errata_failed: BTreeMap<u32, glint_errata::SeriesFailure> = BTreeMap::new();
     // The errata of every RFC with a module, by document id, for its document record.
     let mut errata_by_id: BTreeMap<String, DocumentErrata> = BTreeMap::new();
+    // The PEM blocks of every document that has one, for artifacts.json.
+    let mut scanned: Vec<ScannedDocument> = Vec::new();
     for (rfc, mut extraction) in extracted {
+        let pem = std::mem::take(&mut extraction.pem);
+        if pem != glint_extract::artifacts::PemScan::default() {
+            scanned.push(ScannedDocument {
+                document: format!("rfc{rfc}"),
+                scan: pem,
+                obsoleted: meta.get(&rfc).is_some_and(|m| !m.obsoleted_by.is_empty()),
+            });
+        }
         if !extraction.errata_applied.is_empty() {
             errata_applied.insert(
                 rfc,
@@ -138,6 +149,14 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     // Why a draft with a module is kept as RFCXML for the web UI, by draft.
     let mut draft_notes: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (id, mut extraction) in extracted_drafts {
+        let pem = std::mem::take(&mut extraction.pem);
+        if pem != glint_extract::artifacts::PemScan::default() {
+            scanned.push(ScannedDocument {
+                document: id.clone(),
+                scan: pem,
+                obsoleted: false,
+            });
+        }
         let (smi, modules): (Vec<Candidate>, Vec<Candidate>) =
             std::mem::take(&mut extraction.candidates)
                 .into_iter()
@@ -340,13 +359,18 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         oid_hints,
         ..CorpusData::default()
     };
+    // Every example identified against the corpus as published.
+    let mut artifacts = identify_all(&Corpus::from_data(corpus_data.clone()), &scanned);
+    let openpgp_blocks = scanned.iter().map(|d| d.scan.openpgp.len()).sum();
     // The build id names the content: the same data built twice on one day gets the same id.
     let mut hasher = Sha256::new();
     hasher.update(corpus_data.to_json());
     hasher.update(Documents::write("", &texts));
+    hasher.update(artifacts.to_json());
     let hash: String = hex(&hasher.finalize()).chars().take(8).collect();
     let build = format!("{}.{hash}", settings.date);
     corpus_data.info.build = build.clone();
+    artifacts.build = build.clone();
 
     let data = ReportData {
         build: build.clone(),
@@ -372,6 +396,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         iana_module_ids: corpus_data.iana_module_ids.len(),
         oid_hints: corpus_data.oid_hints.len(),
         hint_conflicts: &hint_conflicts,
+        artifacts: &artifacts,
+        openpgp_blocks,
     };
     let report = render_report(&data);
     if let Some(path) = &settings.dump_findings {
@@ -400,6 +426,12 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         DOCUMENTS_FILE,
         &gzip(&Documents::write(&build, &texts))?,
     )?;
+    write_with_digest(&dir, ARTIFACTS_FILE, &artifacts.to_json())?;
+    std::fs::write(
+        settings.out.join("artifacts.expected"),
+        expected(&artifacts),
+    )
+    .map_err(|e| format!("artifacts.expected: {e}"))?;
     let pointer = Pointer {
         schema: corpus_data.schema,
         build: build.clone(),
@@ -417,13 +449,14 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let mut summary = String::new();
     let _ = write!(
         summary,
-        "{}: build {build}, {} modules from {} RFCs and {} other documents, {} OID assignments, {} document texts",
+        "{}: build {build}, {} modules from {} RFCs and {} other documents, {} OID assignments, {} document texts, {} example artifacts",
         dir.display(),
         corpus_data.modules.len(),
         rfc_documents,
         corpus_data.documents.len().saturating_sub(rfc_documents),
         corpus_data.oid_assignments.len(),
-        texts.len()
+        texts.len(),
+        artifacts.artifacts.len()
     );
     Ok(summary)
 }

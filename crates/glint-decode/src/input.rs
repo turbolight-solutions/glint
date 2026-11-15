@@ -60,6 +60,66 @@ pub fn base64(text: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Encodes `bytes` as base64 (the standard alphabet, padded), on one line.
+pub fn base64_encode(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let symbol =
+        |index: u32| char::from(ALPHABET.get((index & 63) as usize).copied().unwrap_or(b'A'));
+    let mut out = String::with_capacity(bytes.len().div_ceil(3).saturating_mul(4));
+    for chunk in bytes.chunks(3) {
+        let mut word = 0u32;
+        for (shift, byte) in [16u32, 8, 0].into_iter().zip(chunk) {
+            word |= u32::from(*byte) << shift;
+        }
+        out.push(symbol(word >> 18));
+        out.push(symbol(word >> 12));
+        out.push(if chunk.len() > 1 {
+            symbol(word >> 6)
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 { symbol(word) } else { '=' });
+    }
+    out
+}
+
+/// `bytes` as a PEM block with `label` (RFC 7468): base64 in lines of 64 characters.
+pub fn pem_armor(label: &str, bytes: &[u8]) -> String {
+    let encoded = base64_encode(bytes);
+    let mut out = format!("-----BEGIN {label}-----\n");
+    let mut rest = encoded.as_str();
+    while !rest.is_empty() {
+        let (line, tail) = rest.split_at(rest.len().min(64));
+        out.push_str(line);
+        out.push('\n');
+        rest = tail;
+    }
+    out.push_str(&format!("-----END {label}-----\n"));
+    out
+}
+
+/// The label a PEM block is served with: the canonical form of a label the label map knows (`X509 CERTIFICATE` →
+/// `CERTIFICATE`, RFC 7468 Section 5.3), or `None` for a label it does not know.
+pub fn canonical_label(label: &str) -> Option<&'static str> {
+    Some(match label {
+        "CERTIFICATE" | "X509 CERTIFICATE" => "CERTIFICATE",
+        "X509 CRL" | "CRL" => "X509 CRL",
+        "CERTIFICATE REQUEST" | "NEW CERTIFICATE REQUEST" => "CERTIFICATE REQUEST",
+        "ATTRIBUTE CERTIFICATE" => "ATTRIBUTE CERTIFICATE",
+        "PKCS7" | "CMS" => "CMS",
+        "PRIVATE KEY" => "PRIVATE KEY",
+        "ENCRYPTED PRIVATE KEY" => "ENCRYPTED PRIVATE KEY",
+        "PUBLIC KEY" => "PUBLIC KEY",
+        "RSA PRIVATE KEY" => "RSA PRIVATE KEY",
+        "RSA PUBLIC KEY" => "RSA PUBLIC KEY",
+        "EC PRIVATE KEY" => "EC PRIVATE KEY",
+        "OCSP REQUEST" => "OCSP REQUEST",
+        "OCSP RESPONSE" => "OCSP RESPONSE",
+        "PKCS12" => "PKCS12",
+        _ => return None,
+    })
+}
+
 /// The PEM blocks of `text` (RFC 7468): label and decoded bytes. Explanatory text around them is ignored, and so are
 /// RFC 1421 headers (`Proc-Type: ...`) inside a block.
 pub fn pem_blocks(text: &str) -> Vec<(String, Option<Vec<u8>>)> {
@@ -209,8 +269,33 @@ pub fn label_roots(label: &str) -> &'static [&'static str] {
         "EC PRIVATE KEY" => &["rfc5915#ECPrivateKey.ECPrivateKey"],
         "OCSP REQUEST" => &["rfc6960#OCSP-2013-08.OCSPRequest"],
         "OCSP RESPONSE" => &["rfc6960#OCSP-2013-08.OCSPResponse"],
+        "PKCS12" => &["rfc7292#PKCS-12.PFX"],
         _ => &[],
     }
+}
+
+/// The corpus roots tried for an example whose label suggests none that fits (Codegen and Decoder Design, Example
+/// artifacts: Identification), most common first.
+pub fn common_roots() -> &'static [&'static str] {
+    &[
+        "rfc5912#PKIX1Explicit-2009.Certificate",
+        "rfc5912#PKIX1Explicit-2009.CertificateList",
+        "rfc5912#PKCS-10.CertificationRequest",
+        "rfc6268#CryptographicMessageSyntax-2010.ContentInfo",
+        "rfc5958#AsymmetricKeyPackageModuleV1.OneAsymmetricKey",
+        "rfc5958#AsymmetricKeyPackageModuleV1.EncryptedPrivateKeyInfo",
+        "rfc5912#PKIX1Explicit-2009.SubjectPublicKeyInfo",
+        "rfc6960#OCSP-2013-08.OCSPResponse",
+        "rfc6960#OCSP-2013-08.OCSPRequest",
+        "rfc3161#PKIXTSP.TimeStampResp",
+        "rfc3161#PKIXTSP.TimeStampReq",
+        "rfc5912#PKIXAttributeCertificate-2009.AttributeCertificate",
+        "rfc9810#PKIXCMP-2023.PKIMessage",
+        "rfc7292#PKCS-12.PFX",
+        "rfc5915#ECPrivateKey.ECPrivateKey",
+        "rfc8017#PKCS-1.RSAPrivateKey",
+        "rfc8017#PKCS-1.RSAPublicKey",
+    ]
 }
 
 #[cfg(test)]
@@ -224,6 +309,22 @@ mod tests {
         assert_eq!(base64(b"TWFu").unwrap(), b"Man");
         assert_eq!(base64(b"TW\nE=").unwrap(), b"Ma");
         assert!(base64(b"TW=E").is_none());
+    }
+
+    #[test]
+    fn base64_round_trips() {
+        for bytes in [
+            &b""[..],
+            b"M",
+            b"Ma",
+            b"Man",
+            b"Many bytes, more than one line of PEM: 0123456789abcdef",
+        ] {
+            assert_eq!(base64(base64_encode(bytes).as_bytes()).unwrap(), bytes);
+        }
+        let pem = pem_armor("FOO", &[0x30; 50]);
+        assert_eq!(pem.lines().nth(1).unwrap().len(), 64);
+        assert_eq!(sniff(pem.as_bytes())[0].bytes, [0x30; 50]);
     }
 
     #[test]
