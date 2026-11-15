@@ -1,0 +1,73 @@
+name: pages
+
+# Deploys the site to GitHub Pages: the site of a code release with the latest data for the schema it reads
+# (deploy/pages-site.sh). Pages keeps nothing between deploys, so release.yml passes its site and takes the data from
+# the live site, and data.yml passes its data and takes the site from the latest release. Run by hand, it redeploys
+# the latest release with the live data.
+#
+# The repository's Pages source must be "GitHub Actions".
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release whose site to deploy; by default the latest release
+        type: string
+        default: ""
+      site-artifact:
+        description: Artifact of the calling run holding glint-site-<tag>.zip; by default the release's own
+        type: string
+        default: ""
+      data-artifact:
+        description: Artifact of the calling run holding glint-data-<build>.zip; by default the live site's data
+        type: string
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # One deploy at a time; a release and the daily data each deploy a whole site.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: inputs.site-artifact != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.site-artifact }}
+          path: in/site
+      - if: inputs.data-artifact != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.data-artifact }}
+          path: in/data
+      - name: Put the site together
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="$TAG"
+          [ -n "$tag" ] || tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          site="$(find in/site -name 'glint-site-*.zip' 2>/dev/null | head -n 1)"
+          data="$(find in/data -name 'glint-data-*.zip' 2>/dev/null | head -n 1)"
+          deploy/pages-site.sh "$tag" "$site" "$data"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

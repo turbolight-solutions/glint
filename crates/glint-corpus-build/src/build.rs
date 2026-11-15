@@ -371,7 +371,11 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let dir = settings.out.join(build_dir(&build));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     write_with_digest(&dir, CORPUS_FILE, &corpus_data.to_json())?;
-    write_with_digest(&dir, DOCUMENTS_FILE, &Documents::write(&build, &texts))?;
+    write_with_digest(
+        &dir,
+        DOCUMENTS_FILE,
+        &gzip(&Documents::write(&build, &texts))?,
+    )?;
     let pointer = Pointer {
         schema: corpus_data.schema,
         build: build.clone(),
@@ -398,6 +402,16 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         texts.len()
     );
     Ok(summary)
+}
+
+/// Gzips `bytes` the same way every time: the header has no time and no file name.
+fn gzip(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::Write as _;
+    let mut encoder = flate2::GzBuilder::new().write(Vec::new(), flate2::Compression::best());
+    encoder
+        .write_all(bytes)
+        .and_then(|()| encoder.finish())
+        .map_err(|e| format!("{DOCUMENTS_FILE}: {e}"))
 }
 
 fn hex(bytes: &[u8]) -> String {

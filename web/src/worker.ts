@@ -16,10 +16,18 @@ let ready: Promise<void> | null = null;
 let documents: Promise<void> = Promise.resolve();
 let documentsFailed = false;
 
-async function fetchBytes(url: URL): Promise<Uint8Array> {
+async function fetchBytes(url: URL): Promise<Uint8Array<ArrayBuffer>> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url.pathname}: ${response.status} ${response.statusText}`);
   return new Uint8Array(await response.arrayBuffer());
+}
+
+/** Unpacks a gzipped file. A server that sent it with `Content-Encoding: gzip` has had the browser unpack it already,
+ *  so bytes without the gzip magic number are taken as they are. */
+async function gunzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 /** Fetches the corpus while the wasm compiles, and the document texts after both. Data of another schema or build
@@ -48,7 +56,8 @@ function start(base: string): Promise<void> {
         throw new Error(`corpus.json is build ${info.build}, but latest.json names ${build}`);
       }
       scope.postMessage({ event: "corpus", ok: true, info });
-      documents = fetchBytes(new URL(`${build}/documents.bin`, dataDir))
+      documents = fetchBytes(new URL(`${build}/documents.bin.gz`, dataDir))
+        .then(gunzip)
         .then((texts) => {
           (glint as Glint).loadDocuments(texts);
           scope.postMessage({ event: "documents", ok: true });

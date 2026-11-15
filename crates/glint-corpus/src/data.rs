@@ -29,7 +29,9 @@ pub fn build_dir(build: &str) -> String {
 }
 
 pub const CORPUS_FILE: &str = "corpus.json";
-pub const DOCUMENTS_FILE: &str = "documents.bin";
+/// `documents.bin`, gzipped: the site serves it as it is (GitHub Pages would not compress it), and the page unpacks it.
+/// [`Documents::read`] takes the unpacked bytes.
+pub const DOCUMENTS_FILE: &str = "documents.bin.gz";
 
 #[derive(Debug, thiserror::Error)]
 pub enum DataError {

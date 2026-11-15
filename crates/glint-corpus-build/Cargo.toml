@@ -16,6 +16,7 @@ glint-errata = { workspace = true }
 glint-diag = { workspace = true }
 glint-sema = { workspace = true }
 clap = { workspace = true }
+flate2 = { workspace = true }
 rayon = { workspace = true }
 reqwest = { workspace = true }
 sha2 = { workspace = true }

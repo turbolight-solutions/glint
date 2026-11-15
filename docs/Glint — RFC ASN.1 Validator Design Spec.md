@@ -310,7 +310,7 @@ Also make elision markers configurable (`elision_comments = ["-- (snip)", "-- ..
 
 ## RFC module corpus
 
-The corpus is data, not code: `corpus-build` builds it every day, and it is published on the Glint site as `data/v<schema>/<build>/corpus.json` (with `documents.bin`, the texts of the documents, for the web UI) and a `data/v<schema>/latest.json` pointer. The build id is `<UTC date>.<hash of the content>`; code accepts exactly one schema, and every result names both the code version and the data build. The CLI and the web UI carry no data; `glint corpus update` downloads it. Automatic extraction, with Verified errata applied to the documents first and a hand-curated override directory after, is the only workable design: many published modules have errata, and extraction from old text RFCs is lossy.
+The corpus is data, not code: `corpus-build` builds it every day, and it is published on the Glint site as `data/v<schema>/<build>/corpus.json` (with `documents.bin.gz`, the gzipped texts of the documents, for the web UI) and a `data/v<schema>/latest.json` pointer. The build id is `<UTC date>.<hash of the content>`; code accepts exactly one schema, and every result names both the code version and the data build. The CLI and the web UI carry no data; `glint corpus update` downloads it. Automatic extraction, with Verified errata applied to the documents first and a hand-curated override directory after, is the only workable design: many published modules have errata, and extraction from old text RFCs is lossy.
 
 ### Build pipeline
 
@@ -321,7 +321,7 @@ The corpus is data, not code: `corpus-build` builds it every day, and it is publ
    When one RFC shows the same module more than once (a header in the body and the full text in an appendix), the build keeps the copy that parses without syntax errors, then among those the longest (a quoted header may have a placeholder body, as in RFC 4120), then the first.
 5. **Parse and check** each module with no corpus (pass 1), then again with the partial corpus to resolve imports (pass 2). Record status: `clean`, `warnings`, `errors`, `unparseable`.
 6. **Index** by module name (a name may map to several modules), by module OID, by every OID value assigned (for `W140`), and by the `name(number)` labels published modules write for each arc (the label table, for `W142`–`W144`; drafts are not evidence), and the entries of IANA's module identifier registries from `smi-numbers.xml` (for `W146`, and the registry note of `W102`; errata the registry cites are resolved with `errata.json`). Import resolution by name prefers a current RFC or a module of another body, then an active draft (newest first), then an obsoleted RFC.
-7. **Emit** `data/v<schema>/<build>/corpus.json` and `documents.bin` with `.sha256` files, the `latest.json` pointer, and a human-readable `report.md` listing every module, its status and its diagnostics, and an audit of every module against the label table, and the errata applied per RFC. The report is the curator's to-do list.
+7. **Emit** `data/v<schema>/<build>/corpus.json` and `documents.bin.gz` with `.sha256` files, the `latest.json` pointer, and a human-readable `report.md` listing every module, its status and its diagnostics, and an audit of every module against the label table, and the errata applied per RFC. The report is the curator's to-do list.
 
 ### RFC errata
 
@@ -431,7 +431,7 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 | `glint corpus list [--filter <text>]` | List modules with RFC, OID and status |
 | `glint corpus show <name\|oid\|document>` | Print a module's text and metadata; a document is `rfc5280`, `X.509`, ... |
 | `glint corpus oid <dotted-oid>` | Who assigns this OID, and its parent arcs |
-| `glint corpus update` | Download the latest published data (or `--build <id>`) to the user cache; without data, commands that need it say to run this |
+| `glint corpus update` | Download the latest published data to the user cache; without data, commands that need it say to run this |
 | `glint explain <code>` | Long description of a diagnostic code with examples |
 | `glint errata queue \| list N \| show N ID \| edit N ID \| prove <work file> \| record N ID --decision … \| check` | Triage the Verified errata of RFCs with ASN.1 and keep `corpus/errata` (see "RFC errata"): the queue (`new`, `changed`, `withdrawn`, `patch-fails`, `rescope`); every erratum of an RFC, whatever its status; an erratum with every place its text is in the RFC's modules, inline ASN.1 or prose; a work copy of the RFC's source; a proof that an edit adds no error or warning to any corpus module or to the RFC's inline ASN.1 (exit 1 on a loss); the decision, which writes the patch and the ledger row and rebases the RFC's higher patches; and a check of the data against the mirror. Offline; `--corpus-dir` and `--cache-dir` locate `corpus/` and `corpus/cache`. The `errata-triage` skill (`.claude/skills/`) drives a session |
 
@@ -470,7 +470,7 @@ Also ship a composite GitHub Action (`glint-action`) that downloads a release bi
 
 ## Web: static site and frontend
 
-**Decision: a static site; Glint runs in the browser.** The page loads `glint.wasm` (the `glint-wasm` crate) in a Web Worker and the published data beside it: the `latest.json` pointer and the `corpus.json` it names while the wasm compiles, then `documents.bin` in the background. Nothing is sent anywhere, so unpublished drafts stay on the author's machine, and there is no server to run: nginx serves files. A draft or RFC is opened by name from `documents.bin` instead of being fetched from the IETF (which a browser could not do across origins).
+**Decision: a static site; Glint runs in the browser.** The page loads `glint.wasm` (the `glint-wasm` crate) in a Web Worker and the published data beside it: the `latest.json` pointer and the `corpus.json` it names while the wasm compiles, then `documents.bin.gz` in the background, unpacked with `DecompressionStream`. Nothing is sent anywhere, so unpublished drafts stay on the author's machine, and there is no server to run: GitHub Pages serves files. A draft or RFC is opened by name from `documents.bin` instead of being fetched from the IETF (which a browser could not do across origins).
 
 ### In-browser API
 
@@ -502,7 +502,7 @@ Data of another schema, or a file of another build than the pointer names, is re
 
 **Decision: self-host first, built for adoption by the IETF Tools Team.** The IETF [Author Tools web service](https://authors.ietf.org/author-tools-web-service) already chains xml2rfc, kramdown-rfc and idnits and invites new tasks, and the [tools catalog](https://authors.ietf.org/tools-catalog) lists no ASN.1 validator.
 
-1. **Now:** a static site on any small host the owner controls: each code release is a directory switched in with a symlink, and the data is published daily beside it (`deploy/`).
+1. **Now:** a static site on GitHub Pages: each code release and each daily data build deploys a whole site of the latest code and the latest data (`.github/workflows/pages.yml`).
 2. **Adoption-ready from day one:** license the project Apache-2.0; static files only, so any web server can host it; no host-specific code.
 3. **After M5:** propose it to the IETF Tools Team, either as an Author Tools task ("Validate ASN.1" beside idnits) or as a standalone service on their infrastructure.
 

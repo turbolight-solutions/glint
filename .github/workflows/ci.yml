@@ -74,7 +74,6 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: sudo apt-get update && sudo apt-get install -y brotli
       # The same zip release.yml attaches to a release, named for the commit (a pull request's head, not the merge).
       - name: Package
         working-directory: .
@@ -83,7 +82,6 @@ jobs:
         run: |
           set -euo pipefail
           name="glint-site-${COMMIT::12}"
-          deploy/precompress.sh web/dist
           (cd web/dist && zip -qr "../../$name.zip" .)
           sha256sum "$name.zip" > "$name.zip.sha256"
       - uses: actions/upload-artifact@v7

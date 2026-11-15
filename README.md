@@ -18,7 +18,7 @@ The full design is in [`docs/`](docs/). Work follows the milestones in that spec
 | M4 — X.681, X.682, X.683 | information object classes, objects and object sets with `WITH SYNTAX`, table and component relation constraints, parameterization, checks `E150`–`E168`, `W169`–`W173`, `E180`–`E185`, the resolved type model (`glint_sema::typemodel`) |
 | M5 — Snippet consistency | X.680 Annex C.3 normal-form comparison of the assignments quoted in the text with the module definitions (`E300`, `W301`, `W302`, `I303`, `W304`, optional `W310`), `-- glint:` directives and elision comments |
 | M6 — Web UI | a static site: `glint-wasm` in a Web Worker over the published data, TypeScript frontend (CodeMirror with completion, Bootstrap), documents by name, corpus browser, OID lookup |
-| M7 — Distribution | SARIF output, `glint explain`, `check --draft`, `corpus update`, release and daily data workflows, GitHub Action, static deployment with security headers and precompression; see [`docs/distribution.md`](docs/distribution.md) |
+| M7 — Distribution | SARIF output, `glint explain`, `check --draft`, `corpus update`, release and daily data workflows, GitHub Action, static deployment to GitHub Pages; see [`docs/distribution.md`](docs/distribution.md) |
 
 ## Use
 

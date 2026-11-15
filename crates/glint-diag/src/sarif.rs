@@ -11,8 +11,9 @@ use serde_sarif::sarif::{
 use crate::{Diagnostic, FileId, Files, Label, Severity, Versions, code_info, explain};
 
 const SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
-const INFORMATION_URI: &str = "https://github.com/glint-asn1/glint";
-const RULES_URI: &str = "https://github.com/glint-asn1/glint/blob/main/docs/diagnostics.md";
+const INFORMATION_URI: &str = "https://github.com/turbolight-solutions/glint";
+const RULES_URI: &str =
+    "https://github.com/turbolight-solutions/glint/blob/main/docs/diagnostics.md";
 
 /// The diagnostics of one checked document and the files they point into. By convention the document itself
 /// is the first file, `FileId(0)`; the others are corpus modules.

@@ -99,7 +99,13 @@ fn the_build_writes_digests_and_the_document_texts_under_one_build_id() {
         let digest = std::fs::read_to_string(dir.join(format!("{file}.sha256"))).unwrap();
         assert!(digest.ends_with(&format!("  {file}\n")), "{digest}");
     }
-    let documents = Documents::read(std::fs::read(dir.join(DOCUMENTS_FILE)).unwrap()).unwrap();
+    let mut unpacked = Vec::new();
+    std::io::Read::read_to_end(
+        &mut flate2::read::GzDecoder::new(std::fs::File::open(dir.join(DOCUMENTS_FILE)).unwrap()),
+        &mut unpacked,
+    )
+    .unwrap();
+    let documents = Documents::read(unpacked).unwrap();
     documents.require_build(&pointer.build).unwrap();
     let (text, format) = documents.get("rfc8692").unwrap();
     assert_eq!(format, "xml");
@@ -1122,10 +1128,11 @@ fn errata_args(fixture: &ErrataFixture) -> Vec<String> {
 
 fn documents(out: &Path) -> Documents {
     let pointer = Pointer::from_json(&std::fs::read(out.join(latest_path())).unwrap()).unwrap();
-    Documents::read(
-        std::fs::read(out.join(build_dir(&pointer.build)).join(DOCUMENTS_FILE)).unwrap(),
-    )
-    .unwrap()
+    let file =
+        std::fs::File::open(out.join(build_dir(&pointer.build)).join(DOCUMENTS_FILE)).unwrap();
+    let mut unpacked = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(file), &mut unpacked).unwrap();
+    Documents::read(unpacked).unwrap()
 }
 
 fn run_ok(fixture: &ErrataFixture, args: &[String]) {
