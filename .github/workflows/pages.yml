@@ -68,8 +68,44 @@ jobs:
           [ ! -d in/data ] || data="$(find in/data -name 'glint-data-*.zip' | head -n 1)"
           deploy/pages-site.sh "$tag" "$site" "$data"
       - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      - id: upload
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
+      # What actions/deploy-pages does, with a build version of our own: it always uses the commit, and Pages treats a
+      # deployment whose build version it already has as done, reporting success but serving the earlier one. A data
+      # deploy usually runs on a commit already deployed, so the version names the run as well.
       - id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/github-script@v9
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact_id }}
+        with:
+          script: |
+            const version = `${context.sha}.${context.runId}.${context.runAttempt}`;
+            const { data: created } = await github.request('POST /repos/{owner}/{repo}/pages/deployments', {
+              ...context.repo,
+              artifact_id: Number(process.env.ARTIFACT_ID),
+              pages_build_version: version,
+              oidc_token: await core.getIDToken(),
+            });
+            core.info(`Created Pages deployment ${created.id} (build version ${version})`);
+            const failed = ['deployment_failed', 'deployment_content_failed', 'deployment_cancelled', 'deployment_lost'];
+            // Up to 10 minutes, as deploy-pages waits.
+            for (let i = 0; i < 120; i++) {
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+              const { data } = await github.request('GET /repos/{owner}/{repo}/pages/deployments/{id}', {
+                ...context.repo,
+                id: created.id,
+              });
+              if (data.status === 'succeed') {
+                core.info('Deployed.');
+                core.setOutput('page_url', created.page_url);
+                return;
+              }
+              if (failed.includes(data.status)) {
+                core.setFailed(`Pages deployment ${created.id}: ${data.status}`);
+                return;
+              }
+              core.info(`Status: ${data.status}`);
+            }
+            core.setFailed(`Pages deployment ${created.id} did not finish in 10 minutes`);
