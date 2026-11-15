@@ -104,6 +104,9 @@ Implemented so far (M1, M2, M3, M4, M5, the decoder of the codegen and decoder d
 | `I413` | info | A PEM example that is BER but not DER | X.690 10, 11 | explain example |
 | `W415` | warning | A PEM example that decodes cleanly only as a type its label does not name (a PKCS #1 key labelled `PRIVATE KEY`); raised only when the corpus has the label's types | RFC 7468 5–13 | `crates/glint-check/tests/pipeline.rs` |
 | `I414` | info | The type a PEM example was identified as, and how (`label`, `decoded`). Off unless `[examples] identified = true` | policy | `crates/glint-check/src/pipeline.rs` |
+| `W420` | warning | `glint codegen`: a construct the target library cannot express, and what the generated code does instead (a `DEFAULT` written as `OPTIONAL`, a value kept as a raw TLV) | policy | `crates/glint-codegen/tests/rasn.rs`, explain example |
+| `W421` | warning | `glint codegen`: a constraint the generated code does not check (`CONSTRAINED BY`, `PATTERN` without regular expressions, a value that cannot be evaluated); extensible constraints are not checked, by design | X.680 49–51; X.682 9 | explain example |
+| `I422` | info | `glint codegen`: a type the IR could not lower (an unavailable module, macro notation), kept as a raw TLV | policy | explain example |
 
 ### Snippet comparison (M5)
 

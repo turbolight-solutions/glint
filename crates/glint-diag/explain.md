@@ -1525,3 +1525,51 @@ MAYCAQUCAQc=
 </section>
 </middle></rfc>
 ```
+
+## W420
+
+`glint codegen` met a construct the target library cannot express, and the generated code does something else, which the message says: a `DEFAULT` value the target cannot write makes the component `OPTIONAL`; a `REAL`, `EXTERNAL`, `EMBEDDED PDV` or `CHARACTER STRING` value is kept as a raw TLV; an open type whose `@` path no enclosing record holds is kept raw; of several relations, only the first selects the type.
+
+```asn1 bad codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { reading REAL }
+END
+```
+
+```asn1 good codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { reading INTEGER }
+END
+```
+
+## W421
+
+A constraint the generated code does not check: `CONSTRAINED BY`, `PATTERN` on a target with no regular expressions, or a constraint whose values cannot be evaluated. Every other constraint is checked when a value is decoded and when it is encoded. An extensible constraint is not checked, since its extensions admit values outside its root.
+
+```asn1 bad codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= OCTET STRING (CONSTRAINED BY { -- signed by the issuer -- })
+END
+```
+
+```asn1 good codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= OCTET STRING (SIZE (1..64))
+END
+```
+
+## I422
+
+A type the IR could not lower, such as a reference to a module that is not available, or macro notation. The generated code keeps its value as a raw TLV, which decodes and re-encodes as it is.
+
+```asn1 bad codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a Missing }
+END
+```
+
+```asn1 good codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER }
+END
+```

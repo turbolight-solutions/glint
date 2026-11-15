@@ -592,6 +592,24 @@ const CODES: &[CodeInfo] = &[
         title: "The type a PEM example was identified as (off unless `[examples] identified = true`)",
         basis: "policy",
     },
+    CodeInfo {
+        code: "W420",
+        severity: Severity::Warning,
+        title: "Generated code: a construct the target library cannot express, and what the code does instead (a DEFAULT written as OPTIONAL, a value kept as a raw TLV)",
+        basis: "policy",
+    },
+    CodeInfo {
+        code: "W421",
+        severity: Severity::Warning,
+        title: "Generated code: a constraint the code does not check (CONSTRAINED BY, PATTERN on a target without regular expressions, a value that cannot be evaluated)",
+        basis: "X.680 49–51; X.682 9",
+    },
+    CodeInfo {
+        code: "I422",
+        severity: Severity::Info,
+        title: "Generated code: a type the IR could not lower (an unavailable module, macro notation), kept as a raw TLV",
+        basis: "policy",
+    },
 ];
 
 /// Every registered code.

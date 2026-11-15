@@ -306,6 +306,8 @@ Every generated file has a header with the Glint code version, the data build ID
 | Extensibility | `#[rasn(extensible)]` | runtime skips unknown trailing components | native | runtime skips unknown trailing components |
 
 Known target gaps, each reported as a finding plus a comment in the output:
+- rasn decodes an untagged `CHOICE` or open type by trying it, so when such a component is `OPTIONAL`, absent and followed by another component (RFC 5912 `TBSCertList.nextUpdate`), the value does not decode (`W420`).
+- rasn's BER decoder rejects unknown extension additions. The runtime works around it: an extensible `SEQUENCE` gets a trailing `_extensions: glint_rt::Extensions` field that keeps them, so they re-encode unchanged. An extensible `SET` or `CHOICE` still rejects unknown additions.
 - `der` has no constraints, extensibility or open types of its own: everything goes through generated hooks and the runtime.
 - cryptobyte's `asn1.Tag` is a `uint8`, so it cannot express tag numbers above 30; the runtime reads those itself.
 - pyasn1 has no `PATTERN` constraint: the runtime supplies one built on `re`, approximating X.680 Annex A regular expressions.
@@ -313,7 +315,7 @@ Known target gaps, each reported as a finding plus a comment in the output:
 
 ### Constraint enforcement
 
-Values are checked on decode and on encode. In rasn and pyasn1 the native checks run, and the runtime adds what they lack. In `der` and Go, the generated `validate()`/`Validate()` runs inside the generated decode and encode paths, so hand-built values are rejected at encode time. Errors name the ASN.1 path (`tbsCertificate.extensions[3].extnValue`) and the constraint as written.
+Values are checked on decode and on encode. The middle layer turns each constraint into a check program (ranges over values, sizes and code points, constant equality, presence, per-component and per-element checks, and/or/not), which generated code carries as static data and the runtime interprets through one trait every generated type implements; `glint_rt::decode`/`decode_der` resolve open types and then check, and `glint_rt::encode` resolves a copy (so an open type whose key names another type is refused) and checks before writing. The rasn backend emits no `size`/`value`/`from` attributes of its own: they only matter to PER, and rasn's BER size check counts octets, not characters. In pyasn1 the native checks run, and the runtime adds what they lack. In `der` and Go, the generated `validate()`/`Validate()` runs inside the generated decode and encode paths, so hand-built values are rejected at encode time. Errors name the ASN.1 path (`tbsCertificate.extensions[3].extnValue`) and the constraint as written.
 
 ### CLI
 
@@ -418,13 +420,17 @@ glint artifacts extract FILE           # scan a local document, no corpus data n
 2. **Decoder, CLI** (done). Sniffing, BER walk, rendering, DER and constraint findings, mismatch fallback, OID hint table, `glint decode`. *Accept:* a real certificate decoded with the RFC 5912 modules shows every extension's contents decoded through the `ExtensionSet` table, with OID labels. The same certificate decoded with the RFC 5280 modules shows its extensions decoded through hints, marked heuristic.
 3. **Artifacts** (done). PEM extraction, identification, `artifacts.json`, the report section, `corpus/artifacts.expected`, `glint artifacts`, example checks in `check`. *Accept:* every PEM example in the corpus is extracted or has an extraction finding; every decode failure is triaged as a decoder bug (fixed) or an erratum candidate (listed).
 4. **Workbench web route: Decode and Artifacts tabs** (done). *Accept:* drag-and-drop of PEM, base64 and DER files; tree and hex linked both ways; a shareable hash route; artifact download in the right format; Open in Decode.
-5. **Codegen middle layer, registry, rasn backend + runtime.** *Accept:* fixture roots compile, the differential test passes over the vectors and artifacts, round-trip passes.
+5. **Codegen middle layer, registry, rasn backend + runtime** (done). *Accept:* fixture roots compile, the differential test passes over the vectors and artifacts, round-trip passes. Measured: 24 roots (the fixture roots, a synthetic module of constraints, and every root the published examples are identified as) compile against rasn 0.30.0; 357 vectors decode to the decoder's tree and re-encode byte for byte, 20 are rejected as the decoder rejects them, 8 BER vectors decode (not compared), and hand-built invalid values are refused on encode.
 6. **pyasn1 backend.**
 7. **RustCrypto `der` backend.**
 8. **Go cryptobyte backend.**
 9. **Codegen tab in the workbench.**
 
 Milestones 6–8 have the same acceptance criteria as milestone 5. They also confirm that a backend needs no change outside its own module; any change the shared layers need goes back into them.
+
+### Codegen codes
+
+`W420` (a construct the target cannot express, and what the code does instead), `W421` (a constraint the code does not check: `CONSTRAINED BY`, `PATTERN` without regular expressions, an unevaluable value) and `I422` (a type lowering left opaque, kept as a raw TLV), documented in `explain` with examples that `glint-codegen`'s tests run through every backend.
 
 ## Decided questions
 

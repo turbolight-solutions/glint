@@ -1,0 +1,44 @@
+-- Constructs the differential test exercises beyond the RFC modules: constraints of every kind, a non-extensible
+-- object set, DEFAULT values, tags, recursion and extensibility.
+Codegen-Test DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+Top ::= SEQUENCE {
+    record      Record,
+    holders     SEQUENCE SIZE (1..4) OF Holder,
+    tree        Tree OPTIONAL,
+    wrapped     [5] EXPLICIT Kind DEFAULT one
+}
+
+Record ::= SEQUENCE {
+    small   INTEGER (0..9),
+    name    IA5String (SIZE (1..4)),
+    flags   [0] BIT STRING { a(0), b(1) } (SIZE (2)) OPTIONAL,
+    choice  CHOICE { n [1] INTEGER, s [2] UTF8String (FROM ("a".."z")) } OPTIONAL,
+    numbers [3] SEQUENCE SIZE (1..2) OF INTEGER (1..3) OPTIONAL,
+    pair    [4] Pair OPTIONAL,
+    ...
+}
+
+Pair ::= SEQUENCE {
+    x [0] INTEGER OPTIONAL,
+    y [1] INTEGER OPTIONAL
+} (WITH COMPONENTS { ..., x PRESENT } | WITH COMPONENTS { ..., y PRESENT })
+
+Kind ::= ENUMERATED { one(1), two(2) }
+
+THING ::= CLASS { &id INTEGER UNIQUE, &Type } WITH SYNTAX { ID &id TYPE &Type }
+
+Things THING ::= { { ID 1 TYPE INTEGER } | { ID 2 TYPE BOOLEAN } | { ID 3 TYPE Record } }
+
+Holder ::= SEQUENCE {
+    id      THING.&id ({Things}),
+    value   [0] EXPLICIT THING.&Type ({Things}{@id})
+}
+
+Tree ::= SEQUENCE {
+    label   UTF8String,
+    left    [0] Tree OPTIONAL,
+    right   [1] Tree OPTIONAL
+}
+
+END

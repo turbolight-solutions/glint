@@ -1,0 +1,24 @@
+[package]
+name = "glint-codegen"
+version = "0.1.0"
+description = "Glint's code generators: a backend registry, a shared middle layer and one emitter per target library"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+glint-diag = { workspace = true }
+glint-ir = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+glint-check = { workspace = true }
+glint-corpus = { workspace = true }
+glint-decode = { workspace = true }
+insta = { workspace = true }
+serde_json = { workspace = true }

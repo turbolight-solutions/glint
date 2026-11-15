@@ -1,0 +1,60 @@
+---
+source: crates/glint-codegen/tests/rasn.rs
+expression: listing
+---
+rfc5912-certificate
+  pkix1_explicit_2009.rs (2253 lines)
+  algorithm_information_2009.rs (329 lines)
+  pkix_algs_2009.rs (633 lines)
+  pkix1_pss_oaep_algorithms_2009.rs (726 lines)
+  pkix_common_types_2009.rs (243 lines)
+  pkix1_implicit_2009.rs (2631 lines)
+  pkix_x400_address_2009.rs (2347 lines)
+  mod.rs (26 lines)
+rfc5280-certificate
+  pkix1_explicit88.rs (958 lines)
+  mod.rs (14 lines)
+codegen-test
+  codegen_test.rs (590 lines)
+  mod.rs (14 lines)
+  W420 Codegen-Test.Record.choice: rasn cannot tell this absent untagged CHOICE or open type from the component after it: a value without it does not decode
+rfc6268-content-info
+  cryptographic_message_syntax_2010.rs (5952 lines)
+  algorithm_information_2009.rs (1594 lines)
+  pkix1_explicit_2009.rs (2837 lines)
+  pkix_algs_2009.rs (633 lines)
+  pkix1_pss_oaep_algorithms_2009.rs (726 lines)
+  pkix_common_types_2009.rs (900 lines)
+  pkix1_implicit_2009.rs (3158 lines)
+  pkix_x400_address_2009.rs (2347 lines)
+  attribute_certificate_version1_2009.rs (511 lines)
+  pkix_attribute_certificate_2009.rs (1924 lines)
+  cryptographic_message_syntax_2009.rs (5734 lines)
+  cryptographic_message_syntax_algorithms_2009.rs (782 lines)
+  mod.rs (36 lines)
+  W420 PKIX1Explicit-2009.TBSCertList.nextUpdate: rasn cannot tell this absent untagged CHOICE or open type from the component after it: a value without it does not decode
+  W420 PKIXAttributeCertificate-2009.TargetCert.targetName: rasn cannot tell this absent untagged CHOICE or open type from the component after it: a value without it does not decode
+rfc5652-content-info
+  cryptographic_message_syntax2004.rs (108 lines)
+  mod.rs (14 lines)
+rfc5958-one-asymmetric-key
+  asymmetric_key_package_module_v1.rs (494 lines)
+  algorithm_information_2009.rs (68 lines)
+  cryptographic_message_syntax_2009.rs (62 lines)
+  mod.rs (18 lines)
+rfc3161-time-stamp-resp
+  pkixtsp.rs (292 lines)
+  pkixcmp.rs (76 lines)
+  cryptographic_message_syntax.rs (108 lines)
+  mod.rs (18 lines)
+rfc6960-ocsp-response
+  ocsp_2013_08.rs (1451 lines)
+  pkix1_explicit_2009.rs (2253 lines)
+  pkix_common_types_2009.rs (493 lines)
+  algorithm_information_2009.rs (439 lines)
+  pkix1_implicit_2009.rs (2680 lines)
+  pkix_x400_address_2009.rs (2347 lines)
+  pkix_algs_2009.rs (633 lines)
+  pkix1_pss_oaep_algorithms_2009.rs (726 lines)
+  mod.rs (28 lines)
+  I422 OCSP-2013-08.RevokedInfo.revocationReason: the type was not lowered (`CRLReason` is neither defined nor imported); the value is kept as a raw TLV

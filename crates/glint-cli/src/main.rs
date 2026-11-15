@@ -3,6 +3,7 @@
 mod artifacts_cmd;
 mod check_cmd;
 mod closure_cmd;
+mod codegen_cmd;
 mod common;
 mod corpus_cmd;
 mod decode_cmd;
@@ -52,6 +53,13 @@ enum Command {
     /// The output directory gets `modules/<Name>.asn` per module, `modules.tsv` (name, input or dependency,
     /// source; dependencies first) and `combined.asn` (every module in one file, dependencies first).
     Closure(closure_cmd::Args),
+    /// Generate code for a type and everything it reaches, for a target library
+    ///
+    /// Takes a corpus module (`rfc5912#PKIX1Explicit-2009`, or a name only one document defines) or, with FILES, a
+    /// module of user ASN.1, and writes one file per ASN.1 module plus the vendored runtime (`glint_rt`, MIT-0). The
+    /// generated types decode and encode, resolve open types through their object sets, and check every constraint;
+    /// what the target cannot express is reported on stderr (`glint explain W420`).
+    Codegen(codegen_cmd::Args),
     /// Browse the module corpus (RFCs, active Internet-Drafts and standalone modules) and update its data
     Corpus(corpus_cmd::Args),
     /// Decode a BER or DER encoding (PEM, base64 or binary) as a type, like `openssl asn1parse` with names
@@ -93,6 +101,7 @@ fn main() -> ExitCode {
         Command::Artifacts(args) => artifacts_cmd::run(&args),
         Command::Check(args) => check_cmd::run(&args),
         Command::Closure(args) => closure_cmd::run(&args),
+        Command::Codegen(args) => codegen_cmd::run(&args),
         Command::Corpus(args) => corpus_cmd::run(&args),
         Command::Decode(args) => decode_cmd::run(&args),
         Command::Errata(args) => errata_cmd::run(&args),

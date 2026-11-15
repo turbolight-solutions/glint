@@ -15,6 +15,7 @@ path = "src/main.rs"
 clap = { workspace = true }
 etcetera = { workspace = true }
 glint-check = { workspace = true }
+glint-codegen = { workspace = true }
 glint-corpus = { workspace = true }
 glint-corpus-build = { workspace = true }
 glint-decode = { workspace = true }

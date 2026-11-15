@@ -67,7 +67,8 @@ fn examples_behave_as_the_explanation_says() {
         let body = explain(code).unwrap();
         let found = examples(body);
         for example in &found {
-            if example.tags.contains(&"untested") {
+            // `codegen` examples are run through the code generators, in glint-codegen's tests
+            if example.tags.contains(&"untested") || example.tags.contains(&"codegen") {
                 continue;
             }
             let raised = if example.language == "der" {

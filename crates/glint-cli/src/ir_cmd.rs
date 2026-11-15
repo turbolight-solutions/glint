@@ -60,11 +60,20 @@ pub(crate) fn find_module(corpus: &Corpus, reference: &str) -> Result<usize, Str
     }
 }
 
-pub fn run(args: &Args) -> ExitCode {
-    let pins = match parse_pins(&args.pins) {
-        Ok(pins) => pins,
-        Err(message) => return failure(&message),
-    };
+/// Where a root type comes from: a corpus module, or a module of user ASN.1 files.
+pub(crate) struct RootSource<'a> {
+    pub module: &'a str,
+    pub ty: &'a str,
+    pub files: &'a [PathBuf],
+    pub corpus: Option<&'a std::path::Path>,
+    pub pins: &'a [String],
+}
+
+/// The IR of a root type, and the corpus data build its imports resolved against.
+pub(crate) fn lower_root(
+    source: &RootSource<'_>,
+) -> Result<(glint_ir::IrSet, Option<String>), String> {
+    let pins = parse_pins(source.pins)?;
     let mut options = Options {
         pins: pins.into_iter().collect::<HashMap<_, _>>(),
         oid_collisions: false,
@@ -74,43 +83,35 @@ pub fn run(args: &Args) -> ExitCode {
         ..Options::default()
     };
     // user ASN.1 can do without a corpus; a corpus module cannot
-    let corpus = match load_corpus(args.corpus.as_deref()) {
+    let corpus = match load_corpus(source.corpus) {
         Ok(corpus) => Some(corpus),
-        Err(message) if !args.files.is_empty() && args.corpus.is_none() => {
+        Err(message) if !source.files.is_empty() && source.corpus.is_none() => {
             eprintln!("glint: warning: {message}; imports from the corpus stay unresolved");
             None
         }
-        Err(message) => return failure(&message),
+        Err(message) => return Err(message),
     };
     let mut texts = Vec::new();
     let mut parse_options = ParseOptions::default();
-    let module_name = if args.files.is_empty() {
-        let Some(corpus) = &corpus else {
-            return failure("no corpus data");
-        };
-        let record = match find_module(corpus, &args.module).and_then(|i| {
+    let module_name = if source.files.is_empty() {
+        let corpus = corpus.as_ref().ok_or("no corpus data")?;
+        let record = find_module(corpus, source.module).and_then(|i| {
             corpus
                 .modules()
                 .get(i)
                 .ok_or_else(|| "no such module".to_owned())
-        }) {
-            Ok(record) => record,
-            Err(message) => return failure(&message),
-        };
+        })?;
         options.home_document = Some(record.source.document.clone());
         parse_options = ParseOptions::corpus();
         texts.push(record.text.clone());
         record.name.clone()
     } else {
-        for path in &args.files {
-            match read_input(path) {
-                Ok(text) => texts.push(text),
-                Err(error) => {
-                    return failure(&format!("cannot read {}: {error}", display_name(path)));
-                }
-            }
+        for path in source.files {
+            let text = read_input(path)
+                .map_err(|error| format!("cannot read {}: {error}", display_name(path)))?;
+            texts.push(text);
         }
-        args.module.clone()
+        source.module.to_owned()
     };
     let sources = texts
         .iter()
@@ -125,16 +126,37 @@ pub fn run(args: &Args) -> ExitCode {
         None => &empty,
     };
     let analysis = analyze(sources, provider, &options);
-    let Some(module) = analysis.drafts.iter().copied().find(|&id| {
-        analysis
-            .graph
-            .module(id)
-            .is_some_and(|m| m.model.name == module_name)
-    }) else {
-        return failure(&format!("no module `{module_name}` in the given files"));
+    let module = analysis
+        .drafts
+        .iter()
+        .copied()
+        .find(|&id| {
+            analysis
+                .graph
+                .module(id)
+                .is_some_and(|m| m.model.name == module_name)
+        })
+        .ok_or_else(|| format!("no module `{module_name}` in the given files"))?;
+    let set = glint_sema::ir::lower(&analysis.graph, module, source.ty)
+        .ok_or_else(|| format!("`{module_name}` defines no type `{}`", source.ty))?;
+    let build = corpus
+        .as_ref()
+        .map(|c| c.info().build.clone())
+        .filter(|b| !b.is_empty());
+    Ok((set, build))
+}
+
+pub fn run(args: &Args) -> ExitCode {
+    let source = RootSource {
+        module: &args.module,
+        ty: &args.ty,
+        files: &args.files,
+        corpus: args.corpus.as_deref(),
+        pins: &args.pins,
     };
-    let Some(set) = glint_sema::ir::lower(&analysis.graph, module, &args.ty) else {
-        return failure(&format!("`{module_name}` defines no type `{}`", args.ty));
+    let set = match lower_root(&source) {
+        Ok((set, _)) => set,
+        Err(message) => return failure(&message),
     };
     let text = if args.json {
         match serde_json::to_string_pretty(&set) {

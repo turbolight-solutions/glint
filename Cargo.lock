@@ -623,6 +623,7 @@ dependencies = [
  "clap",
  "etcetera",
  "glint-check",
+ "glint-codegen",
  "glint-corpus",
  "glint-corpus-build",
  "glint-decode",
@@ -658,6 +659,20 @@ dependencies = [
  "sha2",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "glint-codegen"
+version = "0.1.0"
+dependencies = [
+ "glint-check",
+ "glint-corpus",
+ "glint-decode",
+ "glint-diag",
+ "glint-ir",
+ "insta",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
