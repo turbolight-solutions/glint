@@ -528,9 +528,16 @@ fn queue(
             escape_line(&row.note)
         );
     }
+    // A skipped entry a person has decided (it has a ledger row) is no longer listed.
+    let decided = |m: &str| {
+        malformed_rfc(m)
+            .zip(malformed_erratum(m))
+            .is_some_and(|(n, id)| rows.iter().any(|r| r.rfc == n && r.errata_id == id))
+    };
     let skipped: Vec<&String> = feed
         .malformed
         .iter()
+        .filter(|m| !decided(m))
         .filter(|m| match malformed_rfc(m) {
             Some(n) => scope.rfcs.contains(&n) && wanted(n),
             None => rfc.is_none(),
@@ -547,6 +554,13 @@ fn queue(
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// The erratum id a skip reason names (`erratum 8911 (rfc2459): ...`), if it got that far.
+fn malformed_erratum(reason: &str) -> Option<u32> {
+    let start = reason.find("erratum ")?.saturating_add("erratum ".len());
+    let rest = reason.get(start..)?;
+    ascii_number(rest.get(..rest.find(' ')?)?).ok()
 }
 
 fn malformed_rfc(reason: &str) -> Option<u32> {

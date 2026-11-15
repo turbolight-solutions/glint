@@ -48,7 +48,7 @@ Releases are made on GitHub (Releases → Draft a new release, with a new `v*` t
 3. attaches the archives, the code zip and their `.sha256` files;
 4. deploys the code zip to the host (`deploy/deploy.sh code`) when the `glint-site` environment has a deploy target.
 
-`.github/workflows/data.yml` runs every day: it mirrors the RFCs, the active drafts, the errata and IANA's SMI Numbers registry (`corpus/fetch.sh`), runs `corpus-build`, precompresses the build, uploads `glint-data-<build>.zip` (`data/v<schema>/<build>/` and `latest.json`) and `report.md` as artifacts, and publishes the build to the host (`deploy/deploy.sh data`), the pointer last.
+`.github/workflows/data.yml` runs every day: it mirrors the RFCs, the active drafts, the errata and IANA's SMI Numbers registry (`corpus/fetch.sh`), runs `corpus-build`, precompresses the build, uploads `glint-data-<build>.zip` (`data/v<schema>/<build>/` and `latest.json`) and `report.md` as artifacts, and publishes the build to the host (`deploy/deploy.sh data`), the pointer last. It also runs `glint errata queue` on the build and keeps one issue, "RFC errata awaiting triage", in step with it (`.github/errata-issue.sh`): opened when errata wait on a person, updated with a comment that mentions the maintainers in `MAINTAINERS` when the list changes, closed when it is empty. That job alone has `issues: write`; the issue never holds up the data.
 
 `.github/workflows/ci.yml` builds release binaries for Linux, macOS and Windows on every push and pull request and runs a smoke test with an empty corpus file.
 

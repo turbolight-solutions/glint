@@ -23,3 +23,9 @@ control or bidi character in an added line, with `--errata` a patched erratum th
 RFC) fails the build.
 
 Errata that only fix prose are not applied. Fixes that are not Verified errata are overrides (`corpus/overrides`).
+
+The daily data build keeps an issue, "RFC errata awaiting triage", open while `glint errata queue` lists anything
+waiting on a person, and mentions the maintainers in `MAINTAINERS` when that list changes. A feed entry the tools
+cannot read (a control or bidi character) is decided by a person at its erratum page and recorded with `glint errata
+record N ID --by human`; its ledger row has a fingerprint of zeros, so the entry is triaged again if the feed
+corrects it.

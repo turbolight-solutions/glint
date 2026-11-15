@@ -493,3 +493,32 @@ fn prove_sees_the_other_rfcs_with_relative_paths() {
         stdout(&relative)
     );
 }
+
+#[test]
+fn a_skipped_feed_entry_leaves_the_queue_once_decided() {
+    let m = mirror("skipped");
+    // A Verified erratum whose orig_text holds a bidi override: the feed parser skips it.
+    let feed = FEED.replacen(
+        "\n]",
+        ",\n {\"errata_id\":\"9005\",\"doc-id\":\"RFC5280\",\"errata_status_code\":\"Verified\",\"section\":\"1\",\n  \"orig_text\":\"a\u{202e}b\",\"correct_text\":\"ab\",\"notes\":null}\n]",
+        1,
+    );
+    std::fs::write(m.cache().join("errata.json"), feed).unwrap();
+    let before = m.ok(&["queue"]);
+    assert!(before.contains("feed entries skipped"), "{before}");
+    assert!(before.contains("erratum 9005 (rfc5280)"), "{before}");
+    m.ok(&[
+        "record",
+        "5280",
+        "9005",
+        "--decision",
+        "not-applicable",
+        "--by",
+        "human",
+        "--note",
+        "unreadable feed entry",
+    ]);
+    let after = m.ok(&["queue"]);
+    assert!(!after.contains("9005"), "{after}");
+    assert!(!after.contains("feed entries skipped"), "{after}");
+}

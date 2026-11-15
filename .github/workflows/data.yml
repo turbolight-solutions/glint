@@ -41,12 +41,38 @@ jobs:
           echo "build=$build" >> "$GITHUB_OUTPUT"
           deploy/precompress.sh corpus/out/data/v*/"$build"
           (cd corpus/out && zip -qr "../../glint-data-$build.zip" data)
+      - name: List the errata waiting on a person
+        run: |
+          set -euo pipefail
+          cargo run --release --locked -q -p glint-asn1 -- errata \
+            --corpus corpus/out/data/v*/"${{ steps.build.outputs.build }}"/corpus.json queue | tee errata-queue.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: errata-queue
+          path: errata-queue.txt
       - uses: actions/upload-artifact@v7
         with:
           name: glint-data-${{ steps.build.outputs.build }}
           path: |
             glint-data-${{ steps.build.outputs.build }}.zip
             corpus/out/report.md
+
+  errata-issue:
+    # Opens, updates or closes the "RFC errata awaiting triage" issue; never holds up the data.
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: errata-queue
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/errata-issue.sh errata-queue.txt "${{ needs.build.outputs.build }}"
 
   publish:
     needs: build
