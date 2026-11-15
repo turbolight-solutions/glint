@@ -8,6 +8,7 @@ mod checks;
 mod eval;
 mod finding;
 mod graph;
+pub mod ir;
 mod legacy;
 mod model;
 mod names;

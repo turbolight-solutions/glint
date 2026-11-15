@@ -1,0 +1,92 @@
+---
+source: crates/glint-sema/tests/ir.rs
+expression: "glint_ir::dump(&set)"
+---
+root #0
+
+#0 Certificate (PKIX1Explicit88)
+  SEQUENCE {
+    tbsCertificate: -> #1 TBSCertificate
+    signatureAlgorithm: -> #4 AlgorithmIdentifier
+    signature: BIT STRING
+  }
+
+#1 TBSCertificate (PKIX1Explicit88)
+  SEQUENCE {
+    version DEFAULT 0: [0] EXPLICIT -> #2 Version
+    serialNumber: -> #3 CertificateSerialNumber
+    signature: -> #4 AlgorithmIdentifier
+    issuer: -> #5 Name
+    validity: -> #11 Validity
+    subject: -> #5 Name
+    subjectPublicKeyInfo: -> #13 SubjectPublicKeyInfo
+    issuerUniqueID OPTIONAL: [1] IMPLICIT -> #14 UniqueIdentifier
+    subjectUniqueID OPTIONAL: [2] IMPLICIT -> #14 UniqueIdentifier
+    extensions OPTIONAL: [3] EXPLICIT -> #15 Extensions  { size=1..MAX }
+  }
+
+#2 Version (PKIX1Explicit88)
+  INTEGER { v1(0), v2(1), v3(2) }
+
+#3 CertificateSerialNumber (PKIX1Explicit88)
+  INTEGER
+
+#4 AlgorithmIdentifier (PKIX1Explicit88)
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER
+    parameters OPTIONAL: open type DEFINED BY algorithm
+  }
+
+#5 Name (PKIX1Explicit88)
+  CHOICE {
+    rdnSequence: -> #6 RDNSequence
+  }
+
+#6 RDNSequence (PKIX1Explicit88)
+  SEQUENCE OF -> #7 RelativeDistinguishedName  { size=1..MAX }
+
+#7 RelativeDistinguishedName (PKIX1Explicit88)
+  SET (SIZE (1..MAX))  { size=1..MAX } OF -> #8 AttributeTypeAndValue
+
+#8 AttributeTypeAndValue (PKIX1Explicit88)
+  SEQUENCE {
+    type: -> #9 AttributeType
+    value: -> #10 AttributeValue
+  }
+
+#9 AttributeType (PKIX1Explicit88)
+  OBJECT IDENTIFIER
+
+#10 AttributeValue (PKIX1Explicit88)
+  open type
+
+#11 Validity (PKIX1Explicit88)
+  SEQUENCE {
+    notBefore: -> #12 Time
+    notAfter: -> #12 Time
+  }
+
+#12 Time (PKIX1Explicit88)
+  CHOICE {
+    utcTime: UTCTime
+    generalTime: GeneralizedTime
+  }
+
+#13 SubjectPublicKeyInfo (PKIX1Explicit88)
+  SEQUENCE {
+    algorithm: -> #4 AlgorithmIdentifier
+    subjectPublicKey: BIT STRING
+  }
+
+#14 UniqueIdentifier (PKIX1Explicit88)
+  BIT STRING
+
+#15 Extensions (PKIX1Explicit88)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF -> #16 Extension
+
+#16 Extension (PKIX1Explicit88)
+  SEQUENCE {
+    extnID: OBJECT IDENTIFIER
+    critical DEFAULT FALSE: BOOLEAN
+    extnValue: OCTET STRING
+  }

@@ -527,6 +527,24 @@ fn heading_of(patterns: &Patterns, content: &str) -> Option<(SectionRef, String)
     ))
 }
 
+/// The section headings of a plain-text document split into `lines`: the line index, the section and its title.
+pub(crate) fn headings(source: &str, lines: &[Line]) -> Vec<(usize, SectionRef, String)> {
+    let Some(patterns) = PATTERNS.as_ref() else {
+        return Vec::new();
+    };
+    lines
+        .iter()
+        .enumerate()
+        .filter_map(|(i, line)| {
+            let content = line.content(source);
+            if classify_line(content) != Class::Content || content.starts_with([' ', '\t']) {
+                return None;
+            }
+            heading_of(patterns, content).map(|(section, title)| (i, section, title))
+        })
+        .collect()
+}
+
 /// Finds ASN.1 in a plain-text draft or RFC: between `<CODE BEGINS>` and `<CODE ENDS>`, from a module header to
 /// its `END`, and in runs of assignments. Page headers, footers and form feeds are dropped.
 pub(crate) fn extract(source: &str, sink: &mut Sink) {
@@ -547,16 +565,7 @@ pub(crate) fn extract(source: &str, sink: &mut Sink) {
         consumed,
     };
 
-    let sections: Vec<(usize, SectionRef, String)> = (0..document.lines.len())
-        .filter(|&i| document.class(i) == Class::Content)
-        .filter_map(|i| {
-            let content = document.content(i);
-            if content.starts_with([' ', '\t']) {
-                return None;
-            }
-            heading_of(patterns, content).map(|(section, title)| (i, section, title))
-        })
-        .collect();
+    let sections = headings(source, &document.lines);
 
     let mut found = Vec::new();
     document.find_code_markers(&mut found);

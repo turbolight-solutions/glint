@@ -24,6 +24,7 @@ const highlight = HighlightStyle.define([
   { tag: t.number, class: "tok-number" },
   { tag: t.comment, class: "tok-comment" },
   { tag: t.operator, class: "tok-operator" },
+  { tag: [t.macroName, t.meta, t.attributeName], class: "tok-meta" },
 ]);
 
 const theme = EditorView.theme({
@@ -84,6 +85,8 @@ export interface EditorOptions {
   doc?: string;
   readOnly?: boolean;
   highlighting?: boolean;
+  /** The language of the text, instead of ASN.1 (generated code). */
+  language?: Extension;
   /** Number of the first line, for a view that shows an excerpt of a larger document. */
   firstLine?: number;
   onChange?: () => void;
@@ -130,10 +133,10 @@ export function createEditor(parent: HTMLElement, options: EditorOptions = {}): 
     highlightSelectionMatches(),
     lintGutter(),
     syntaxHighlighting(highlight),
-    language.of(languageExtension(options.highlighting ?? true)),
+    language.of(options.language ?? languageExtension(options.highlighting ?? true)),
     keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...lintKeymap]),
     theme,
-    EditorView.contentAttributes.of({ "aria-label": options.readOnly ? "Module text" : "Document to check" }),
+    EditorView.contentAttributes.of({ "aria-label": options.language ? "Generated code" : options.readOnly ? "Module text" : "Document to check" }),
   ];
   if (options.complete) {
     extensions.push(autocompletion({ override: [completionSource(options.complete)] }));

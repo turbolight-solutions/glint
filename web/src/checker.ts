@@ -13,12 +13,13 @@ import {
   type Label,
   type MarkupFindings,
   type ModuleInfo,
+  type UserDocument,
   api,
   moduleLabel,
 } from "./api";
 import { append, debounce, h, replace } from "./dom";
 import { OffsetMap } from "./offsets";
-import { draftHash, hashForTarget, moduleHash, oidHash, type Route, rfcHash } from "./router";
+import { draftHash, hashForTarget, moduleHash, oidHash, type Route, rfcHash, workbenchHash } from "./router";
 import { createTabStrip, nextActive } from "./tabs";
 
 const AUTO_CHECK_MS = 500;
@@ -53,6 +54,8 @@ interface TabErrata {
 
 export interface CheckerView {
   show(route: Extract<Route, { view: "checker" }>): void;
+  /** The document of the active tab, whose modules the workbench can decode with; null when it is empty. */
+  activeDocument(): { title: string; document: UserDocument } | null;
 }
 
 /** One open document. The editor view shows exactly one tab's state at a time. */
@@ -77,6 +80,9 @@ interface Tab {
    * errata): the published XML's URL.
    */
   xmlSource: string | null;
+  /** For an RFC or draft opened by name: its document id (`rfc5280`, `draft-ietf-lamps-foo-03`), which names its PEM
+   *  examples in the workbench. */
+  corpusDocument: string | null;
   /**
    * For such a document: the route of its other view (the RFCXML from the text, the text from the RFCXML). A check of the
    * text view's edited text reads it with the text heuristics, not with the blocks the RFCXML marks.
@@ -229,6 +235,7 @@ export function createChecker(root: HTMLElement): CheckerView {
       result: null,
       errata: null,
       xmlSource: null,
+      corpusDocument: null,
       otherView: null,
       fetching: false,
       pendingModule: null,
@@ -422,6 +429,7 @@ export function createChecker(root: HTMLElement): CheckerView {
         text: sameLines ? textOf(tab) : null,
       };
       tab.xmlSource = response.document.xml_source ?? null;
+      tab.corpusDocument = response.document.name.replace(/\.xml$/, "");
       const other = response.document.other_format;
       const document = route.rfc !== undefined ? { rfc: route.rfc } : { draft: route.draft ?? "" };
       tab.otherView = other ? { view: "checker", ...document, ...(other === "xml" ? { xml: true } : {}) } : null;
@@ -453,6 +461,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     tab.format = "bare";
     tab.errata = null;
     tab.xmlSource = null;
+    tab.corpusDocument = null;
     tab.otherView = null;
     if (isActive(tab)) renderViewLinks(tab);
     edit(tab, () => highlightingSpec(true));
@@ -942,6 +951,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     tab.result = null;
     tab.errata = null;
     tab.xmlSource = null;
+    tab.corpusDocument = null;
     tab.otherView = null;
     setError(tab, null);
     edit(tab, () => highlightingSpec(tab.format === "bare"));
@@ -1055,6 +1065,17 @@ export function createChecker(root: HTMLElement): CheckerView {
 
   /** The links beside the status line: the other view of the active RFC or draft, and its published RFCXML. */
   function renderViewLinks(tab: Tab): void {
+    const examples = tab.corpusDocument
+      ? h(
+          "a",
+          {
+            class: "ms-2",
+            href: workbenchHash({ tab: "artifacts", document: tab.corpusDocument }),
+            title: "The PEM examples of this document, decoded, in the workbench",
+          },
+          "Examples",
+        )
+      : null;
     const other = tab.otherView;
     const rfc = other?.rfc !== undefined;
     const title = other?.xml
@@ -1082,6 +1103,7 @@ export function createChecker(root: HTMLElement): CheckerView {
             "↗",
           )
         : null,
+      examples,
     );
   }
 
@@ -1165,6 +1187,16 @@ export function createChecker(root: HTMLElement): CheckerView {
   refresh();
 
   return {
+    activeDocument() {
+      if (!active) return null;
+      const content = textOf(active);
+      if (content.trim() === "") return null;
+      const document: UserDocument = { content };
+      if (active.name) document.name = active.name;
+      const format = selectedFormat(active);
+      if (format) document.format = format;
+      return { title: titleOf(active), document };
+    },
     show(route) {
       const wanted = targetOf(route);
       if (!wanted) return;

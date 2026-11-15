@@ -40,6 +40,33 @@ jobs:
           build="$(jq -r .build corpus/out/data/v*/latest.json)"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           (cd corpus/out && zip -qr "../../glint-data-$build.zip" data)
+      - name: Compare the example artifacts with corpus/artifacts.expected
+        # A difference is a decoder fix (update the file) or a decoder regression; it never holds up the data. New RFCs
+        # with PEM examples add lines too.
+        run: |
+          if ! diff -u corpus/artifacts.expected corpus/out/artifacts.expected > artifacts.diff; then
+            echo "::warning::The RFC example artifacts differ from corpus/artifacts.expected; see the artifacts-diff artifact"
+            cat artifacts.diff
+          fi
+      - name: Decode every published example with generated code
+        # The code generators' differential test over every identified example (Codegen and Decoder Design, Testing).
+        # Like the artifact comparison, a failure is a warning that never holds up the data.
+        run: |
+          dir="$(echo corpus/out/data/v*/"${{ steps.build.outputs.build }}")"
+          if ! GLINT_CODEGEN_DATA="$PWD/$dir" cargo test --release -p glint-codegen --test rasn -- --ignored --nocapture > codegen.txt 2>&1; then
+            echo "::warning::Generated code disagrees with the decoder on published examples; see the codegen-differential artifact"
+            grep '^FAIL' codegen.txt || tail -50 codegen.txt
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: codegen-differential
+          path: codegen.txt
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-diff
+          path: artifacts.diff
+          if-no-files-found: ignore
       - name: List the errata waiting on a person
         run: |
           set -euo pipefail
@@ -55,6 +82,7 @@ jobs:
           path: |
             glint-data-${{ steps.build.outputs.build }}.zip
             corpus/out/report.md
+            corpus/out/artifacts.expected
 
   errata-issue:
     # Opens, updates or closes the "RFC errata awaiting triage" issue; never holds up the data.

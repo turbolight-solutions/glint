@@ -15,6 +15,9 @@ let glint: Glint | null = null;
 let ready: Promise<void> | null = null;
 let documents: Promise<void> = Promise.resolve();
 let documentsFailed = false;
+/** The build directory of the loaded corpus, for the files fetched on demand. */
+let buildDir: URL | null = null;
+let artifacts: Promise<void> | null = null;
 
 async function fetchBytes(url: URL): Promise<Uint8Array<ArrayBuffer>> {
   const response = await fetch(url);
@@ -55,6 +58,7 @@ function start(base: string): Promise<void> {
         glint = new Glint();
         throw new Error(`corpus.json is build ${info.build}, but latest.json names ${build}`);
       }
+      buildDir = new URL(`${build}/`, dataDir);
       scope.postMessage({ event: "corpus", ok: true, info });
       documents = fetchBytes(new URL(`${build}/documents.bin.gz`, dataDir))
         .then(gunzip)
@@ -72,6 +76,24 @@ function start(base: string): Promise<void> {
       scope.postMessage({ event: "corpus", ok: false, error: error instanceof Error ? error.message : String(error) });
     }
   });
+}
+
+/** Fetches `artifacts.json` the first time an example artifact is asked for; a failed fetch is tried again on the
+ *  next call. */
+function loadArtifacts(g: Glint): Promise<void> {
+  artifacts ??= (async () => {
+    if (!buildDir) throw new Error(JSON.stringify({ code: "artifacts_unavailable", message: "The corpus data is not loaded, so the example artifacts are not either." }));
+    try {
+      g.loadArtifacts(await fetchBytes(new URL("artifacts.json", buildDir)));
+    } catch (error) {
+      console.error("glint: refused the example artifacts:", error);
+      throw new Error(JSON.stringify({ code: "artifacts_unavailable", message: `The example artifacts could not be loaded: ${errorOf(error).message}` }));
+    }
+  })().catch((error: unknown) => {
+    artifacts = null;
+    throw error;
+  });
+  return artifacts;
 }
 
 /** The `{ code, message }` that glint-wasm puts in the message of its errors. */
@@ -109,6 +131,20 @@ async function answer(method: string, args: unknown[]): Promise<string> {
       return g.oid(String(args[0]), Array.isArray(args[1]) ? args[1].map(String) : []);
     case "complete":
       return g.complete(String(args[0]), args[1] == null ? undefined : String(args[1]), args[2] == null ? undefined : String(args[2]), Number(args[3]));
+    case "decode":
+      return g.decode(JSON.stringify(args[0]), args[1] instanceof Uint8Array ? args[1] : new Uint8Array());
+    case "types":
+      return g.types(JSON.stringify(args[0]));
+    case "backends":
+      return Glint.backends();
+    case "codegen":
+      return g.codegen(JSON.stringify(args[0]));
+    case "artifacts":
+      await loadArtifacts(g);
+      return g.artifacts(JSON.stringify(args[0]));
+    case "artifact":
+      await loadArtifacts(g);
+      return g.artifact(String(args[0]));
     default:
       throw new Error(JSON.stringify({ code: "bad_request", message: `no method ${method}` }));
   }

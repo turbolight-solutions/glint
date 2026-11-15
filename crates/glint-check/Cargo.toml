@@ -1,6 +1,6 @@
 [package]
 name = "glint-check"
-version = "0.1.0"
+version.workspace = true
 description = "Check pipeline, configuration and rule set for Glint"
 edition.workspace = true
 license.workspace = true
@@ -14,6 +14,8 @@ glint-extract = { workspace = true }
 glint-corpus = { workspace = true }
 glint-sema = { workspace = true }
 glint-diag = { workspace = true }
+glint-decode = { workspace = true }
+glint-ir = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

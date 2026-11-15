@@ -69,7 +69,7 @@ fn gather(args: &Args, corpus: &Corpus) -> Result<Vec<ClosureInput>, Vec<String>
 }
 
 /// The index of the corpus module `DOC#NAME[@OID]`.
-fn corpus_module(corpus: &Corpus, reference: &str) -> Result<usize, String> {
+pub(crate) fn corpus_module(corpus: &Corpus, reference: &str) -> Result<usize, String> {
     let (document, rest) = reference
         .split_once('#')
         .ok_or("expected DOC#NAME or DOC#NAME@OID")?;
@@ -110,7 +110,7 @@ fn corpus_module(corpus: &Corpus, reference: &str) -> Result<usize, String> {
     }
 }
 
-fn parse_pins(pins: &[String]) -> Result<Vec<(String, String)>, String> {
+pub(crate) fn parse_pins(pins: &[String]) -> Result<Vec<(String, String)>, String> {
     pins.iter()
         .map(|pin| match pin.split_once('=') {
             Some((name, target))

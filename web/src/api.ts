@@ -232,6 +232,179 @@ export interface CompletionResponse {
   items: CompletionItem[];
 }
 
+export type InputFormat = "auto" | "pem" | "base64" | "der";
+
+/** A document whose modules a decode can take its type from: the one open in the checker. */
+export interface UserDocument {
+  content: string;
+  name?: string;
+  format?: FormatName;
+}
+
+/** Where a decode's root type comes from: a corpus module, or a module of `document`, named by `module.name`. */
+export interface SchemaSpec {
+  module?: ModuleRef;
+  document?: UserDocument;
+}
+
+export interface DecodeRequest extends SchemaSpec {
+  input?: InputFormat;
+  /** The root type; without it, each PEM block's label chooses one. */
+  type?: string;
+  no_schema?: boolean;
+}
+
+export interface DecodeFinding {
+  code: string;
+  severity: Severity;
+  message: string;
+}
+
+export interface OidName {
+  name: string;
+  module: string;
+  document?: string;
+}
+
+export type Rendered =
+  | { kind: "boolean"; value: boolean }
+  | { kind: "integer"; decimal: string; hex?: string; name?: string }
+  | { kind: "enumerated"; decimal: string; name?: string }
+  | { kind: "null" }
+  | { kind: "bit-string"; unused: number; hex: string; named?: string[] }
+  | { kind: "octet-string"; hex: string }
+  | { kind: "oid"; dotted: string; names?: OidName[] }
+  | { kind: "relative-oid"; dotted: string }
+  | { kind: "time"; text: string; normalized?: string }
+  | { kind: "string"; text: string }
+  | { kind: "real"; text: string }
+  | { kind: "hex"; hex: string };
+
+export type TagClass = "universal" | "application" | "context" | "private";
+
+/** One TLV of a decode (Codegen and Decoder Design, Decoder: Output). Offsets are into the block's octets. */
+export interface Tlv {
+  offset: number;
+  header_len: number;
+  len: { form: "definite"; octets: number } | { form: "indefinite" };
+  /** The end of the TLV, end-of-contents octets included. */
+  end: number;
+  /** Absent for octets that do not start a TLV. */
+  tag?: { class: TagClass; number: number; constructed: boolean };
+  tagging?: "explicit" | "implicit";
+  field?: string;
+  type_name?: string;
+  value?: Rendered;
+  children?: Tlv[];
+  findings?: DecodeFinding[];
+  schema: { state: "matched" | "unmatched" } | { state: "hinted"; from: string };
+}
+
+export interface DecodedBlock {
+  encoding: "pem" | "base64" | "der";
+  label?: string;
+  /** `doc#Module.Type` or `Module.Type`; absent for a decode without a schema. */
+  root?: string;
+  /** The octets, base64. */
+  der: string;
+  tlvs: Tlv[];
+  findings?: DecodeFinding[];
+}
+
+export interface DecodeResponse {
+  blocks: DecodedBlock[];
+}
+
+export interface TypesResponse {
+  modules: { name: string; types: string[] }[];
+}
+
+/** A code generator of the registry (Codegen and Decoder Design, Backends and the registry). */
+export interface BackendMeta {
+  id: string;
+  display_name: string;
+  language: "rust" | "python" | "go";
+  library: string;
+  library_version: string;
+}
+
+export interface CodegenRequest extends SchemaSpec {
+  type: string;
+  backend: string;
+}
+
+/** Something the target cannot express, and what the generated code does instead (`W420`, `W421`, `I422`). */
+export interface CodegenFinding {
+  code: string;
+  severity: Severity;
+  at: string;
+  message: string;
+}
+
+export interface CodegenResponse {
+  backend: BackendMeta;
+  /** `doc#Module.Type` or `Module.Type`. */
+  root: string;
+  /** One per ASN.1 module, `mod.rs`, and the runtime. */
+  files: { path: string; contents: string }[];
+  findings: CodegenFinding[];
+}
+
+export type Confidence = "label" | "decoded" | "unknown";
+
+export interface ArtifactQuery {
+  document?: string;
+  label?: string;
+  type?: string;
+  confidence?: Confidence;
+  errors?: boolean;
+}
+
+/** A PEM example of an RFC or draft, without its octets (Codegen and Decoder Design, Example artifacts). */
+export interface ArtifactRow {
+  id: string;
+  document: string;
+  section?: string;
+  appendix?: boolean;
+  title?: string;
+  caption?: string;
+  line: number;
+  label: string;
+  /** The identified type; for `unknown`, the closest candidate. */
+  root?: string;
+  confidence: Confidence;
+  findings?: string[];
+  /** The first error of the decode as `root`: with the decoder correct, the example has errors. */
+  first_error?: string;
+  obsoleted?: boolean;
+  size: number;
+}
+
+export interface BrokenArtifact {
+  id: string;
+  document: string;
+  section?: string;
+  appendix?: boolean;
+  line: number;
+  label: string;
+  message: string;
+}
+
+export interface ArtifactList {
+  build: string;
+  artifacts: ArtifactRow[];
+  broken: BrokenArtifact[];
+  labels: string[];
+}
+
+export interface ArtifactDetail extends ArtifactRow {
+  /** The octets, base64. */
+  der: string;
+  canonical_label?: string;
+  /** What a download gives: PEM with the canonical label, or base64 lines for a label the label map does not know. */
+  text: string;
+}
+
 export interface CheckOptions {
   snippets?: boolean;
   pins?: Record<string, string>;
@@ -248,7 +421,20 @@ export class ApiError extends Error {
 }
 
 /** What Glint is asked; the worker answers each with the JSON of the matching method of `glint-wasm`. */
-export type Method = "check" | "checkDocument" | "corpus" | "modules" | "module" | "oid" | "complete";
+export type Method =
+  | "check"
+  | "checkDocument"
+  | "corpus"
+  | "modules"
+  | "module"
+  | "oid"
+  | "complete"
+  | "decode"
+  | "types"
+  | "artifacts"
+  | "artifact"
+  | "backends"
+  | "codegen";
 
 /** Where requests go: the Glint worker on the page, or a stand-in in tests. */
 export interface Backend {
@@ -374,4 +560,13 @@ export const api = {
   oid: (dotted: string, names: string[] = []) => call<OidResponse>("oid", [dotted, names]),
   complete: (text: string, name: string | null, format: FormatName | null, position: number, signal?: AbortSignal) =>
     call<CompletionResponse>("complete", [text, name, format, position], signal),
+  /** Decodes `bytes`: PEM or base64 text (UTF-8), or DER. */
+  decode: (request: DecodeRequest, bytes: Uint8Array, signal?: AbortSignal) => call<DecodeResponse>("decode", [request, bytes], signal),
+  types: (spec: SchemaSpec, signal?: AbortSignal) => call<TypesResponse>("types", [spec], signal),
+  /** The example artifacts; the first call fetches `artifacts.json`. */
+  artifacts: (query: ArtifactQuery, signal?: AbortSignal) => call<ArtifactList>("artifacts", [query], signal),
+  artifact: (id: string) => call<ArtifactDetail>("artifact", [id]),
+  backends: () => call<{ backends: BackendMeta[] }>("backends", []),
+  /** The code a backend generates for a root type and everything it reaches. */
+  codegen: (request: CodegenRequest, signal?: AbortSignal) => call<CodegenResponse>("codegen", [request], signal),
 };

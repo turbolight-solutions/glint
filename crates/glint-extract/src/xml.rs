@@ -368,6 +368,127 @@ pub fn code_elements(source: &str) -> Vec<CodeElement> {
     elements
 }
 
+/// A `<sourcecode>` or `<artwork>` element with where it sits: its section and the caption of its `<figure>`.
+pub(crate) struct LocatedElement {
+    /// The content as [`CodeElement::text`] has it.
+    pub text: String,
+    /// Maps `text` to offsets of the document.
+    pub map: crate::SourceMap,
+    pub section: Option<SectionRef>,
+    pub title: Option<String>,
+    /// The `<name>` of the enclosing `<figure>` (v3), or its `title` attribute (v2).
+    pub caption: Option<String>,
+}
+
+/// Every `<sourcecode>` and `<artwork>` element with content, in document order, with its section and figure caption.
+/// Stops at the first point where the document is not well-formed.
+pub(crate) fn located_elements(source: &str) -> Vec<LocatedElement> {
+    let mut reader = Reader::from_str(source);
+    let config = reader.config_mut();
+    config.check_end_names = false;
+    config.allow_unmatched_ends = true;
+    config.allow_dangling_amp = true;
+
+    let mut stack: Vec<Frame> = Vec::new();
+    let mut sections: Vec<SectionInfo> = Vec::new();
+    let mut numbering = Numbering::default();
+    // The caption of each open `<figure>`, innermost last.
+    let mut figures: Vec<Option<String>> = Vec::new();
+    let mut capture: Option<Capture> = None;
+    // The text of a `<name>` being read, and whether it names a figure (else a section).
+    let mut name_text: Option<(String, bool)> = None;
+    let mut elements = Vec::new();
+    loop {
+        let before = position(&reader);
+        let Ok(event) = reader.read_event() else {
+            break;
+        };
+        let after = position(&reader);
+        match event {
+            Event::Eof => break,
+            Event::Start(start) => {
+                let name = local_name(&start);
+                if capture.is_none() {
+                    match name.as_str() {
+                        "back" => numbering.reset(true),
+                        "middle" => numbering.reset(false),
+                        "figure" => figures.push(attribute(&start, "title")),
+                        _ => {}
+                    }
+                    if matches!(name.as_str(), "sourcecode" | "artwork") {
+                        capture = Some(Capture {
+                            type_attr: attribute(&start, "type"),
+                            content_start: after,
+                            tag_start: before,
+                            section: sections.last().cloned(),
+                            element: name.clone(),
+                        });
+                    } else if name == "name" {
+                        match stack.last() {
+                            Some(frame) if frame.is_section => {
+                                name_text = Some((String::new(), false));
+                            }
+                            Some(frame) if frame.name == "figure" => {
+                                name_text = Some((String::new(), true));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                let is_section = name == "section";
+                if is_section {
+                    sections.push(section_info(&start, &sections, &mut numbering));
+                }
+                stack.push(Frame { name, is_section });
+            }
+            Event::Text(text) => {
+                if let Some((title, _)) = name_text.as_mut() {
+                    title.push_str(&decode_entities(&text));
+                }
+            }
+            Event::End(end) => {
+                let name = end.local_name().as_ref().to_owned();
+                if capture.as_ref().is_some_and(|c| c.element == name)
+                    && let Some(done) = capture.take()
+                {
+                    let content = done.content_start..before.max(done.content_start);
+                    let (text, map) = decode_content(source, content).finish();
+                    let section = done.section.as_ref();
+                    elements.push(LocatedElement {
+                        text,
+                        map,
+                        section: section.and_then(|info| {
+                            info.number.clone().map(|number| SectionRef {
+                                number,
+                                appendix: info.appendix,
+                            })
+                        }),
+                        title: section.and_then(|info| info.title.clone()),
+                        caption: figures.last().cloned().flatten(),
+                    });
+                }
+                if name == "name"
+                    && let Some((title, is_figure)) = name_text.take()
+                {
+                    if is_figure {
+                        if let Some(caption) = figures.last_mut() {
+                            *caption = Some(title.split_whitespace().collect::<Vec<_>>().join(" "));
+                        }
+                    } else {
+                        set_section_title(&stack, &mut sections, title);
+                    }
+                }
+                if name == "figure" && capture.is_none() {
+                    figures.pop();
+                }
+                close_element(&name, &mut stack, &mut sections);
+            }
+            _ => {}
+        }
+    }
+    elements
+}
+
 /// Finds ASN.1 in `<sourcecode>` (RFCXML v3) and `<artwork>` (RFCXML v2 and v3) elements.
 pub(crate) fn extract(source: &str, sink: &mut Sink) {
     walk(source, sink, |_, _| {});

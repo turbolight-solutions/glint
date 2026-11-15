@@ -2,12 +2,14 @@
 //!
 //! The crate does no I/O. `glint-corpus-build` produces the data; every other crate only reads it.
 
+mod artifacts;
 mod corpus;
 mod data;
 mod labels;
 mod oid;
 mod record;
 
+pub use artifacts::{ARTIFACTS_FILE, Artifact, ArtifactsData, BrokenArtifact, Confidence};
 pub use corpus::{
     Corpus, CorpusProvider, EmptyCorpus, IanaVerdict, iana_conflict, iana_verdict, preferred,
     unique_label,
@@ -21,6 +23,6 @@ pub use oid::{Oid, OidParseError};
 pub use record::{
     AppliedErratum, BODY_DRAFT, BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, ErrataFailure,
     ErratumPatch, Exports, HunkLines, IanaModuleId, ModuleRecord, ModuleSource, OidAssignment,
-    OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title, draft_name, rfc_number,
-    same_document,
+    OidHint, OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title, draft_name,
+    rfc_number, same_document,
 };

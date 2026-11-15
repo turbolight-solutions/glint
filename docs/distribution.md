@@ -24,12 +24,12 @@ Severity levels map to SARIF as `error` → `error`, `warning` → `warning`, `i
 
 ## Code and data
 
-Glint is code (the `glint` binary, and the site: `index.html`, the scripts and `glint.wasm`) and data (`corpus.json`, `documents.bin.gz`). Code changes only with a release; data changes every day, with RFCs, drafts, errata and overrides. Nothing data-like is compiled into the code.
+Glint is code (the `glint` binary, and the site: `index.html`, the scripts and `glint.wasm`) and data (`corpus.json`, `documents.bin.gz`, `artifacts.json`). Code changes only with a release; data changes every day, with RFCs, drafts, errata and overrides. Nothing data-like is compiled into the code.
 
 The data carries a schema number, and code reads exactly one schema; the schema is also in the path, so code never sees data of another schema. The site publishes, per schema:
 
 - `data/v<schema>/latest.json`: `{ "schema", "build" }`, the current build; not cached.
-- `data/v<schema>/<build>/corpus.json` and `documents.bin.gz` (the texts of the RFCs and active drafts with an ASN.1 module, for the web UI: an RFC from 8650 on, or a draft with RFCXML, as its published text with the ASN.1 blocks its XML marks, and its (corrected) RFCXML beside it; gzipped by `corpus-build`, because Pages would not compress it, and unpacked by the page), each with a `.sha256` of the file as published; never changed once published. Only the latest build is on the site.
+- `data/v<schema>/<build>/corpus.json`, `artifacts.json` (the PEM examples of every RFC and active draft, each identified as a type; `glint corpus update` downloads it with `corpus.json`) and `documents.bin.gz` (the texts of the RFCs and active drafts with an ASN.1 module, for the web UI: an RFC from 8650 on, or a draft with RFCXML, as its published text with the ASN.1 blocks its XML marks, and its (corrected) RFCXML beside it; gzipped by `corpus-build`, because Pages would not compress it, and unpacked by the page), each with a `.sha256` of the file as published; never changed once published. Only the latest build is on the site.
 
 A build id is `<UTC date>.<first 8 hex digits of a SHA-256 of the content>`. `corpus-build` reads the clock once, at its start (`--date` overrides), and everything after reads the id from the data. Every result names the code version and the data build. When the schema changes, the site publishes only the new one; older Glint versions keep the last data of their schema, and their age warning (data over 30 days old) tells their users to upgrade.
 
@@ -41,7 +41,7 @@ The data used by `glint check` and `glint corpus ...` is, in order: `--corpus`, 
 
 ## Releases and the data workflow
 
-Releases are made on GitHub (Releases → Draft a new release, with a new `v*` tag). Publishing one runs `.github/workflows/release.yml`, which publishes code only:
+The version is set once, in `[workspace.package]` of `Cargo.toml`. To release, commit the bump (`cargo set-version 1.2.3` from cargo-edit, or edit the line and run `cargo update --workspace` to refresh `Cargo.lock`), then make the release on GitHub (Releases → Draft a new release) with the tag `v1.2.3` on that commit. Publishing it runs `.github/workflows/release.yml`, which fails unless the tag matches the version, and publishes code only:
 
 1. builds `glint` for Linux x86-64, macOS arm64, and Windows x86-64, packages each as `glint-<target>.tar.gz` (`.zip` on Windows) with `LICENSE` and `NOTICE`, and runs `--version`, `explain`, and `corpus list` (which must say how to get data);
 2. builds the site (`web/build-wasm.sh`, then Vite) and packages it as `glint-site-<tag>.zip`, the code zip;

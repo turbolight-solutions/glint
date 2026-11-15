@@ -41,6 +41,8 @@ pub struct RfcExtraction {
     pub xml_errata_applied: Vec<(u32, Vec<LineRange>)>,
     /// Why the RFC's errata were not applied, when they were not: it is extracted as published.
     pub errata_failure: Option<SeriesFailure>,
+    /// The PEM blocks of the document as read.
+    pub pem: glint_extract::artifacts::PemScan,
     /// Why a document with a module, whose source is XML, is kept as its XML in `documents.bin` instead of its text
     /// ("kept as RFCXML for the web UI").
     pub kept_as_xml: Option<String>,
@@ -284,6 +286,7 @@ fn extract_text(
             });
         }
     }
+    result.pem = glint_extract::artifacts::pem_blocks(&text, format);
     result.text = text;
     result
 }

@@ -66,6 +66,8 @@ pub fn parse_assignment_list(text: &str) -> Parse {
 pub enum PrefixKind {
     Type,
     Value,
+    /// The element sets of a value set, between its braces (X.680 16.7), read into a `Constraint` node.
+    ElementSet,
 }
 
 /// The outcome of [`parse_prefix`].
@@ -99,6 +101,7 @@ pub fn parse_prefix(
     let ok = match kind {
         PrefixKind::Type => parser.parse_type(),
         PrefixKind::Value => parser.parse_value(),
+        PrefixKind::ElementSet => parser.parse_bare_element_sets(),
     };
     let end = parser
         .pos

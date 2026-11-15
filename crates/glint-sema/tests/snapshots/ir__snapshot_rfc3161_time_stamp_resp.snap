@@ -1,0 +1,43 @@
+---
+source: crates/glint-sema/tests/ir.rs
+expression: "glint_ir::dump(&set)"
+---
+root #0
+
+#0 TimeStampResp (PKIXTSP)
+  SEQUENCE {
+    status: -> #1 PKIStatusInfo
+    timeStampToken OPTIONAL: -> #5 TimeStampToken
+  }
+
+#1 PKIStatusInfo (PKIXTSP)
+  SEQUENCE {
+    status: -> #2 PKIStatus
+    statusString OPTIONAL: -> #3 PKIFreeText  { size=1..MAX }
+    failInfo OPTIONAL: -> #4 PKIFailureInfo
+  }
+
+#2 PKIStatus (PKIXTSP)
+  INTEGER { granted(0) }
+
+#3 PKIFreeText (PKIXCMP)
+  SEQUENCE (SIZE (1..MAX))  { size=1..MAX } OF UTF8String
+
+#4 PKIFailureInfo (PKIXTSP)
+  BIT STRING { badAlg(0), badRequest(2), badDataFormat(5), timeNotAvailable(14), unacceptedPolicy(15), unacceptedExtension(16), addInfoNotAvailable(17) }
+
+#5 TimeStampToken (PKIXTSP)
+  -> #6 ContentInfo
+
+#6 ContentInfo (CryptographicMessageSyntax)
+  SEQUENCE {
+    contentType: -> #7 ContentType
+    content: [0] EXPLICIT open type DEFINED BY contentType
+  }
+
+#7 ContentType (CryptographicMessageSyntax)
+  OBJECT IDENTIFIER
+
+notes
+  PKIXTSP.PKIStatus: the value of `requested` cannot be evaluated
+  PKIXTSP.PKIStatus: the value of `is` cannot be evaluated

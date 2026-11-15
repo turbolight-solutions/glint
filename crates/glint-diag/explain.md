@@ -2,6 +2,8 @@
 
 Each section is the text of `glint explain <code>`. Fenced examples tagged `bad` must raise the code and examples tagged `good` must not (`crates/glint-check/tests/explain.rs`); `untested` examples need a corpus or a configuration the test does not have.
 
+The decoder's codes (`E400`–`E409`) have `der` examples: an encoding in hexadecimal, decoded by `glint decode`. An example that names a type (`M.T`) is decoded as that type of the section's `asn1 schema` module; one that names none is decoded without a schema.
+
 ## E001
 
 The parser expected a token or construct and found something else. Glint reports the first problem in a construct and then resynchronizes, so one mistake does not hide the rest of the module.
@@ -1130,5 +1132,444 @@ A type or class defined in a draft module that the text neither shows in a snipp
 ```asn1 untested
 M DEFINITIONS ::= BEGIN
   Hidden ::= INTEGER
+END
+```
+
+## E400
+
+The identifier or length octets cannot be read (a tag number or length cut off, the reserved length octet `FF`, an indefinite length on a primitive encoding), a length runs past the end of the input, an indefinite length has no end-of-contents octets, or constructed encodings nest more than 64 deep (X.690 8.1). The octets from there on are shown as they are.
+
+```der bad
+04 05 01 02
+```
+
+The length says 5 octets, but only 2 follow.
+
+```der good
+04 02 01 02
+```
+
+## E401
+
+The contents octets are not a valid encoding of a value of the type: a BOOLEAN with other than one octet, a NULL with any, an empty INTEGER or one not written in the fewest octets, an OBJECT IDENTIFIER subidentifier that starts with `80` or is cut off, a BIT STRING with more than 7 unused bits, a UTCTime or GeneralizedTime that is not a valid time, a character the string type cannot hold, or an ENUMERATED value that is not an item of a type that is not extensible (X.690 8.2–8.23).
+
+```der bad
+02 02 00 05
+```
+
+The leading `00` is not needed: 5 is `02 01 05`.
+
+```der good
+02 01 05
+```
+
+## W402
+
+The encoding is valid BER but not DER (X.690 10, 11): an indefinite length, a length not written in the fewest octets, a string in the constructed form, BOOLEAN TRUE written as other than `FF`, unused bits of a BIT STRING that are not zero, a BIT STRING with named bits that ends in a zero bit, a component encoded with its `DEFAULT` value, `SET` components out of tag order, `SET OF` elements out of order, or a UTCTime or GeneralizedTime not in the form DER requires. Certificates and other signed structures must be DER, because the signature covers the exact octets. `glint decode --strict-der` fails on these.
+
+```der bad
+01 01 01
+```
+
+TRUE in DER is `01 01 FF`.
+
+```der good
+01 01 FF
+```
+
+## E403
+
+The TLV does not match the type the schema expects at its place: another tag, or the primitive form where the type is constructed. The TLV and everything in it are decoded without a schema, and decoding carries on with the next TLV.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE OF INTEGER
+END
+```
+
+```der bad M.T
+30 03 01 01 FF
+```
+
+The element is a BOOLEAN, not an INTEGER.
+
+```der good M.T
+30 03 02 01 05
+```
+
+## E404
+
+A component that is neither `OPTIONAL` nor `DEFAULT` is missing from a `SEQUENCE` or `SET`. Components of extension addition groups may be absent: a sender may use an earlier version of the type.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER, b BOOLEAN }
+END
+```
+
+```der bad M.T
+30 03 02 01 05
+```
+
+```der good M.T
+30 06 02 01 05 01 01 FF
+```
+
+## E405
+
+A TLV that is not a component of its `SEQUENCE` or `SET`, when the type is not extensible; a second TLV inside an explicit tag; or octets after the value inside a `CONTAINING` octet string. The TLV is decoded without a schema.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER }
+END
+```
+
+```der bad M.T
+30 06 02 01 05 01 01 FF
+```
+
+```der good M.T
+30 03 02 01 05
+```
+
+## I406
+
+A TLV that matches no component of an extensible `SEQUENCE`, `SET` or `CHOICE`: an extension addition from a later version of the type than the schema. X.680 52 asks a decoder to accept it; it is decoded without a schema.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER, ... }
+END
+```
+
+```der bad M.T
+30 06 02 01 05 01 01 FF
+```
+
+```der good M.T
+30 03 02 01 05
+```
+
+## E407
+
+The value is outside the constraints of its type: an integer outside its value range, a string, octet string, bit string or collection outside its size range, a character outside the permitted alphabet, or a value that is not the key of any object of the set in a simple table constraint of a set that is not extensible. Extensible constraints (`(1..10, ...)`) are not checked, since a later version may permit more.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= INTEGER (1..10)
+END
+```
+
+```der bad M.T
+02 01 0B
+```
+
+```der good M.T
+02 01 0A
+```
+
+## W408
+
+An open type (a type field read through a component relation constraint, X.682 10) whose type the object set does not give: the component that holds the key was not decoded, the set has no object with the key, or the object does not set the field. The contents are decoded through the OID hint table when it names a type for the key, otherwise without a schema. When the set is not extensible, a key outside it is an error.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  ALG ::= CLASS { &id OBJECT IDENTIFIER UNIQUE, &Params OPTIONAL } WITH SYNTAX { ID &id [PARAMS &Params] }
+  alg-a ALG ::= { ID { 1 2 3 } PARAMS INTEGER }
+  Algs ALG ::= { alg-a, ... }
+  T ::= SEQUENCE { id ALG.&id({Algs}), params ALG.&Params({Algs}{@id}) }
+END
+```
+
+```der bad M.T
+30 07 06 02 2A 04 02 01 05
+```
+
+`1.2.4` is not the identifier of an object of `Algs`.
+
+```der good M.T
+30 07 06 02 2A 03 02 01 05
+```
+
+## E409
+
+Octets follow the top-level value: the input holds more than one value, or junk after it. Each further TLV is shown, decoded without a schema.
+
+```der bad
+05 00 05 00
+```
+
+```der good
+05 00
+```
+
+## E410
+
+A PEM example (RFC 7468) that cannot be read: it has no `-----END` line, its `-----END` line names another label, its body is not base64 (often an example shortened with `...`), or its octets are not one complete BER encoding. RFC 8792 folding and RFC 1421 headers (`Proc-Type: ...`) are undone first. OpenPGP armor (`-----BEGIN PGP ...-----`) is not PEM and is not checked.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUC...
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W411
+
+No type decodes the PEM example. Glint tries, in order, the types its label names (`CERTIFICATE` is a `Certificate` of RFC 5912 or RFC 5280, and so on), the top-level types of the document's own modules (constructed types that no other type of the module uses), then common corpus types (`Certificate`, `ContentInfo`, `OneAsymmetricKey`, ...). A type fits when the structure matches: tags, components and lengths. The closest candidate and its first mismatch are given. `glint decode` with the intended type shows where the example goes wrong.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+BAIBAg==
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+The octets are an `OCTET STRING`, not a `Pair`.
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W412
+
+The PEM example has the shape of the type it was identified as, but values that type does not allow: invalid contents (a bad time, a character the string type cannot hold), a constraint violation, or a contained value (an extension's `extnValue`) that is not an encoding of its type. Either the example or the module is wrong.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQo=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+`b` is 10, outside `0..9`.
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## I413
+
+The PEM example is valid BER but not DER (an indefinite length, a `DEFAULT` value encoded, a `SET OF` out of order, ...; see `W402`). Certificates and other signed structures must be DER.
+
+```xml bad
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MIACAQUCAQcAAA==
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+The `SEQUENCE` has an indefinite length.
+
+```xml good
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W415
+
+The PEM example decodes cleanly, but only as a type its label does not name: a PKCS #1 `RSAPrivateKey` labelled `PRIVATE KEY` (which RFC 7468 Section 10 gives to PKCS #8 `OneAsymmetricKey`), a `SubjectPublicKeyInfo` labelled `CERTIFICATE`. Either the label or the octets are wrong; readers' tools go by the label. Only raised when the corpus has the label's types.
+
+```xml bad untested
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PRIVATE KEY-----
+MAYCAQUCAQc=
+-----END PRIVATE KEY-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+With the corpus, the octets are a `Pair`, not the `OneAsymmetricKey` that `PRIVATE KEY` names.
+
+## I414
+
+Names the type each PEM example was identified as, and how: `label` (a type its label names), `decoded` (a type that decodes it, tried without the label's help). Off unless `glint.toml` has `[examples] identified = true`.
+
+```xml good untested
+<rfc><middle>
+<section><name>Module</name>
+<sourcecode type="asn.1">
+Example DEFINITIONS EXPLICIT TAGS ::= BEGIN
+  Pair ::= SEQUENCE { a INTEGER, b INTEGER (0..9) }
+END
+</sourcecode>
+</section>
+<section><name>Example</name>
+<sourcecode type="pem">
+-----BEGIN PAIR-----
+MAYCAQUCAQc=
+-----END PAIR-----
+</sourcecode>
+</section>
+</middle></rfc>
+```
+
+## W420
+
+`glint codegen` met a construct the target library cannot express, and the generated code does something else, which the message says: a `DEFAULT` value the target cannot write makes the component `OPTIONAL`; a `REAL`, `EXTERNAL`, `EMBEDDED PDV` or `CHARACTER STRING` value is kept as a raw TLV; an open type whose `@` path no enclosing record holds is kept raw; of several relations, only the first selects the type.
+
+```asn1 bad codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { reading REAL }
+END
+```
+
+```asn1 good codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { reading INTEGER }
+END
+```
+
+## W421
+
+A constraint the generated code does not check: `CONSTRAINED BY`, `PATTERN` on a target with no regular expressions, or a constraint whose values cannot be evaluated. Every other constraint is checked when a value is decoded and when it is encoded. An extensible constraint is not checked, since its extensions admit values outside its root.
+
+```asn1 bad codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= OCTET STRING (CONSTRAINED BY { -- signed by the issuer -- })
+END
+```
+
+```asn1 good codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= OCTET STRING (SIZE (1..64))
+END
+```
+
+## I422
+
+A type the IR could not lower, such as a reference to a module that is not available, or macro notation. The generated code keeps its value as a raw TLV, which decodes and re-encodes as it is.
+
+```asn1 bad codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a Missing }
+END
+```
+
+```asn1 good codegen M.T
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER }
 END
 ```

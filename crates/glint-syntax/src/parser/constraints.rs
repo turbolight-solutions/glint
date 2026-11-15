@@ -23,6 +23,14 @@ impl Parser<'_> {
         self.leave();
     }
 
+    /// The element sets of a value set without its braces, as a `Constraint` node with no parentheses.
+    pub(super) fn parse_bare_element_sets(&mut self) -> bool {
+        self.start_node(SyntaxKind::Constraint);
+        self.parse_element_set_specs();
+        self.finish_node();
+        self.cur().is_none()
+    }
+
     // X.680 49.6 ConstraintSpec, GeneralConstraint (X.682 8.1)
     fn parse_constraint_spec(&mut self) {
         match self.cur() {

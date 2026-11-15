@@ -3,7 +3,10 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use glint_corpus::{AllowedOid, ModuleRecord, OverrideTier, ParseStatus, SourceKind, SyntaxEra};
+use glint_corpus::{
+    AllowedOid, Artifact, ArtifactsData, Confidence, ModuleRecord, OverrideTier, ParseStatus,
+    SourceKind, SyntaxEra,
+};
 use glint_diag::Severity;
 
 use crate::overrides::Override;
@@ -59,6 +62,22 @@ pub struct ReportData<'a> {
     pub label_audit: &'a [AuditLine],
     /// Entries read from the IANA module identifier registries.
     pub iana_module_ids: usize,
+    /// Rows of the decoder's OID hint table.
+    pub oid_hints: usize,
+    pub hint_conflicts: &'a [HintConflict],
+    pub artifacts: &'a ArtifactsData,
+    /// OpenPGP armor blocks, which look like PEM and are left out.
+    pub openpgp_blocks: usize,
+}
+
+/// An OID, class and field that two modules bind to different types; the hint table keeps one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HintConflict {
+    pub oid: String,
+    /// `EXTENSION.&ExtnType`.
+    pub field: String,
+    pub kept: String,
+    pub others: Vec<String>,
 }
 
 fn status_name(status: ParseStatus) -> &'static str {
@@ -166,6 +185,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         "| IANA module identifier entries | {} |",
         data.iana_module_ids
     );
+    let _ = writeln!(out, "| OID hint table rows | {} |", data.oid_hints);
     let _ = writeln!(
         out,
         "| Label table and registry findings (W142, W143, W144, W146) | {} |",
@@ -308,6 +328,30 @@ pub fn render_report(data: &ReportData<'_>) -> String {
     }
     let _ = writeln!(out);
 
+    let _ = writeln!(out, "## OID hint conflicts\n");
+    let _ = writeln!(
+        out,
+        "OIDs whose objects set a type field to different types in different 2002-syntax modules. The decoder's hint \
+         table keeps the module of the most recent current RFC.\n"
+    );
+    if data.hint_conflicts.is_empty() {
+        let _ = writeln!(out, "None.\n");
+    } else {
+        for conflict in data.hint_conflicts {
+            let _ = writeln!(
+                out,
+                "- {} {}: kept {}; also {}",
+                conflict.oid,
+                conflict.field,
+                conflict.kept,
+                conflict.others.join(", ")
+            );
+        }
+        let _ = writeln!(out);
+    }
+
+    render_artifacts(&mut out, data);
+
     let _ = writeln!(out, "## Modules needing attention\n");
     let _ = writeln!(
         out,
@@ -405,4 +449,157 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         }
     }
     out
+}
+
+fn artifact_line(artifact: &Artifact) -> String {
+    let mut line = format!("- {} `{}`", artifact.id, artifact.label);
+    if let Some(section) = &artifact.section {
+        let word = if artifact.appendix {
+            "Appendix"
+        } else {
+            "Section"
+        };
+        let _ = write!(line, " ({word} {section})");
+    }
+    if let Some(root) = &artifact.root {
+        let _ = write!(line, " as {root}");
+    }
+    if artifact.obsoleted {
+        line.push_str(" (obsoleted)");
+    }
+    line
+}
+
+/// The example artifacts: counts, then every example that its label's type does not decode, every one with errors
+/// (an erratum candidate, once the decoder is right), every one with DER or constraint findings, and every broken
+/// block (Codegen and Decoder Design, Example artifacts: Corpus self-audit).
+fn render_artifacts(out: &mut String, data: &ReportData<'_>) {
+    let artifacts = &data.artifacts.artifacts;
+    let _ = writeln!(out, "## Example artifacts\n");
+    let documents: std::collections::BTreeSet<&str> =
+        artifacts.iter().map(|a| a.document.as_str()).collect();
+    let _ = writeln!(
+        out,
+        "{} PEM examples in {} documents; {} broken blocks; {} OpenPGP armor blocks left out.\n",
+        artifacts.len(),
+        documents.len(),
+        data.artifacts.broken.len(),
+        data.openpgp_blocks
+    );
+    let _ = writeln!(out, "| Confidence | Examples |\n| --- | --- |");
+    for confidence in [Confidence::Label, Confidence::Decoded, Confidence::Unknown] {
+        let count = artifacts
+            .iter()
+            .filter(|a| a.confidence == confidence)
+            .count();
+        let _ = writeln!(out, "| {} | {count} |", confidence.as_str());
+    }
+    let _ = writeln!(out);
+    let mut labels: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for artifact in artifacts {
+        let entry = labels.entry(artifact.label.as_str()).or_default();
+        entry.0 = entry.0.saturating_add(1);
+        if artifact.confidence != Confidence::Unknown {
+            entry.1 = entry.1.saturating_add(1);
+        }
+    }
+    let _ = writeln!(
+        out,
+        "| Label | Examples | Identified |\n| --- | --- | --- |"
+    );
+    for (label, (count, identified)) in &labels {
+        let _ = writeln!(out, "| {label} | {count} | {identified} |");
+    }
+    let _ = writeln!(out);
+
+    let _ = writeln!(out, "### Not decoded as their label's type\n");
+    let _ = writeln!(
+        out,
+        "Examples whose label the decoder's label map knows, that none of the label's types fits.\n"
+    );
+    let unlabelled: Vec<&Artifact> = artifacts
+        .iter()
+        .filter(|a| {
+            !glint_decode::label_roots(&a.label).is_empty() && a.confidence != Confidence::Label
+        })
+        .collect();
+    list(out, &unlabelled, |a| {
+        a.first_error.clone().map(|e| format!("closest: {e}"))
+    });
+
+    let _ = writeln!(out, "### Erratum candidates\n");
+    let _ = writeln!(
+        out,
+        "Examples identified as a type whose decode has errors, and examples that decode cleanly as a type their \
+         label does not name. Once the decoder is right, the example is wrong: input to errata triage.\n"
+    );
+    let errata: Vec<&Artifact> = artifacts
+        .iter()
+        .filter(|a| {
+            (a.confidence != Confidence::Unknown && a.has_errors())
+                || (a.confidence == Confidence::Decoded
+                    && !glint_decode::label_roots(&a.label).is_empty())
+        })
+        .collect();
+    list(out, &errata, |a| {
+        Some(
+            a.first_error.clone().unwrap_or_else(|| {
+                format!("decodes cleanly, but not as a type `{}` names", a.label)
+            }),
+        )
+    });
+
+    let _ = writeln!(out, "### Unknown type\n");
+    let _ = writeln!(
+        out,
+        "Examples with a label the label map does not know, that no candidate type fits.\n"
+    );
+    let unknown: Vec<&Artifact> = artifacts
+        .iter()
+        .filter(|a| {
+            glint_decode::label_roots(&a.label).is_empty() && a.confidence == Confidence::Unknown
+        })
+        .collect();
+    list(out, &unknown, |a| {
+        a.first_error.clone().map(|e| format!("closest: {e}"))
+    });
+
+    let _ = writeln!(out, "### DER and constraint findings\n");
+    let noted: Vec<&Artifact> = artifacts
+        .iter()
+        .filter(|a| {
+            a.confidence != Confidence::Unknown
+                && a.findings.iter().any(|c| c == "W402" || c == "E407")
+        })
+        .collect();
+    list(out, &noted, |a| Some(a.findings.join(", ")));
+
+    let _ = writeln!(out, "### Broken PEM blocks\n");
+    if data.artifacts.broken.is_empty() {
+        let _ = writeln!(out, "None.\n");
+    } else {
+        for broken in &data.artifacts.broken {
+            let _ = writeln!(
+                out,
+                "- {} `{}` (line {}): {}",
+                broken.id, broken.label, broken.line, broken.message
+            );
+        }
+        let _ = writeln!(out);
+    }
+}
+
+fn list(out: &mut String, artifacts: &[&Artifact], detail: impl Fn(&Artifact) -> Option<String>) {
+    if artifacts.is_empty() {
+        let _ = writeln!(out, "None.\n");
+        return;
+    }
+    for artifact in artifacts {
+        let mut line = artifact_line(artifact);
+        if let Some(detail) = detail(artifact) {
+            let _ = write!(line, ": {detail}");
+        }
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = writeln!(out);
 }

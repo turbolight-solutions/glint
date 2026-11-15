@@ -1,6 +1,6 @@
 [package]
 name = "glint-errata"
-version = "0.1.0"
+version.workspace = true
 description = "RFC errata: the feed, the triage ledger, per-erratum patches to the RFC source, and the triage queue"
 edition.workspace = true
 license.workspace = true

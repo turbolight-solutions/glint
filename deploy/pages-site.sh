@@ -49,11 +49,11 @@ if [ ! -f "$dir/latest.json" ]; then
     echo "::error::$live/data/v$schema/latest.json names no build" >&2
     exit 1
   fi
-  for file in corpus.json corpus.json.sha256 documents.bin.gz documents.bin.gz.sha256; do
+  for file in corpus.json corpus.json.sha256 documents.bin.gz documents.bin.gz.sha256 artifacts.json artifacts.json.sha256; do
     curl --fail --silent --show-error --location --create-dirs --output "$dir/$build/$file" \
       "$live/data/v$schema/$build/$file"
   done
-  (cd "$dir/$build" && sha256sum --check --quiet corpus.json.sha256 documents.bin.gz.sha256)
+  (cd "$dir/$build" && sha256sum --check --quiet corpus.json.sha256 documents.bin.gz.sha256 artifacts.json.sha256)
 fi
 
 build="$(jq -r .build "$dir/latest.json")"

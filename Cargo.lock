@@ -623,11 +623,14 @@ dependencies = [
  "clap",
  "etcetera",
  "glint-check",
+ "glint-codegen",
  "glint-corpus",
  "glint-corpus-build",
+ "glint-decode",
  "glint-diag",
  "glint-errata",
  "glint-extract",
+ "glint-ir",
  "glint-sema",
  "glint-syntax",
  "rayon",
@@ -643,8 +646,10 @@ name = "glint-check"
 version = "0.1.0"
 dependencies = [
  "glint-corpus",
+ "glint-decode",
  "glint-diag",
  "glint-extract",
+ "glint-ir",
  "glint-sema",
  "glint-syntax",
  "insta",
@@ -654,6 +659,20 @@ dependencies = [
  "sha2",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "glint-codegen"
+version = "0.1.0"
+dependencies = [
+ "glint-check",
+ "glint-corpus",
+ "glint-decode",
+ "glint-diag",
+ "glint-ir",
+ "insta",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -673,6 +692,7 @@ dependencies = [
  "flate2",
  "glint-check",
  "glint-corpus",
+ "glint-decode",
  "glint-diag",
  "glint-errata",
  "glint-extract",
@@ -685,6 +705,17 @@ dependencies = [
  "serde_json",
  "sha2",
  "toml",
+]
+
+[[package]]
+name = "glint-decode"
+version = "0.1.0"
+dependencies = [
+ "glint-diag",
+ "glint-ir",
+ "proptest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -714,6 +745,7 @@ dependencies = [
 name = "glint-extract"
 version = "0.1.0"
 dependencies = [
+ "glint-decode",
  "glint-syntax",
  "insta",
  "proptest",
@@ -723,11 +755,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "glint-ir"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "glint-sema"
 version = "0.1.0"
 dependencies = [
  "glint-corpus",
  "glint-diag",
+ "glint-ir",
  "glint-syntax",
  "insta",
  "serde",
@@ -750,9 +791,12 @@ name = "glint-wasm"
 version = "0.1.0"
 dependencies = [
  "glint-check",
+ "glint-codegen",
  "glint-corpus",
+ "glint-decode",
  "glint-diag",
  "glint-extract",
+ "glint-ir",
  "glint-sema",
  "glint-syntax",
  "serde",

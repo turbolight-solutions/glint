@@ -4,7 +4,9 @@ use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
-use glint_corpus::{CORPUS_FILE, Corpus, CorpusData, SCHEMA, build_date};
+use glint_corpus::{
+    ARTIFACTS_FILE, ArtifactsData, CORPUS_FILE, Corpus, CorpusData, SCHEMA, build_date,
+};
 
 pub const EXIT_OK: u8 = 0;
 pub const EXIT_ERRORS: u8 = 1;
@@ -94,6 +96,34 @@ pub fn load_corpus(explicit: Option<&Path>) -> Result<Corpus, String> {
     })?;
     warn_if_stale(&data.info.build);
     Ok(Corpus::from_data(data))
+}
+
+/// Loads the example artifacts: `--artifacts`, else the `artifacts.json` beside the corpus data that `load_corpus` would
+/// read for `corpus` (`--corpus`, `$GLINT_CORPUS`, or the downloaded data).
+pub fn load_artifacts(
+    explicit: Option<&Path>,
+    corpus: Option<&Path>,
+) -> Result<ArtifactsData, String> {
+    let beside_corpus = || {
+        corpus
+            .map(Path::to_path_buf)
+            .or_else(|| std::env::var_os("GLINT_CORPUS").map(PathBuf::from))
+            .or_else(cached_corpus_path)
+            .map(|path| path.with_file_name(ARTIFACTS_FILE))
+    };
+    let path = explicit
+        .map(Path::to_path_buf)
+        .or_else(beside_corpus)
+        .ok_or_else(|| {
+            "no example artifacts; run `glint corpus update`, or pass --artifacts".to_owned()
+        })?;
+    let json = std::fs::read(&path).map_err(|e| {
+        format!(
+            "cannot read the example artifacts {}: {e}; run `glint corpus update`, or pass --artifacts",
+            path.display()
+        )
+    })?;
+    ArtifactsData::from_json(&json).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn warn_if_stale(build: &str) {

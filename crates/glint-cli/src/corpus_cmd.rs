@@ -4,8 +4,8 @@ use std::process::ExitCode;
 
 use clap::{Args as ClapArgs, Subcommand};
 use glint_corpus::{
-    CORPUS_FILE, Corpus, CorpusData, CorpusProvider, ModuleRecord, Oid, ParseStatus, Pointer,
-    build_dir, latest_path,
+    ARTIFACTS_FILE, ArtifactsData, CORPUS_FILE, Corpus, CorpusData, CorpusProvider, ModuleRecord,
+    Oid, ParseStatus, Pointer, build_dir, latest_path,
 };
 use glint_diag::Versions;
 
@@ -44,12 +44,12 @@ enum Sub {
         /// Dotted object identifier
         oid: String,
     },
-    /// Download the corpus data to the user cache
+    /// Download the corpus data (`corpus.json` and the example artifacts, `artifacts.json`) to the user cache
     Update {
         /// The site to download from; the data is read from `<URL>/data/v<schema>/`
         #[arg(long, default_value = DEFAULT_SITE)]
         url: String,
-        /// Install a `corpus.json` file instead of downloading one
+        /// Install a `corpus.json` file instead of downloading one, with the `artifacts.json` beside it when there is one
         #[arg(long, conflicts_with = "url")]
         from: Option<PathBuf>,
     },
@@ -274,10 +274,25 @@ fn oid_info(corpus: &Corpus, text: &str, out: &mut impl Write) -> u8 {
 fn update(site: &str, from: Option<&Path>) -> Result<String, String> {
     let destination = cached_corpus_path()
         .ok_or_else(|| "cannot tell where the user cache is; set GLINT_CACHE_DIR".to_owned())?;
+    let artifacts_destination = destination.with_file_name(ARTIFACTS_FILE);
     if let Some(path) = from {
         let bytes =
             std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-        return install(&bytes, None, None, &destination);
+        let mut message = install(&bytes, None, None, &destination)?;
+        let beside = path.with_file_name(ARTIFACTS_FILE);
+        let build = installed_build(&destination).unwrap_or_default();
+        if let Ok(artifacts) = std::fs::read(&beside) {
+            message.push_str(&install_artifacts(
+                &artifacts,
+                None,
+                &build,
+                &artifacts_destination,
+            )?);
+        } else {
+            // Artifacts of another build must not stay beside the new corpus.
+            let _ = std::fs::remove_file(&artifacts_destination);
+        }
+        return Ok(message);
     }
     let site = site.trim_end_matches('/');
     let url = format!("{site}/{}", latest_path());
@@ -287,22 +302,97 @@ fn update(site: &str, from: Option<&Path>) -> Result<String, String> {
     let build = Pointer::from_json(&bytes)
         .map_err(|e| format!("{url}: {e}"))?
         .build;
-    if installed_build(&destination).as_deref() == Some(build.as_str()) {
-        return Ok(format!(
-            "the corpus data is up to date (build {build}) at {}",
-            destination.display()
-        ));
+    let artifacts_installed =
+        installed_artifacts_build(&artifacts_destination).as_deref() == Some(build.as_str());
+    let mut message = if installed_build(&destination).as_deref() == Some(build.as_str()) {
+        if artifacts_installed {
+            return Ok(format!(
+                "the corpus data is up to date (build {build}) at {}",
+                destination.display()
+            ));
+        }
+        format!("the corpus data is up to date (build {build})")
+    } else {
+        let (bytes, digest) = fetch_verifiable(site, &build, CORPUS_FILE)?;
+        install(&bytes, Some(&digest), Some(&build), &destination)?
+    };
+    if !artifacts_installed {
+        let (bytes, digest) = fetch_verifiable(site, &build, ARTIFACTS_FILE)?;
+        message.push_str(&install_artifacts(
+            &bytes,
+            Some(&digest),
+            &build,
+            &artifacts_destination,
+        )?);
     }
-    let url = format!("{site}/{}/{CORPUS_FILE}", build_dir(&build));
+    Ok(message)
+}
+
+/// Downloads the data file `name` of `build` and its published digest.
+fn fetch_verifiable(site: &str, build: &str, name: &str) -> Result<(Vec<u8>, String), String> {
+    let url = format!("{site}/{}/{name}", build_dir(build));
     let bytes = fetch_data(&url)?.ok_or_else(|| format!("{url}: not found"))?;
     let digest = fetch_data(&format!("{url}.sha256"))?
         .ok_or_else(|| format!("{url}.sha256: not found; the download cannot be verified"))?;
-    install(
-        &bytes,
-        Some(&String::from_utf8_lossy(&digest)),
-        Some(&build),
-        &destination,
-    )
+    Ok((bytes, String::from_utf8_lossy(&digest).into_owned()))
+}
+
+/// The build of the example artifacts at `path`, if they are readable data of this schema.
+fn installed_artifacts_build(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    ArtifactsData::from_json(&bytes).ok().map(|data| data.build)
+}
+
+/// Fails unless `bytes` match the digest line `expected` (`<hex>  <name>`).
+fn verify_digest(bytes: &[u8], expected: &str) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    let wanted = expected.split_whitespace().next().unwrap_or_default();
+    let actual: String = Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if wanted.eq_ignore_ascii_case(&actual) {
+        Ok(())
+    } else {
+        Err(format!(
+            "the download does not match its published digest (expected {wanted}, got {actual})"
+        ))
+    }
+}
+
+/// Writes `bytes` to `destination` through a temporary file beside it.
+fn replace_file(bytes: &[u8], destination: &Path) -> Result<(), String> {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| "the cache path has no directory".to_owned())?;
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    let temporary = destination.with_extension("json.part");
+    std::fs::write(&temporary, bytes)
+        .and_then(|()| std::fs::rename(&temporary, destination))
+        .map_err(|e| format!("cannot write {}: {e}", destination.display()))
+}
+
+/// Checks the digest (when one is given), that the bytes are example artifacts of this schema and of `build`, then
+/// replaces `destination`. Returns a sentence to append to the corpus's message.
+fn install_artifacts(
+    bytes: &[u8],
+    expected_sha256: Option<&str>,
+    build: &str,
+    destination: &Path,
+) -> Result<String, String> {
+    if let Some(expected) = expected_sha256 {
+        verify_digest(bytes, expected)?;
+    }
+    let data = ArtifactsData::from_json(bytes)
+        .map_err(|e| format!("the download is not usable artifact data: {e}"))?;
+    data.require_build(build).map_err(|e| e.to_string())?;
+    replace_file(bytes, destination)?;
+    Ok(format!(
+        "; {} example artifacts at {}",
+        data.artifacts.len(),
+        destination.display()
+    ))
 }
 
 /// The build of the data at `path`, if it is readable data of this schema.
@@ -321,18 +411,8 @@ fn install(
     expected_build: Option<&str>,
     destination: &Path,
 ) -> Result<String, String> {
-    use sha2::{Digest, Sha256};
     if let Some(expected) = expected_sha256 {
-        let wanted = expected.split_whitespace().next().unwrap_or_default();
-        let actual: String = Sha256::digest(bytes)
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        if !wanted.eq_ignore_ascii_case(&actual) {
-            return Err(format!(
-                "the download does not match its published digest (expected {wanted}, got {actual})"
-            ));
-        }
+        verify_digest(bytes, expected)?;
     }
     let data = CorpusData::from_json(bytes)
         .map_err(|e| format!("the download is not usable corpus data: {e}"))?;
@@ -344,15 +424,7 @@ fn install(
             data.info.build
         ));
     }
-    let parent = destination
-        .parent()
-        .ok_or_else(|| "the cache path has no directory".to_owned())?;
-    std::fs::create_dir_all(parent)
-        .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
-    let temporary = destination.with_extension("json.part");
-    std::fs::write(&temporary, bytes)
-        .and_then(|()| std::fs::rename(&temporary, destination))
-        .map_err(|e| format!("cannot write {}: {e}", destination.display()))?;
+    replace_file(bytes, destination)?;
     // The cache file of Glint versions that embedded a corpus.
     if let Some(old) = cache_dir().map(|dir| dir.join("corpus.bundle")) {
         let _ = std::fs::remove_file(old);
@@ -396,6 +468,25 @@ mod tests {
         assert_eq!(std::fs::read(&destination).unwrap(), bytes);
         assert_eq!(
             installed_build(&destination).as_deref(),
+            Some("2026-11-05.0123abcd")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn artifacts_install_only_for_the_corpus_build() {
+        let dir = std::env::temp_dir().join(format!("glint-install-art-{}", std::process::id()));
+        let destination = dir.join(ARTIFACTS_FILE);
+        let data = ArtifactsData {
+            build: "2026-11-05.0123abcd".to_owned(),
+            ..ArtifactsData::default()
+        };
+        let bytes = data.to_json();
+        assert!(install_artifacts(&bytes, None, "2026-11-06.0123abcd", &destination).is_err());
+        assert!(!destination.exists());
+        install_artifacts(&bytes, None, "2026-11-05.0123abcd", &destination).unwrap();
+        assert_eq!(
+            installed_artifacts_build(&destination).as_deref(),
             Some("2026-11-05.0123abcd")
         );
         let _ = std::fs::remove_dir_all(&dir);

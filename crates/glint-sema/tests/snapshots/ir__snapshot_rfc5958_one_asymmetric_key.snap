@@ -1,0 +1,45 @@
+---
+source: crates/glint-sema/tests/ir.rs
+expression: "glint_ir::dump(&set)"
+---
+root #0
+
+#0 OneAsymmetricKey (AsymmetricKeyPackageModuleV1)
+  SEQUENCE { ...
+    version: -> #1 Version  { value=0..0,... }
+    privateKeyAlgorithm: -> #2 PrivateKeyAlgorithmIdentifier
+    privateKey: -> #4 PrivateKey
+    attributes OPTIONAL: [0] IMPLICIT -> #5 Attributes
+    publicKey OPTIONAL +ext [[0 v2]]: [1] IMPLICIT -> #7 PublicKey
+  }
+
+#1 Version (AsymmetricKeyPackageModuleV1)
+  INTEGER { v1(0), v2(1) } (0, ..., 1)  { value=0..0,... }
+
+#2 PrivateKeyAlgorithmIdentifier (AsymmetricKeyPackageModuleV1)
+  -> #3 AlgorithmIdentifierPrivateKeyAlgorithms
+
+#3 AlgorithmIdentifierPrivateKeyAlgorithms (AlgorithmInformation-2009) = AlgorithmIdentifier{PUBLIC-KEY, { PrivateKeyAlgorithms }}
+  SEQUENCE {
+    algorithm: OBJECT IDENTIFIER (table(set#0 &id))
+    parameters OPTIONAL: open type PUBLIC-KEY.&Params table(set#0 &Params @algorithm)
+  }
+
+#4 PrivateKey (AsymmetricKeyPackageModuleV1)
+  OCTET STRING
+
+#5 Attributes (AsymmetricKeyPackageModuleV1)
+  SET OF -> #6 AttributeOneAsymmetricKeyAttributes
+
+#6 AttributeOneAsymmetricKeyAttributes (CryptographicMessageSyntax-2009) = Attribute{{ OneAsymmetricKeyAttributes }}
+  SEQUENCE {
+    attrType: OBJECT IDENTIFIER (table(set#1 &id))
+    attrValues: SET OF open type ATTRIBUTE.&Type table(set#1 &Type @attrType)
+  }
+
+#7 PublicKey (AsymmetricKeyPackageModuleV1)
+  BIT STRING
+
+set#0 PrivateKeyAlgorithms (AsymmetricKeyPackageModuleV1) PUBLIC-KEY key &id ...
+
+set#1 OneAsymmetricKeyAttributes (AsymmetricKeyPackageModuleV1) ATTRIBUTE key &id ...

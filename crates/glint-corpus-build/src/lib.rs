@@ -2,6 +2,7 @@
 //! local RFC mirror. The library is what the `corpus-build` binary runs, and what `glint errata prove` builds the corpus
 //! with on both sides of an edit.
 
+mod artifacts;
 mod build;
 mod collect;
 pub mod errata;

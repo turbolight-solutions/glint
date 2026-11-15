@@ -1,0 +1,19 @@
+---
+source: crates/glint-check/tests/decode.rs
+expression: render_text(&decoded)
+---
+    0:d=0  hl=2 l= inf cons: SEQUENCE                       T
+       ! W402 warning: indefinite length (X.690 10.1)
+    2:d=1  hl=2 l= inf cons:  [0] IMPLICIT                  a: AABB
+        ! W402 warning: indefinite length (X.690 10.1)
+        ! W402 warning: a string in the constructed form (X.690 10.2)
+    4:d=2  hl=2 l=   1 prim:   OCTET STRING                 AA
+    7:d=2  hl=2 l=   1 prim:   OCTET STRING                 BB
+   12:d=1  hl=2 l=   1 prim:  [1] IMPLICIT                  b: FALSE
+        ! W402 warning: `b` is encoded with its DEFAULT value (X.690 11.5)
+   15:d=1  hl=2 l=   6 cons:  [2] IMPLICIT                  c:
+        ! W402 warning: the elements of a SET OF are not in ascending order of their encodings (X.690 11.6)
+   17:d=2  hl=2 l=   1 prim:   INTEGER                      7
+   20:d=2  hl=2 l=   1 prim:   INTEGER                      3
+   23:d=1  hl=2 l=   1 prim:  [3] IMPLICIT                  d: @
+        ! E401 error: PrintableString cannot hold the character '@' (U+0040)

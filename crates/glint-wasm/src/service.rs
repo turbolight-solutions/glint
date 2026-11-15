@@ -9,9 +9,10 @@ use glint_check::{
     check_extraction,
 };
 use glint_corpus::{
-    AppliedErratum, Corpus, CorpusData, CorpusProvider, DataError, DocumentBlock, DocumentRecord,
-    Documents, ErrataFailure, LabelEvidence, LabelProblem, ModuleRecord, Oid, OidAssignment,
-    ParseStatus, SCHEMA, SyntaxEra, document_title, draft_name, preferred, unique_label,
+    AppliedErratum, ArtifactsData, Corpus, CorpusData, CorpusProvider, DataError, DocumentBlock,
+    DocumentRecord, Documents, ErrataFailure, LabelEvidence, LabelProblem, ModuleRecord, Oid,
+    OidAssignment, ParseStatus, SCHEMA, SyntaxEra, document_title, draft_name, preferred,
+    unique_label,
 };
 use glint_diag::{Diagnostic, FileId};
 use glint_extract::{
@@ -34,18 +35,18 @@ pub struct ServiceError {
 }
 
 impl ServiceError {
-    fn new(code: &'static str, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
         }
     }
 
-    fn bad_request(message: impl Into<String>) -> Self {
+    pub(crate) fn bad_request(message: impl Into<String>) -> Self {
         Self::new("bad_request", message)
     }
 
-    fn not_found(message: impl Into<String>) -> Self {
+    pub(crate) fn not_found(message: impl Into<String>) -> Self {
         Self::new("not_found", message)
     }
 }
@@ -68,6 +69,8 @@ pub type Result<T> = std::result::Result<T, ServiceError>;
 pub struct Service {
     corpus: Corpus,
     documents: Option<Documents>,
+    /// `artifacts.json`, which the page loads when the workbench's Artifacts tab opens.
+    pub(crate) artifacts: Option<ArtifactsData>,
 }
 
 #[derive(Serialize)]
@@ -94,6 +97,13 @@ impl Service {
             .is_some_and(|d| d.build() != self.corpus.info().build)
         {
             self.documents = None;
+        }
+        if self
+            .artifacts
+            .as_ref()
+            .is_some_and(|a| a.build != self.corpus.info().build)
+        {
+            self.artifacts = None;
         }
         Ok(self.corpus_info())
     }
@@ -374,7 +384,13 @@ impl Service {
         }
     }
 
-    pub fn module(&self, source: &str, name: &str, oid: Option<&str>) -> Result<ModuleDetail> {
+    /// The corpus module `name` of `source` (`rfc5280`, or `5280`), the one with `oid` when the source has several.
+    pub(crate) fn module_index(
+        &self,
+        source: &str,
+        name: &str,
+        oid: Option<&str>,
+    ) -> Result<usize> {
         let wanted_oid = oid
             .map(|text| {
                 text.parse::<Oid>()
@@ -395,8 +411,15 @@ impl Service {
                 })
             })
             .collect();
-        let record = preferred(corpus, &candidates)
-            .and_then(|i| corpus.modules().get(i))
+        preferred(corpus, &candidates)
+            .ok_or_else(|| ServiceError::not_found(format!("no module `{name}` in `{source}`")))
+    }
+
+    pub fn module(&self, source: &str, name: &str, oid: Option<&str>) -> Result<ModuleDetail> {
+        let corpus = &self.corpus;
+        let record = corpus
+            .modules()
+            .get(self.module_index(source, name, oid)?)
             .ok_or_else(|| ServiceError::not_found(format!("no module `{name}` in `{source}`")))?;
         let label = unique_label(corpus, record);
         let options = CheckOptions {
@@ -581,7 +604,7 @@ impl DocumentFormat {
     }
 }
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FormatName {
     Xml,
