@@ -19,8 +19,8 @@ const TABS: readonly WorkbenchTab[] = ["decode", "artifacts", "codegen"];
 
 /**
  * The workbench: the picked module and type (`source` is a corpus document, or {@link CHECKER_SOURCE} for a module of the
- * document open in the checker), the tab, an artifact the Decode tab holds, the Artifacts tab's document filter, and the
- * Codegen tab's backend.
+ * document open in the checker), the tab, an artifact the Decode tab holds, the Artifacts tab's document filter and
+ * column sort (`-size`, as `formatArtifactSort` writes it), and the Codegen tab's backend.
  * Pasted or dropped input is never part of the hash.
  */
 export interface WorkbenchRoute {
@@ -32,6 +32,7 @@ export interface WorkbenchRoute {
   type?: string;
   artifact?: string;
   document?: string;
+  sort?: string;
   backend?: string;
 }
 
@@ -66,6 +67,8 @@ export function parseHash(hash: string): Route {
     if (artifact) route.artifact = artifact;
     const document = params.get("document");
     if (document) route.document = document;
+    const sort = params.get("sort");
+    if (sort) route.sort = sort;
     const backend = params.get("backend");
     if (backend) route.backend = backend;
     return route;
@@ -130,6 +133,7 @@ export function workbenchHash(route: Omit<WorkbenchRoute, "view">): string {
   if (route.source && route.module && route.moduleOid) params.set("oid", route.moduleOid);
   if (route.artifact) params.set("artifact", route.artifact);
   if (route.document) params.set("document", route.document);
+  if (route.sort) params.set("sort", route.sort);
   if (route.backend) params.set("backend", route.backend);
   const query = params.toString();
   return query ? `${path}?${query}` : path;

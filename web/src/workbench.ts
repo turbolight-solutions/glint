@@ -21,6 +21,15 @@ import {
   documentTitle,
 } from "./api";
 import type { Extension } from "@codemirror/state";
+import {
+  type ArtifactSort,
+  type ArtifactSortKey,
+  artifactType,
+  formatArtifactSort,
+  nextArtifactSort,
+  parseArtifactSort,
+  sortArtifacts,
+} from "./artifactsort";
 import { debounce, h, replace } from "./dom";
 import { type EditorHandle, createEditor } from "./editor";
 import { CHECKER_SOURCE, type WorkbenchRoute, type WorkbenchTab, hashForTarget, moduleHash, rootRoute, workbenchHash } from "./router";
@@ -35,6 +44,15 @@ const HEX_SHOWN_BYTES = 64 * 1024;
 const PAGE_SIZE = 50;
 
 const DEFAULT_BACKEND = "rasn";
+
+const ARTIFACT_COLUMNS: { key: ArtifactSortKey; label: string }[] = [
+  { key: "example", label: "Example" },
+  { key: "label", label: "Label" },
+  { key: "type", label: "Type" },
+  { key: "confidence", label: "Confidence" },
+  { key: "size", label: "Size" },
+  { key: "findings", label: "Findings" },
+];
 
 const SEVERITY_BADGE: Record<DecodeFinding["severity"], string> = {
   error: "text-bg-danger",
@@ -112,6 +130,9 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
   let artifactsController: AbortController | null = null;
   let artifactList: ArtifactList | null = null;
   let artifactOffset = 0;
+  let artifactSort: ArtifactSort | null = null;
+  /** The artifacts the filters leave, in the column sort's order. */
+  let sortedArtifacts: ArtifactRow[] = [];
 
   // Navigation -----------------------------------------------------------------------------
 
@@ -137,6 +158,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     if (artifactId) route.artifact = artifactId;
     const document = documentFilter.value.trim();
     if (document) route.document = document;
+    if (artifactSort) route.sort = formatArtifactSort(artifactSort);
     if (backendSelect.value && backendSelect.value !== DEFAULT_BACKEND) route.backend = backendSelect.value;
     return route;
   }
@@ -357,8 +379,8 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     h("div", { class: "workbench-type" }, typeInput, typeList),
     noSchemaCheck,
   );
-  /** The picker, above the Decode and Codegen tabs. */
-  const pickerBar = h("div", { class: "d-flex flex-column gap-2 px-3 pt-3 flex-shrink-0" }, picker, pickerNote);
+  /** The picker, above the Decode and Codegen tabs; an element of its own, since `d-flex` would override `hidden`. */
+  const pickerBar = h("div", { class: "flex-shrink-0" }, h("div", { class: "d-flex flex-column gap-2 px-3 pt-3" }, picker, pickerNote));
 
   // Input ------------------------------------------------------------------------------------
 
@@ -867,6 +889,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
       const list = await api.artifacts(query(), run.signal);
       if (run.signal.aborted) return;
       artifactList = list;
+      sortedArtifacts = sortArtifacts(list.artifacts, artifactSort);
       artifactOffset = 0;
       const chosen = labelFilter.value;
       replace(labelFilter, h("option", { value: "" }, "Any label"), ...list.labels.map((label) => h("option", { value: label, selected: label === chosen }, label)));
@@ -946,7 +969,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
 
   function artifactRow(row: ArtifactRow): HTMLElement {
     const confidence = CONFIDENCE_BADGE[row.confidence];
-    const typeName = row.root ? (row.root.split("#").pop() ?? row.root) : null;
+    const typeName = artifactType(row);
     return h(
       "tr",
       {},
@@ -974,11 +997,38 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     );
   }
 
+  function sortArtifactsBy(key: ArtifactSortKey): void {
+    artifactSort = nextArtifactSort(artifactSort, key);
+    sortedArtifacts = sortArtifacts(artifactList?.artifacts ?? [], artifactSort);
+    artifactOffset = 0;
+    syncHash();
+    renderArtifacts();
+  }
+
+  function artifactHeader(column: { key: ArtifactSortKey; label: string }): HTMLElement {
+    const active = artifactSort?.key === column.key ? artifactSort.direction : null;
+    const arrow = active === "asc" ? " \u25B2" : active === "desc" ? " \u25BC" : "";
+    return h(
+      "th",
+      { "aria-sort": active === "asc" ? "ascending" : active === "desc" ? "descending" : undefined },
+      h(
+        "button",
+        {
+          class: `sort-button${active ? " active" : ""}`,
+          type: "button",
+          title: column.key === "findings" ? "Sort by severity" : `Sort by ${column.label.toLowerCase()}`,
+          onclick: () => sortArtifactsBy(column.key),
+        },
+        column.label + arrow,
+      ),
+    );
+  }
+
   function renderArtifacts(): void {
     const list = artifactList;
     if (!list) return;
     const total = list.artifacts.length;
-    const page = list.artifacts.slice(artifactOffset, artifactOffset + PAGE_SIZE);
+    const page = sortedArtifacts.slice(artifactOffset, artifactOffset + PAGE_SIZE);
     const broken = list.broken.length;
     artifactsSummary.textContent = `${total} example${total === 1 ? "" : "s"}${broken ? `, ${broken} broken block${broken === 1 ? "" : "s"}` : ""} · data ${list.build}`;
     const pager =
@@ -1013,7 +1063,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
             h(
               "table",
               { class: "table table-sm align-middle" },
-              h("thead", {}, h("tr", {}, ...["Example", "Label", "Type", "Confidence", "Size", "Findings", ""].map((label) => h("th", {}, label)))),
+              h("thead", {}, h("tr", {}, ...ARTIFACT_COLUMNS.map(artifactHeader), h("th", {}))),
               h("tbody", {}, ...page.map(artifactRow)),
             ),
           ),
@@ -1280,6 +1330,13 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
         confidenceFilter.value = "";
         errorsFilter.checked = false;
         documentChanged = true;
+      }
+      const sort = parseArtifactSort(route.sort);
+      if ((sort ? formatArtifactSort(sort) : "") !== (artifactSort ? formatArtifactSort(artifactSort) : "")) {
+        artifactSort = sort;
+        sortedArtifacts = sortArtifacts(artifactList?.artifacts ?? [], artifactSort);
+        artifactOffset = 0;
+        renderArtifacts();
       }
       if (route.artifact && route.artifact !== artifactId) void loadArtifact(route.artifact, route);
       else if (pickChanged) void runDecode();

@@ -120,6 +120,8 @@ describe("workbench routes", () => {
     expect(parseHash(hash)).toEqual({ view: "workbench", ...route });
     expect(workbenchHash({ tab: "artifacts", document: "rfc9500" })).toBe("#workbench?tab=artifacts&document=rfc9500");
     expect(workbenchHash({ tab: "decode" })).toBe("#workbench");
+    expect(workbenchHash({ tab: "artifacts", sort: "-size" })).toBe("#workbench?tab=artifacts&sort=-size");
+    expect(parseHash("#workbench?tab=artifacts&sort=-size")).toEqual({ view: "workbench", tab: "artifacts", sort: "-size" });
     expect(workbenchHash({ tab: "codegen", source: "rfc5912", module: "PKIX1Explicit-2009", type: "Certificate", backend: "rasn" })).toBe(
       "#workbench/rfc5912/PKIX1Explicit-2009/Certificate?tab=codegen&backend=rasn",
     );
