@@ -67,9 +67,9 @@ jobs:
           [ ! -d in/site ] || site="$(find in/site -name 'glint-site-*.zip' | head -n 1)"
           [ ! -d in/data ] || data="$(find in/data -name 'glint-data-*.zip' | head -n 1)"
           deploy/pages-site.sh "$tag" "$site" "$data"
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
