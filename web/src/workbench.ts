@@ -1,10 +1,13 @@
-// The workbench (`#workbench`): decode PEM, base64 or DER as a type of a corpus module or of the checker's document, and
-// browse the PEM examples of the RFCs and drafts (Codegen and Decoder Design, Web: `#/workbench`).
+// The workbench (`#workbench`): decode PEM, base64 or DER as a type of a corpus module or of the checker's document,
+// browse the PEM examples of the RFCs and drafts, and generate code for a type (Codegen and Decoder Design, Web:
+// `#/workbench`).
 import {
   ApiError,
   type ArtifactList,
   type ArtifactQuery,
   type ArtifactRow,
+  type BackendMeta,
+  type CodegenResponse,
   type Confidence,
   type DecodeFinding,
   type DecodeRequest,
@@ -17,9 +20,12 @@ import {
   api,
   documentTitle,
 } from "./api";
+import type { Extension } from "@codemirror/state";
 import { debounce, h, replace } from "./dom";
+import { type EditorHandle, createEditor } from "./editor";
 import { CHECKER_SOURCE, type WorkbenchRoute, type WorkbenchTab, hashForTarget, moduleHash, rootRoute, workbenchHash } from "./router";
 import { byteOwners, flatten, formatSize, fromBase64, holdsContents, shortType, tagText, valueText } from "./tlv";
+import { zip } from "./zip";
 
 const DECODE_MS = 300;
 const SEARCH_MS = 200;
@@ -27,6 +33,8 @@ const MAX_FILE_BYTES = 8_000_000;
 /** The hex view shows this much of a large input. */
 const HEX_SHOWN_BYTES = 64 * 1024;
 const PAGE_SIZE = 50;
+
+const DEFAULT_BACKEND = "rasn";
 
 const SEVERITY_BADGE: Record<DecodeFinding["severity"], string> = {
   error: "text-bg-danger",
@@ -109,11 +117,13 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
 
   const decodeLink = h("a", { class: "nav-link", href: "#workbench" }, "Decode");
   const artifactsLink = h("a", { class: "nav-link", href: "#workbench?tab=artifacts" }, "Artifacts");
+  const codegenLink = h("a", { class: "nav-link", href: "#workbench?tab=codegen" }, "Codegen");
   const nav = h(
     "ul",
     { class: "nav nav-tabs px-3 pt-2 flex-shrink-0" },
     h("li", { class: "nav-item" }, decodeLink),
     h("li", { class: "nav-item" }, artifactsLink),
+    h("li", { class: "nav-item" }, codegenLink),
   );
 
   function currentRoute(): Omit<WorkbenchRoute, "view"> {
@@ -127,6 +137,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     if (artifactId) route.artifact = artifactId;
     const document = documentFilter.value.trim();
     if (document) route.document = document;
+    if (backendSelect.value && backendSelect.value !== DEFAULT_BACKEND) route.backend = backendSelect.value;
     return route;
   }
 
@@ -135,6 +146,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     const route = currentRoute();
     decodeLink.setAttribute("href", workbenchHash({ ...route, tab: "decode" }));
     artifactsLink.setAttribute("href", workbenchHash({ ...route, tab: "artifacts" }));
+    codegenLink.setAttribute("href", workbenchHash({ ...route, tab: "codegen" }));
     const hash = workbenchHash(route);
     if (window.location.hash !== hash) history.replaceState(null, "", hash);
   }
@@ -270,6 +282,13 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
   }
 
   function describePick(): void {
+    if (tab === "codegen") {
+      if (picked?.type) {
+        const where = picked.source === CHECKER_SOURCE ? `${picked.module} of the checker document` : `${picked.source}#${picked.module}`;
+        pickerNote.textContent = `Generating code for ${picked.type} from ${where}, and every type it reaches.`;
+      } else pickerNote.textContent = "Pick a module and a type to generate code for it and every type it reaches.";
+      return;
+    }
     if (noSchema.checked) pickerNote.textContent = "Decoding without a schema.";
     else if (picked?.type) {
       const where = picked.source === CHECKER_SOURCE ? `${picked.module} of the checker document` : `${picked.source}#${picked.module}`;
@@ -289,6 +308,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     describePick();
     syncHash();
     void runDecode();
+    if (tab === "codegen") void runCodegen();
   }
 
   function setPicker(next: Picked | null): void {
@@ -328,14 +348,17 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     void runDecode();
   });
 
+  const noSchemaCheck = h("div", { class: "form-check mb-0" }, noSchema, h("label", { class: "form-check-label small", for: "workbench-no-schema" }, "No schema"));
   const picker = h(
     "div",
     { class: "d-flex flex-wrap align-items-center gap-2" },
     sourceSelect,
     h("div", { class: "workbench-module" }, moduleInput, moduleList),
     h("div", { class: "workbench-type" }, typeInput, typeList),
-    h("div", { class: "form-check mb-0" }, noSchema, h("label", { class: "form-check-label small", for: "workbench-no-schema" }, "No schema")),
+    noSchemaCheck,
   );
+  /** The picker, above the Decode and Codegen tabs. */
+  const pickerBar = h("div", { class: "d-flex flex-column gap-2 px-3 pt-3 flex-shrink-0" }, picker, pickerNote);
 
   // Input ------------------------------------------------------------------------------------
 
@@ -780,7 +803,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
   const decodePane = h(
     "div",
     { class: "workbench-pane workbench-decode drop-zone", "data-drop-hint": "Drop a PEM, base64 or DER file to decode it" },
-    h("div", { class: "d-flex flex-column gap-2 p-3 pb-2 flex-shrink-0" }, picker, pickerNote, inputArea, decodeAlert),
+    h("div", { class: "d-flex flex-column gap-2 p-3 pb-2 flex-shrink-0" }, inputArea, decodeAlert),
     output,
   );
   let dragDepth = 0;
@@ -1025,7 +1048,206 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     artifactsTable,
   );
 
-  replace(root, nav, decodePane, artifactsPane);
+  // Codegen ----------------------------------------------------------------------------------
+
+  const backendSelect = h(
+    "select",
+    { class: "form-select form-select-sm w-auto", "aria-label": "Backend" },
+    h("option", { value: DEFAULT_BACKEND }, "rasn (Rust)"),
+  );
+  let backendsLoaded = false;
+  let codegenController: AbortController | null = null;
+  let codegen: CodegenResponse | null = null;
+  /** What the code shown was generated for, so that showing the tab again does not generate it again. */
+  let codegenKey = "";
+  let fileIndex = 0;
+  let viewer: EditorHandle | null = null;
+  /** The Rust language for the viewer, loaded with the first generated code: only the Codegen tab needs it. */
+  let rustLanguage: Promise<Extension> | null = null;
+  const loadRust = (): Promise<Extension> =>
+    (rustLanguage ??= import("@codemirror/lang-rust").then(
+      (module) => module.rust(),
+      () => [],
+    ));
+  const codegenStatus = h("span", { class: "small text-secondary", role: "status", "aria-live": "polite" });
+  const codegenAlert = h("div");
+  const fileTabs = h("div", { class: "d-flex flex-wrap gap-1", role: "tablist", "aria-label": "Generated files" });
+  const copyButton = h("button", { class: "btn btn-sm btn-outline-secondary", type: "button", disabled: true }, "Copy");
+  const downloadButton = h("button", { class: "btn btn-sm btn-outline-secondary", type: "button", disabled: true }, "Download file");
+  const zipButton = h("button", { class: "btn btn-sm btn-outline-primary", type: "button", disabled: true }, "Download all (.zip)");
+  const editorHost = h("div", { class: "workbench-code" });
+  const codegenFindings = h("div", { class: "workbench-codegen-findings small" });
+
+  async function loadBackends(): Promise<void> {
+    if (backendsLoaded) return;
+    backendsLoaded = true;
+    try {
+      const { backends } = await api.backends();
+      const chosen = backendSelect.value;
+      replace(backendSelect, ...backends.map((b: BackendMeta) => h("option", { value: b.id, title: `${b.library} ${b.library_version}` }, b.display_name)));
+      if (backends.some((b) => b.id === chosen)) backendSelect.value = chosen;
+    } catch (error) {
+      backendsLoaded = false;
+      console.error("glint: the backends could not be listed:", error);
+    }
+  }
+
+  function currentFile(): { path: string; contents: string } | null {
+    return codegen?.files[fileIndex] ?? null;
+  }
+
+  let language: Extension | null = null;
+
+  function showFile(index: number): void {
+    fileIndex = index;
+    const file = currentFile();
+    viewer ??= createEditor(editorHost, { readOnly: true, language: language ?? [] });
+    viewer.setText(file?.contents ?? "");
+    viewer.view.scrollDOM.scrollTop = 0;
+    for (const [i, button] of Array.from(fileTabs.children).entries()) {
+      const active = i === index;
+      button.classList.toggle("btn-secondary", active);
+      button.classList.toggle("btn-outline-secondary", !active);
+      button.setAttribute("aria-selected", String(active));
+    }
+    copyButton.disabled = downloadButton.disabled = file === null;
+  }
+
+  function renderCodegen(message?: string): void {
+    replace(codegenAlert, message ? h("div", { class: "alert alert-secondary py-1 small mb-0" }, message) : null);
+    if (!codegen) {
+      replace(fileTabs);
+      replace(codegenFindings);
+      codegenStatus.textContent = "";
+      zipButton.disabled = true;
+      viewer?.setText("");
+      copyButton.disabled = downloadButton.disabled = true;
+      return;
+    }
+    const { backend, files, findings } = codegen;
+    const lines = files.filter((f) => f.path !== "glint_rt.rs").reduce((n, f) => n + f.contents.split("\n").length, 0);
+    const modules = files.filter((f) => f.path !== "glint_rt.rs" && f.path !== "mod.rs").length;
+    codegenStatus.textContent = `${codegen.root} · ${modules} ${modules === 1 ? "module" : "modules"}, ${lines.toLocaleString()} lines · ${backend.library} ${backend.library_version}`;
+    replace(
+      fileTabs,
+      ...files.map((file, i) =>
+        h(
+          "button",
+          {
+            type: "button",
+            role: "tab",
+            class: "btn btn-sm btn-outline-secondary font-monospace",
+            title: file.path === "glint_rt.rs" ? "The runtime the generated code needs, vendored (MIT-0)" : file.path === "mod.rs" ? "Declares the modules" : `ASN.1 module ${file.path}`,
+            onclick: () => showFile(i),
+          },
+          file.path,
+        ),
+      ),
+    );
+    replace(
+      codegenFindings,
+      findings.length === 0
+        ? h("div", { class: "text-secondary px-3 py-2" }, "No findings: everything the types say is expressed in the generated code, constraints included.")
+        : h(
+            "ul",
+            { class: "list-unstyled mb-0 px-3 py-2" },
+            ...findings.map((f) =>
+              h(
+                "li",
+                { class: "mb-1" },
+                h("span", { class: `badge ${SEVERITY_BADGE[f.severity]} me-2`, title: `glint explain ${f.code}` }, f.code),
+                h("code", { class: "me-2" }, f.at),
+                f.message,
+              ),
+            ),
+          ),
+    );
+    zipButton.disabled = false;
+    showFile(Math.min(fileIndex, files.length - 1));
+  }
+
+  async function runCodegen(): Promise<void> {
+    codegenController?.abort();
+    if (!picked?.type) {
+      codegen = null;
+      codegenKey = "";
+      renderCodegen("Pick a module and a type above to generate code for it.");
+      return;
+    }
+    const module: ModuleRef = { source: picked.source, name: picked.module, ...(picked.oid ? { oid: picked.oid } : {}) };
+    const schema = schemaOf(module);
+    if (typeof schema === "string") {
+      codegen = null;
+      codegenKey = "";
+      renderCodegen(schema);
+      return;
+    }
+    const backend = backendSelect.value || DEFAULT_BACKEND;
+    const key = JSON.stringify([picked, backend, schema.document?.content ?? null]);
+    if (key === codegenKey && codegen) return;
+    const run = new AbortController();
+    codegenController = run;
+    codegenStatus.textContent = "Generating…";
+    replace(codegenAlert);
+    try {
+      const [answer, loaded] = await Promise.all([api.codegen({ ...schema, type: picked.type, backend }, run.signal), loadRust()]);
+      language = loaded;
+      if (run.signal.aborted) return;
+      codegen = answer;
+      codegenKey = key;
+      fileIndex = 0;
+      renderCodegen();
+    } catch (error) {
+      if (isAbort(error) || run.signal.aborted) return;
+      codegen = null;
+      codegenKey = "";
+      renderCodegen();
+      replace(codegenAlert, h("div", { class: "alert alert-danger py-1 small mb-0", role: "alert" }, describe(error)));
+    }
+  }
+
+  copyButton.addEventListener("click", () => {
+    const file = currentFile();
+    if (!file) return;
+    void navigator.clipboard.writeText(file.contents).then(
+      () => {
+        copyButton.textContent = "Copied";
+        setTimeout(() => (copyButton.textContent = "Copy"), 1500);
+      },
+      () => (copyButton.textContent = "Copy failed"),
+    );
+  });
+  downloadButton.addEventListener("click", () => {
+    const file = currentFile();
+    if (file) saveFile(file.path, file.contents, "text/plain");
+  });
+  zipButton.addEventListener("click", () => {
+    if (!codegen || !picked) return;
+    // a folder the files can be dropped into as one Rust module (`mod.rs` declares the others)
+    const folder = picked.type.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "generated";
+    const archive = zip(codegen.files.map((f) => ({ path: `${folder}/${f.path}`, contents: f.contents })));
+    saveFile(`${folder}-${codegen.backend.id}.zip`, archive, "application/zip");
+  });
+  backendSelect.addEventListener("change", () => {
+    syncHash();
+    void runCodegen();
+  });
+
+  const codegenPane = h(
+    "div",
+    { class: "workbench-pane workbench-codegen" },
+    h(
+      "div",
+      { class: "d-flex flex-column gap-2 p-3 pb-2 flex-shrink-0" },
+      h("div", { class: "d-flex flex-wrap align-items-center gap-2" }, backendSelect, copyButton, downloadButton, zipButton, codegenStatus),
+      codegenAlert,
+      fileTabs,
+    ),
+    editorHost,
+    codegenFindings,
+  );
+
+  replace(root, nav, pickerBar, decodePane, artifactsPane, codegenPane);
   renderBlock();
   describePick();
 
@@ -1034,8 +1256,17 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
       tab = route.tab;
       decodePane.hidden = tab !== "decode";
       artifactsPane.hidden = tab !== "artifacts";
+      codegenPane.hidden = tab !== "codegen";
+      pickerBar.hidden = tab === "artifacts";
+      noSchemaCheck.hidden = tab === "codegen";
       decodeLink.classList.toggle("active", tab === "decode");
       artifactsLink.classList.toggle("active", tab === "artifacts");
+      codegenLink.classList.toggle("active", tab === "codegen");
+      const backend = route.backend ?? DEFAULT_BACKEND;
+      if (backendSelect.value !== backend) {
+        if (!Array.from(backendSelect.options).some((o) => o.value === backend)) backendSelect.append(h("option", { value: backend }, backend));
+        backendSelect.value = backend;
+      }
       const next: Picked | null =
         route.source && route.module ? { source: route.source, module: route.module, ...(route.moduleOid ? { oid: route.moduleOid } : {}), type: route.type ?? "" } : null;
       const pickChanged = !samePick(next, picked);
@@ -1053,6 +1284,11 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
       if (route.artifact && route.artifact !== artifactId) void loadArtifact(route.artifact, route);
       else if (pickChanged) void runDecode();
       if (tab === "artifacts" && (!artifactsLoaded || documentChanged)) void runArtifacts();
+      if (tab === "codegen") {
+        void loadBackends();
+        void runCodegen();
+      }
+      describePick();
       syncHash();
     },
   };

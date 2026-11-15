@@ -1,7 +1,9 @@
 //! What the workbench asks of Glint (Codegen and Decoder Design, Web: `#/workbench`): decodes of PEM, base64 or DER as
-//! a type of a corpus module or of the checker's document, the types a module offers, and the example artifacts.
+//! a type of a corpus module or of the checker's document, the types a module offers, the example artifacts, and the
+//! code the backends generate for a type.
 
 use glint_check::{CorpusOracle, lower_corpus_root, lower_corpus_type, lower_user_type};
+use glint_codegen::{BackendMeta, File, Finding, Options, backend, backends, generate};
 use glint_corpus::{Artifact, ArtifactsData, BrokenArtifact, Confidence, CorpusProvider};
 use std::path::Path;
 
@@ -88,6 +90,30 @@ pub struct DecodeRequest {
     /// Decode without a schema even when a PEM label suggests one.
     #[serde(default)]
     pub no_schema: bool,
+}
+
+/// `{ module?, document?, type, backend }`: the code of a root type, for one backend.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodegenRequest {
+    #[serde(flatten)]
+    pub schema: SchemaSpec,
+    #[serde(rename = "type")]
+    pub ty: String,
+    pub backend: String,
+}
+
+#[derive(Serialize)]
+pub struct CodegenResponse {
+    backend: &'static BackendMeta,
+    /// `doc#Module.Type` or `Module.Type`.
+    root: String,
+    files: Vec<File>,
+    findings: Vec<Finding>,
+}
+
+#[derive(Serialize)]
+pub struct BackendsResponse {
+    backends: Vec<&'static BackendMeta>,
 }
 
 /// One decoded input: its octets (for the hex view) and its TLV tree.
@@ -452,5 +478,32 @@ impl Service {
             })
             .collect();
         Ok(DecodeResponse { blocks })
+    }
+
+    /// The backends the Codegen tab offers.
+    pub fn backends() -> BackendsResponse {
+        BackendsResponse {
+            backends: backends().iter().map(|b| b.meta()).collect(),
+        }
+    }
+
+    /// The code `request.backend` generates for the request's root type and everything it reaches.
+    pub fn codegen(&self, request: &CodegenRequest) -> Result<CodegenResponse> {
+        let target = backend(&request.backend).ok_or_else(|| {
+            ServiceError::bad_request(format!("no backend `{}`", request.backend))
+        })?;
+        let schema = self.schema(&request.schema, &request.ty)?;
+        let build = self.corpus().info().build.clone();
+        let options = Options {
+            glint_version: env!("CARGO_PKG_VERSION").to_owned(),
+            data_build: (request.schema.document.is_none() && !build.is_empty()).then_some(build),
+        };
+        let output = generate(&schema.set, target, &options);
+        Ok(CodegenResponse {
+            backend: target.meta(),
+            root: schema.name,
+            files: output.files,
+            findings: output.findings,
+        })
     }
 }

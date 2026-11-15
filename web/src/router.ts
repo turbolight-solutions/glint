@@ -13,11 +13,14 @@ export type Route =
   | { view: "oid"; oid?: string }
   | WorkbenchRoute;
 
-export type WorkbenchTab = "decode" | "artifacts";
+export type WorkbenchTab = "decode" | "artifacts" | "codegen";
+
+const TABS: readonly WorkbenchTab[] = ["decode", "artifacts", "codegen"];
 
 /**
  * The workbench: the picked module and type (`source` is a corpus document, or {@link CHECKER_SOURCE} for a module of the
- * document open in the checker), the tab, an artifact the Decode tab holds, and the Artifacts tab's document filter.
+ * document open in the checker), the tab, an artifact the Decode tab holds, the Artifacts tab's document filter, and the
+ * Codegen tab's backend.
  * Pasted or dropped input is never part of the hash.
  */
 export interface WorkbenchRoute {
@@ -29,6 +32,7 @@ export interface WorkbenchRoute {
   type?: string;
   artifact?: string;
   document?: string;
+  backend?: string;
 }
 
 /** The workbench source that stands for the modules of the document open in the checker. */
@@ -48,7 +52,8 @@ export function parseHash(hash: string): Route {
   if (first === "corpus") return { view: "corpus", q: params.get("q") ?? "", sort: parseSort(params.get("sort")) ?? undefined };
   if (first === "oid") return { view: "oid", oid: parts[1] || undefined };
   if (first === "workbench") {
-    const route: WorkbenchRoute = { view: "workbench", tab: params.get("tab") === "artifacts" ? "artifacts" : "decode" };
+    const tab = TABS.find((t) => t === params.get("tab")) ?? "decode";
+    const route: WorkbenchRoute = { view: "workbench", tab };
     const [, source, moduleName, type] = parts;
     if (source && moduleName) {
       route.source = source;
@@ -61,6 +66,8 @@ export function parseHash(hash: string): Route {
     if (artifact) route.artifact = artifact;
     const document = params.get("document");
     if (document) route.document = document;
+    const backend = params.get("backend");
+    if (backend) route.backend = backend;
     return route;
   }
   const module = params.get("module") || undefined;
@@ -119,10 +126,11 @@ export function workbenchHash(route: Omit<WorkbenchRoute, "view">): string {
     if (route.type) path += `/${encodeURIComponent(route.type)}`;
   }
   const params = new URLSearchParams();
-  if (route.tab === "artifacts") params.set("tab", "artifacts");
+  if (route.tab !== "decode") params.set("tab", route.tab);
   if (route.source && route.module && route.moduleOid) params.set("oid", route.moduleOid);
   if (route.artifact) params.set("artifact", route.artifact);
   if (route.document) params.set("document", route.document);
+  if (route.backend) params.set("backend", route.backend);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }

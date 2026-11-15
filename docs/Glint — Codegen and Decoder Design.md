@@ -424,7 +424,7 @@ glint artifacts extract FILE           # scan a local document, no corpus data n
 6. **pyasn1 backend.**
 7. **RustCrypto `der` backend.**
 8. **Go cryptobyte backend.**
-9. **Codegen tab in the workbench.**
+9. **Codegen tab in the workbench** (rasn done ahead of milestones 6–8; the other backends appear as they land, from the registry). The module and type picker sits above the Decode and Codegen tabs and is shared; the route adds `?tab=codegen` and `backend=` (rasn, the default, is not written). Code is shown in a read-only CodeMirror view with `@codemirror/lang-rust` highlighting (loaded with the first generated code, 40 KB gzipped, so other pages do not pay for it), one button per file, with copy, download and a zip of every file in a folder named after the type. Measured: the code generators add 247 KB (61 KB gzipped) to the wasm module; no split.
 
 Milestones 6–8 have the same acceptance criteria as milestone 5. They also confirm that a backend needs no change outside its own module; any change the shared layers need goes back into them.
 

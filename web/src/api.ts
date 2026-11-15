@@ -319,6 +319,37 @@ export interface TypesResponse {
   modules: { name: string; types: string[] }[];
 }
 
+/** A code generator of the registry (Codegen and Decoder Design, Backends and the registry). */
+export interface BackendMeta {
+  id: string;
+  display_name: string;
+  language: "rust" | "python" | "go";
+  library: string;
+  library_version: string;
+}
+
+export interface CodegenRequest extends SchemaSpec {
+  type: string;
+  backend: string;
+}
+
+/** Something the target cannot express, and what the generated code does instead (`W420`, `W421`, `I422`). */
+export interface CodegenFinding {
+  code: string;
+  severity: Severity;
+  at: string;
+  message: string;
+}
+
+export interface CodegenResponse {
+  backend: BackendMeta;
+  /** `doc#Module.Type` or `Module.Type`. */
+  root: string;
+  /** One per ASN.1 module, `mod.rs`, and the runtime. */
+  files: { path: string; contents: string }[];
+  findings: CodegenFinding[];
+}
+
 export type Confidence = "label" | "decoded" | "unknown";
 
 export interface ArtifactQuery {
@@ -401,7 +432,9 @@ export type Method =
   | "decode"
   | "types"
   | "artifacts"
-  | "artifact";
+  | "artifact"
+  | "backends"
+  | "codegen";
 
 /** Where requests go: the Glint worker on the page, or a stand-in in tests. */
 export interface Backend {
@@ -533,4 +566,7 @@ export const api = {
   /** The example artifacts; the first call fetches `artifacts.json`. */
   artifacts: (query: ArtifactQuery, signal?: AbortSignal) => call<ArtifactList>("artifacts", [query], signal),
   artifact: (id: string) => call<ArtifactDetail>("artifact", [id]),
+  backends: () => call<{ backends: BackendMeta[] }>("backends", []),
+  /** The code a backend generates for a root type and everything it reaches. */
+  codegen: (request: CodegenRequest, signal?: AbortSignal) => call<CodegenResponse>("codegen", [request], signal),
 };

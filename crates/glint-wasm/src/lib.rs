@@ -10,7 +10,7 @@ pub use service::{
     CheckRequest, DocumentFormat, DocumentRequest, FormatName, GLINT_VERSION, Service, ServiceError,
 };
 pub use workbench::{
-    ArtifactQuery, DecodeRequest, InputFormat, ModuleSpec, SchemaSpec, UserDocument,
+    ArtifactQuery, CodegenRequest, DecodeRequest, InputFormat, ModuleSpec, SchemaSpec, UserDocument,
 };
 
 use serde::Serialize;
@@ -165,6 +165,20 @@ impl Glint {
         let request: DecodeRequest = parse(request)?;
         self.service
             .decode(&request, bytes)
+            .map(|r| json(&r))
+            .map_err(|e| js_error(&e))
+    }
+
+    /// The code generators: `{ backends: [{ id, display_name, language, library, library_version }] }`.
+    pub fn backends() -> String {
+        json(&Service::backends())
+    }
+
+    /// The code of a root type; `request` is `{ module?, document?, type, backend }`.
+    pub fn codegen(&self, request: &str) -> Result<String, JsError> {
+        let request: CodegenRequest = parse(request)?;
+        self.service
+            .codegen(&request)
             .map(|r| json(&r))
             .map_err(|e| js_error(&e))
     }

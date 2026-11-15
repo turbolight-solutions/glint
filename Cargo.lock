@@ -791,6 +791,7 @@ name = "glint-wasm"
 version = "0.1.0"
 dependencies = [
  "glint-check",
+ "glint-codegen",
  "glint-corpus",
  "glint-decode",
  "glint-diag",

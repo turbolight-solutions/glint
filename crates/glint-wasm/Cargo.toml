@@ -1,7 +1,7 @@
 [package]
 name = "glint-wasm"
 version = "0.1.0"
-description = "Glint for the browser: checks, corpus queries, completion, decodes and example artifacts over the published data"
+description = "Glint for the browser: checks, corpus queries, completion, decodes, example artifacts and generated code over the published data"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 glint-check = { workspace = true }
+glint-codegen = { workspace = true }
 glint-corpus = { workspace = true }
 glint-decode = { workspace = true }
 glint-diag = { workspace = true }

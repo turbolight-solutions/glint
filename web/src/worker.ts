@@ -135,6 +135,10 @@ async function answer(method: string, args: unknown[]): Promise<string> {
       return g.decode(JSON.stringify(args[0]), args[1] instanceof Uint8Array ? args[1] : new Uint8Array());
     case "types":
       return g.types(JSON.stringify(args[0]));
+    case "backends":
+      return Glint.backends();
+    case "codegen":
+      return g.codegen(JSON.stringify(args[0]));
     case "artifacts":
       await loadArtifacts(g);
       return g.artifacts(JSON.stringify(args[0]));

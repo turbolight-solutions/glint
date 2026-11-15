@@ -120,6 +120,17 @@ describe("workbench routes", () => {
     expect(parseHash(hash)).toEqual({ view: "workbench", ...route });
     expect(workbenchHash({ tab: "artifacts", document: "rfc9500" })).toBe("#workbench?tab=artifacts&document=rfc9500");
     expect(workbenchHash({ tab: "decode" })).toBe("#workbench");
+    expect(workbenchHash({ tab: "codegen", source: "rfc5912", module: "PKIX1Explicit-2009", type: "Certificate", backend: "rasn" })).toBe(
+      "#workbench/rfc5912/PKIX1Explicit-2009/Certificate?tab=codegen&backend=rasn",
+    );
+    expect(parseHash("#workbench/rfc5912/PKIX1Explicit-2009/Certificate?tab=codegen&backend=rasn")).toEqual({
+      view: "workbench",
+      tab: "codegen",
+      source: "rfc5912",
+      module: "PKIX1Explicit-2009",
+      type: "Certificate",
+      backend: "rasn",
+    });
   });
 
   it("splits a root type into the picker's module and type", () => {
