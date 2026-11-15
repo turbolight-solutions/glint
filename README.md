@@ -69,6 +69,12 @@ Exit codes: `0` no errors, `1` errors found (or warnings with `--deny-warnings`)
 
 ## Development
 
+Besides a stable Rust toolchain, you need:
+
+- for the web UI: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` at exactly the version `Cargo.lock` pins for
+  the `wasm-bindgen` crate, and Node.js with npm;
+- for fuzzing: a nightly toolchain and `cargo-fuzz`.
+
 ```sh
 spec/fetch.sh                      # download the pinned ITU-T texts into the git-ignored spec/ directory
 cargo test --workspace
