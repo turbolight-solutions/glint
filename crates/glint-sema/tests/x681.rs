@@ -271,6 +271,26 @@ fn e157_recursive_object_sets() {
     assert!(run("S ATTR ::= { S }").contains(&"E157"));
     assert!(run("A ATTR ::= { B }\nB ATTR ::= { A }").contains(&"E157"));
     clean("a ATTR ::= { IDENTIFIED BY {1 2} }\nA ATTR ::= { a }\nB ATTR ::= { A, ... }");
+    // The name of an arc in an object's own identifier is not a reference to the object (X.680 32.3).
+    clean("a ATTR ::= { IDENTIFIED BY { 1 2 a(3) } }");
+}
+
+// X.681 12.2 with X.680 13.20, 14.6: `Other.S` is the imported S, not the local S of the same name.
+#[test]
+fn e157_external_reference_to_a_set_of_the_local_sets_name() {
+    let text = format!(
+        "Other DEFINITIONS EXPLICIT TAGS ::= BEGIN\n{PRELUDE}\na ATTR ::= {{ IDENTIFIED BY {{1 2}} }}\nS ATTR ::= {{ a }}\nEND\n\
+         M DEFINITIONS EXPLICIT TAGS ::= BEGIN\nIMPORTS ATTR, S FROM Other;\n\
+         b ATTR ::= {{ IDENTIFIED BY {{1 3}} }}\nS ATTR ::= {{ Other.S | b, ... }}\nEND"
+    );
+    let found = codes(&check(&text));
+    assert!(!found.contains(&"E157"), "unexpected E157: {found:?}");
+    // An external reference that leads back to the set is still recursion.
+    let looped = format!(
+        "Other DEFINITIONS EXPLICIT TAGS ::= BEGIN\nIMPORTS S FROM M;\n{PRELUDE}\nT ATTR ::= {{ M.S }}\nEND\n\
+         M DEFINITIONS EXPLICIT TAGS ::= BEGIN\nIMPORTS ATTR, T FROM Other;\nS ATTR ::= {{ Other.T }}\nEND"
+    );
+    assert!(codes(&check(&looped)).contains(&"E157"));
 }
 
 // X.681 12.3

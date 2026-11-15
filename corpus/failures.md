@@ -4,7 +4,7 @@ The errors corpus-build and `glint check` still report once every Verified RFC e
 and what would fix them. `corpus/errata/to-file.md` lists the defects to report to the RFC Editor; this file is the
 wider picture, Glint's own gaps included. Update it when a fix lands (see "How to update").
 
-As of 2026-11-15: corpus build `3a7080be` (482 modules) from a mirror of 2026-11-07.
+As of 2026-11-15: corpus build `3204450b` (482 modules) from a mirror of 2026-11-07.
 
 ## Summary
 
@@ -16,8 +16,8 @@ defects repeated line after line account for 240 of them.
 | --- | --- | --- | --- |
 | RFC modules, maintained | 546 | 48 modules | A current RFC, or still imported by one |
 | RFC modules, unmaintained | 288 | 17 modules | Obsoleted RFC that no maintained module imports |
-| Internet-Draft modules | 66 | 19 modules | Drafts can be fixed in their next revision |
-| ITU-T and other modules | 12 | 5 modules | From `corpus/sources.toml` |
+| Internet-Draft modules | 64 | 17 modules | Drafts can be fixed in their next revision |
+| ITU-T and other modules | 10 | 4 modules | From `corpus/sources.toml` |
 | Inline ASN.1 in RFCs (E300) | 239 | 298 RFCs checked | A snippet differs from its module; syntax errors in snippets are not reported |
 
 Warnings are left out throughout.
@@ -135,7 +135,7 @@ W301 or E300. That is why some applied errata (RFC 2631 5897, 3062 4899) added f
 
 ## Drafts and ITU-T modules
 
-19 Internet-Draft modules have 66 errors, and 5 ITU-T modules have 12. Drafts get no errata: their authors fix them
+17 Internet-Draft modules have 64 errors, and 4 ITU-T modules have 10. Drafts get no errata: their authors fix them
 in the next revision.
 
 | Document | Module | Errors | What is wrong |
@@ -147,11 +147,9 @@ in the next revision.
 | draft-braet-sidrops-spa-profile-00 | `RPKI-SPA-2026` | 5 | Object definitions that do not match their class (E152, E153) |
 | draft-ietf-lamps-cms-fn-dsa-00 | `FN-DSA-Module-2026` | 3 | Imports objects the certificates draft does not define (E101, E110) |
 | draft-vangeest-lamps-update-asn1-signed-type-01 | `AsymmetricKeyPackageModuleV1-2026` | 2 | Uses the `CONTENT-TYPE` syntax that RFC 5911 erratum 2612 replaced (E152) |
-| draft-ietf-sidrops-rpki-ccr-11, draft-ietf-sidrops-rpki-erik-protocol-07 | 2 modules | 1 each | A type defined in terms of itself (E157) |
 | 11 other drafts | 11 modules | 1 or 2 each | Single import, OID or parameter errors (E101, E131, E160, E152) |
 | ITU-T X.501 | `ServiceAdministration` | 6 | Open types in fixed-type fields (E159) |
 | ITU-T X.509 | `AuthenticationFramework`, `CertificateExtensions` | 2, 1 | Open types after OPTIONAL components (E121), one undefined value |
-| ITU-T X.882 | `Remote-Operations-Realizations` | 2 | Self-referencing definitions (E157) |
 | ITU-T X.420 | `PKCS7` | 1 | Imports a name its source module lacks (E101) |
 
 The ITU-T findings are probably checks Glint applies more strictly than X.681 requires (E121 and E159 on open

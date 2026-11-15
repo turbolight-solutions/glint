@@ -1424,14 +1424,35 @@ fn reaches_itself(
         return false;
     };
     let scope = dummies_names(symbol);
-    for token in flatten(value) {
+    let tokens = flatten(value);
+    let kind_at = |index: Option<usize>| index.and_then(|i| tokens.get(i)).map(|t| t.kind);
+    for (index, token) in tokens.iter().enumerate() {
         if !token.kind.is_name() || scope.contains(&token.text) {
             continue;
         }
-        if token.kind == SyntaxKind::UpperName && token.text.chars().any(|c| c.is_lowercase()) {
-            // fallthrough: object set names look like type names
+        let next = kind_at(index.checked_add(1));
+        // The module reference of `Module.name` names no object; the name is looked up in that module below.
+        if token.kind == SyntaxKind::UpperName
+            && next == Some(SyntaxKind::Dot)
+            && kind_at(index.checked_add(2)).is_some_and(SyntaxKind::is_name)
+        {
+            continue;
         }
-        let Some(lookup) = ctx.graph_lookup(at.module, &token.text) else {
+        // `name(3)` in an object identifier value names an arc, not an object (X.680 32.3).
+        if token.kind == SyntaxKind::LowerName && next == Some(SyntaxKind::LParen) {
+            continue;
+        }
+        // `Module.name` is the name imported from Module, even when the module defines one of its own (X.680 13.20, 14.6).
+        let qualifier = index
+            .checked_sub(2)
+            .and_then(|i| tokens.get(i))
+            .filter(|t| t.kind == SyntaxKind::UpperName)
+            .filter(|_| kind_at(index.checked_sub(1)) == Some(SyntaxKind::Dot));
+        let lookup = match qualifier {
+            Some(module) => ctx.graph_lookup_qualified(at.module, &module.text, &token.text),
+            None => ctx.graph_lookup(at.module, &token.text),
+        };
+        let Some(lookup) = lookup else {
             continue;
         };
         if !matches!(ctx.sem.kind(lookup), Kind::Object | Kind::ObjectSet) {
@@ -1461,6 +1482,23 @@ fn dummies_names(symbol: &Symbol) -> Vec<String> {
 impl Ctx<'_, '_, '_> {
     fn graph_lookup(&self, module: crate::graph::ModuleId, name: &str) -> Option<SymRef> {
         match self.graph.lookup(module, name)?.found {
+            crate::graph::Found::Symbol { module, index } => Some(SymRef { module, index }),
+            _ => None,
+        }
+    }
+
+    fn graph_lookup_qualified(
+        &self,
+        module: crate::graph::ModuleId,
+        module_name: &str,
+        name: &str,
+    ) -> Option<SymRef> {
+        match self
+            .graph
+            .lookup_qualified(module, module_name, name)
+            .ok()?
+            .found
+        {
             crate::graph::Found::Symbol { module, index } => Some(SymRef { module, index }),
             _ => None,
         }
