@@ -39,6 +39,8 @@ import { zip } from "./zip";
 
 const DECODE_MS = 300;
 const SEARCH_MS = 200;
+/** What the type list says before a module is picked. */
+const NO_MODULE = "Pick a module from the module list to list its types.";
 const MAX_FILE_BYTES = 8_000_000;
 /** The hex view shows this much of a large input. */
 const HEX_SHOWN_BYTES = 64 * 1024;
@@ -191,7 +193,14 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     "aria-label": "Module",
     autocomplete: "off",
   });
-  const typeCombo = createCombobox({ id: "workbench-type", placeholder: "Type: Certificate", label: "Type", toggleLabel: "Show the module's types" });
+  const typeCombo = createCombobox({
+    id: "workbench-type",
+    placeholder: "Type: Certificate",
+    label: "Type",
+    toggleLabel: "Show the module's types",
+    emptyText: NO_MODULE,
+    noMatchText: "No type of the module holds that.",
+  });
   const typeInput = typeCombo.input;
   const noSchema = h("input", { class: "form-check-input", type: "checkbox", id: "workbench-no-schema" });
   const pickerNote = h("div", { class: "small text-secondary" });
@@ -240,7 +249,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
   function moduleFromInput(): ModuleRef | null {
     const text = moduleInput.value.trim();
     if (!text) return null;
-    const option = moduleOptions.get(text);
+    const option = moduleOptions.get(text) ?? [...moduleOptions].find(([key]) => key.toLowerCase() === text.toLowerCase())?.[1];
     if (option) return option;
     if (sourceSelect.value === CHECKER_SOURCE) return { source: CHECKER_SOURCE, name: text };
     const match = /^([^#\s]+)#(\S+)(?:\s+\(([\d.]+)\))?$/.exec(text);
@@ -282,18 +291,28 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
   async function loadTypes(module: ModuleRef | null): Promise<void> {
     typesController?.abort();
     typeCombo.setOptions([]);
-    if (!module) return;
+    if (!module) {
+      typeCombo.setEmptyText(NO_MODULE);
+      return;
+    }
     const schema = schemaOf(module);
-    if (typeof schema === "string") return;
+    if (typeof schema === "string") {
+      typeCombo.setEmptyText(schema);
+      return;
+    }
     const run = new AbortController();
     typesController = run;
+    typeCombo.setEmptyText("Loading the module's types…");
     try {
       const answer = await api.types(schema, run.signal);
       if (run.signal.aborted) return;
       const types = answer.modules.find((m) => m.name === module.name)?.types ?? [];
+      typeCombo.setEmptyText(`${module.name} defines no types.`);
       typeCombo.setOptions(types);
     } catch (error) {
-      if (!isAbort(error)) pickerNote.textContent = describe(error);
+      if (isAbort(error)) return;
+      pickerNote.textContent = describe(error);
+      typeCombo.setEmptyText(describe(error));
     }
   }
 

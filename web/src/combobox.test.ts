@@ -18,10 +18,17 @@ describe("matching", () => {
   });
 });
 
-function setup() {
-  const combo = createCombobox({ id: "t", placeholder: "Type", label: "Type", toggleLabel: "Show types" });
+function setup(values = ["Certificate", "TBSCertificate", "Name"]) {
+  const combo = createCombobox({
+    id: "t",
+    placeholder: "Type",
+    label: "Type",
+    toggleLabel: "Show types",
+    emptyText: "No module",
+    noMatchText: "No match",
+  });
   document.body.replaceChildren(combo.element);
-  combo.setOptions(["Certificate", "TBSCertificate", "Name"]);
+  combo.setOptions(values);
   const changes: string[] = [];
   combo.input.addEventListener("change", () => changes.push(combo.input.value));
   const menu = combo.element.querySelector<HTMLElement>("[role=listbox]")!;
@@ -111,5 +118,28 @@ describe("createCombobox", () => {
     expect(menu.classList.contains("show")).toBe(true);
     key("Escape");
     expect(menu.classList.contains("show")).toBe(false);
+  });
+
+  it("says why when there is nothing to offer", () => {
+    const { combo, menu, items, toggle, key } = setup([]);
+    toggle.click();
+    expect(menu.classList.contains("show")).toBe(true);
+    expect(items()).toEqual([]);
+    expect(menu.textContent).toBe("No module");
+    key("ArrowDown");
+    key("Enter");
+    expect(combo.input.value).toBe("");
+    combo.setEmptyText("Loading");
+    toggle.click();
+    toggle.click();
+    expect(menu.textContent).toBe("Loading");
+  });
+
+  it("says when nothing matches what was typed", () => {
+    const { combo, menu, items } = setup();
+    type(combo, "Extension");
+    expect(menu.classList.contains("show")).toBe(true);
+    expect(items()).toEqual([]);
+    expect(menu.textContent).toBe("No match");
   });
 });

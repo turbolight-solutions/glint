@@ -910,9 +910,17 @@ fn match_rank(module: &ModuleRecord, query: &str, oid_query: &str) -> Option<u8>
     if name.contains(query) {
         return Some(2);
     }
+    // `rfc5912`, `5912` or `rfc5912#pkix`, as the workbench's module picker writes a module.
+    let qualified = format!("{}#{name}", module.source.label().to_ascii_lowercase());
+    if qualified.starts_with(query) {
+        return Some(3);
+    }
+    if qualified.contains(query) {
+        return Some(4);
+    }
     let oid = module.oid.as_ref().map(ToString::to_string)?;
     if !oid_query.is_empty() && oid.contains(oid_query) {
-        return Some(3);
+        return Some(5);
     }
     None
 }

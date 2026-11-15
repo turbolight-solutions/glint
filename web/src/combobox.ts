@@ -5,6 +5,8 @@ export interface Combobox {
   input: HTMLInputElement;
   /** Replaces the options, closing the list if it was open. */
   setOptions(values: readonly string[]): void;
+  /** What the list says when there are no options at all, such as why. */
+  setEmptyText(text: string): void;
 }
 
 export interface ComboboxOptions {
@@ -13,6 +15,10 @@ export interface ComboboxOptions {
   label: string;
   /** What the toggle button says to a screen reader. */
   toggleLabel: string;
+  /** What the list says when there are no options at all. */
+  emptyText: string;
+  /** What the list says when no option holds what was typed. */
+  noMatchText: string;
 }
 
 /** The values that hold `query`, ignoring case: those starting with it first, each group in its given order. */
@@ -39,6 +45,7 @@ export function createCombobox(options: ComboboxOptions): Combobox {
   let values: readonly string[] = [];
   let shown: string[] = [];
   let active = -1;
+  let emptyText = options.emptyText;
 
   const listId = `${options.id}-list`;
   const input = h("input", {
@@ -77,7 +84,7 @@ export function createCombobox(options: ComboboxOptions): Combobox {
     } else input.removeAttribute("aria-activedescendant");
   }
 
-  /** Opens the list on the options holding `query`, marking the input's value if it is one. */
+  /** Opens the list on the options holding `query`, marking the input's value if it is one; with none, says why. */
   function open(query: string): void {
     shown = matching(values, query);
     active = -1;
@@ -97,10 +104,7 @@ export function createCombobox(options: ComboboxOptions): Combobox {
         ),
       ),
     );
-    if (shown.length === 0) {
-      close();
-      return;
-    }
+    if (shown.length === 0) replace(list, h("div", { class: "dropdown-item-text small text-secondary" }, values.length ? options.noMatchText : emptyText));
     list.classList.add("show");
     input.setAttribute("aria-expanded", "true");
     const current = shown.indexOf(input.value);
@@ -162,6 +166,7 @@ export function createCombobox(options: ComboboxOptions): Combobox {
         open(values.includes(input.value) ? "" : input.value);
         return;
       }
+      if (shown.length === 0) return;
       const step = event.key === "ArrowDown" ? 1 : -1;
       setActive(active < 0 ? (step > 0 ? 0 : shown.length - 1) : (active + step + shown.length) % shown.length);
     } else if ((event.key === "Enter" || event.key === "Tab") && isOpen() && active >= 0) {
@@ -182,6 +187,9 @@ export function createCombobox(options: ComboboxOptions): Combobox {
     setOptions(next) {
       values = [...next];
       close();
+    },
+    setEmptyText(text) {
+      emptyText = text;
     },
   };
 }
