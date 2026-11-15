@@ -1,6 +1,6 @@
 [package]
 name = "glint-extract"
-version = "0.1.0"
+version.workspace = true
 description = "Extracts ASN.1 blocks from RFCXML, Markdown and plain-text drafts, with source maps"
 edition.workspace = true
 license.workspace = true

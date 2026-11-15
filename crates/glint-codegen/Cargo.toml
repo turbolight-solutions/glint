@@ -1,6 +1,6 @@
 [package]
 name = "glint-codegen"
-version = "0.1.0"
+version.workspace = true
 description = "Glint's code generators: a backend registry, a shared middle layer and one emitter per target library"
 edition.workspace = true
 license.workspace = true

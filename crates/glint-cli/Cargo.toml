@@ -1,6 +1,6 @@
 [package]
 name = "glint-asn1"
-version = "0.1.0"
+version.workspace = true
 description = "Glint: an ASN.1 checker for Internet-Draft and RFC authors"
 edition.workspace = true
 license.workspace = true

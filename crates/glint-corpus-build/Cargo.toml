@@ -1,6 +1,6 @@
 [package]
 name = "glint-corpus-build"
-version = "0.1.0"
+version.workspace = true
 description = "Offline builder for the Glint RFC module corpus"
 edition.workspace = true
 license.workspace = true

@@ -41,7 +41,7 @@ The data used by `glint check` and `glint corpus ...` is, in order: `--corpus`, 
 
 ## Releases and the data workflow
 
-Releases are made on GitHub (Releases → Draft a new release, with a new `v*` tag). Publishing one runs `.github/workflows/release.yml`, which publishes code only:
+The version is set once, in `[workspace.package]` of `Cargo.toml`. To release, commit the bump (`cargo set-version 1.2.3` from cargo-edit, or edit the line and run `cargo update --workspace` to refresh `Cargo.lock`), then make the release on GitHub (Releases → Draft a new release) with the tag `v1.2.3` on that commit. Publishing it runs `.github/workflows/release.yml`, which fails unless the tag matches the version, and publishes code only:
 
 1. builds `glint` for Linux x86-64, macOS arm64, and Windows x86-64, packages each as `glint-<target>.tar.gz` (`.zip` on Windows) with `LICENSE` and `NOTICE`, and runs `--version`, `explain`, and `corpus list` (which must say how to get data);
 2. builds the site (`web/build-wasm.sh`, then Vite) and packages it as `glint-site-<tag>.zip`, the code zip;

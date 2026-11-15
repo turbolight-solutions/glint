@@ -1,6 +1,6 @@
 [package]
 name = "glint-syntax"
-version = "0.1.0"
+version.workspace = true
 description = "Lexer, parser and lossless syntax tree for ASN.1 (ITU-T X.680-X.683)"
 edition.workspace = true
 license.workspace = true

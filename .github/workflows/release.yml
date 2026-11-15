@@ -3,7 +3,8 @@ name: release
 # A release is code only: the CLI binaries and the site (index.html, the scripts and glint.wasm). The data is built
 # and published every day by data.yml.
 
-# Make the release on GitHub (with its tag); publishing it runs this workflow, which attaches the files to it.
+# Make the release on GitHub (with its tag); publishing it runs this workflow, which attaches the files to it. Bump the
+# version in Cargo.toml ([workspace.package]) and commit it before tagging: tag v1.2.3 must point at glint 1.2.3.
 
 on:
   release:
@@ -17,6 +18,21 @@ permissions:
   contents: read
 
 jobs:
+  version:
+    name: tag matches Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag against the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --format-version 1 --locked --no-deps | jq -r '.packages[] | select(.name == "glint-asn1") | .version')"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match glint $version in Cargo.toml" >&2
+            exit 1
+          fi
+
   binaries:
     name: binary (${{ matrix.target }})
     strategy:
@@ -26,6 +42,7 @@ jobs:
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, archive: tar.gz }
           - { target: aarch64-apple-darwin, os: macos-latest, archive: tar.gz }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, archive: zip }
+    needs: [version]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -51,6 +68,9 @@ jobs:
           fi
           if command -v sha256sum >/dev/null; then sha256sum "$name" > "$name.sha256"; else shasum -a 256 "$name" > "$name.sha256"; fi
           "dist/$bin" --version
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            "dist/$bin" --version | grep -qx "glint ${GITHUB_REF_NAME#v}"
+          fi
           "dist/$bin" explain E110 | head -n 3
           # Glint carries no data; without any it must say how to get some.
           ("dist/$bin" corpus list 2>&1 || true) | grep -q "glint corpus update"
@@ -63,6 +83,7 @@ jobs:
 
   site:
     name: site (code zip)
+    needs: [version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

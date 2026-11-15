@@ -1,6 +1,6 @@
 [package]
 name = "glint-decode"
-version = "0.1.0"
+version.workspace = true
 description = "Glint's schema-driven BER/DER decoder"
 edition.workspace = true
 license.workspace = true

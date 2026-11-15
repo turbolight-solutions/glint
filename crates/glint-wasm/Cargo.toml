@@ -1,6 +1,6 @@
 [package]
 name = "glint-wasm"
-version = "0.1.0"
+version.workspace = true
 description = "Glint for the browser: checks, corpus queries, completion, decodes, example artifacts and generated code over the published data"
 edition.workspace = true
 license.workspace = true

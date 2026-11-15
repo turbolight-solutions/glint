@@ -1,6 +1,6 @@
 [package]
 name = "glint-ir"
-version = "0.1.0"
+version.workspace = true
 description = "The intermediate representation that Glint's decoder and code generators read"
 edition.workspace = true
 license.workspace = true
