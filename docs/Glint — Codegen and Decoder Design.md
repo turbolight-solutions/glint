@@ -397,12 +397,12 @@ glint artifacts extract FILE           # scan a local document, no corpus data n
 
 ## Web: `#/workbench`
 
-- **Picker:** module (corpus search like the corpus browser, or "modules from the checker document"), then type (types of that module, searchable). Route state is in the hash (`#/workbench/rfc5912/PKIX1Explicit-2009/Certificate`), so links can be shared.
+- **Picker:** module (corpus search like the corpus browser, or "modules from the checker document"), then type (types of that module, searchable). Route state is in the hash (`#workbench/rfc5912/PKIX1Explicit-2009/Certificate`, with `?tab=artifacts`, `oid=`, `artifact=` and `document=`; `#/workbench/...` reads the same), so links can be shared. The source `checker` stands for the modules of the checker's document. Pasted or dropped input is never in the hash.
 - **Decode tab:** a textarea for PEM or base64 that is also a drop target for files in any of the three encodings, plus an input-format override. The TLV tree has collapsible nodes showing field, type, value and finding badges. A hex pane is linked both ways: hovering or selecting a node highlights its header and contents bytes, and clicking a byte selects its node. A PEM with several blocks gets a block selector.
 - **Artifacts tab:** browse by document, or filter by label, identified type and confidence. Each row shows the document and section (linking to the checker's view of it), the label, type, confidence, size and finding badges. Actions: download (PEM when the label is known, otherwise base64; DER always available), copy, and **Open in Decode**, which sets the picker to the identified type and loads the bytes into the Decode tab. A document opened in the checker links to its artifacts here.
 - **Codegen tab:** a backend dropdown filled from the registry, plus a read-only CodeMirror view with one tab per output file (the runtime file included), each with copy and download buttons; the whole output can also be downloaded as a zip. Codegen findings are listed under the editor.
-- **wasm API:** `decode(request) -> json`, `codegen(request) -> json`, `load_artifacts(bytes)` and `artifacts(query) -> json`, behind `web/src/api.ts` like `check_document`. Nothing leaves the browser.
-- **Size:** measure the wasm growth. If the backends add too much, split them into a second wasm module loaded lazily when the Codegen tab opens.
+- **wasm API:** `decode(request, bytes) -> json`, `types(request) -> json` (the types of a module, for the picker), `loadArtifacts(bytes)`, `artifacts(query) -> json`, `artifact(id) -> json` (with its download text), and later `codegen(request) -> json`, behind `web/src/api.ts` like `check_document`. The worker fetches `artifacts.json` on the first artifacts call. A decode with the checker's document extracts its modules as `check` does. Nothing leaves the browser.
+- **Size:** measure the wasm growth. If the backends add too much, split them into a second wasm module loaded lazily when the Codegen tab opens. Measured at milestone 4: the decoder and the workbench API add 161 KB (36 KB gzipped) to a 3.49 MB module; no split.
 
 ## Testing
 
@@ -417,7 +417,7 @@ glint artifacts extract FILE           # scan a local document, no corpus data n
 1. **IR and lowering** (done). Constraint algebra, effective summaries, object-set tables, monomorphization, naming inputs. *Accept:* IR snapshots for the fixture roots with no `Opaque` constraints in the RFC 5912 `Certificate` closure.
 2. **Decoder, CLI** (done). Sniffing, BER walk, rendering, DER and constraint findings, mismatch fallback, OID hint table, `glint decode`. *Accept:* a real certificate decoded with the RFC 5912 modules shows every extension's contents decoded through the `ExtensionSet` table, with OID labels. The same certificate decoded with the RFC 5280 modules shows its extensions decoded through hints, marked heuristic.
 3. **Artifacts** (done). PEM extraction, identification, `artifacts.json`, the report section, `corpus/artifacts.expected`, `glint artifacts`, example checks in `check`. *Accept:* every PEM example in the corpus is extracted or has an extraction finding; every decode failure is triaged as a decoder bug (fixed) or an erratum candidate (listed).
-4. **Workbench web route: Decode and Artifacts tabs.** *Accept:* drag-and-drop of PEM, base64 and DER files; tree and hex linked both ways; a shareable hash route; artifact download in the right format; Open in Decode.
+4. **Workbench web route: Decode and Artifacts tabs** (done). *Accept:* drag-and-drop of PEM, base64 and DER files; tree and hex linked both ways; a shareable hash route; artifact download in the right format; Open in Decode.
 5. **Codegen middle layer, registry, rasn backend + runtime.** *Accept:* fixture roots compile, the differential test passes over the vectors and artifacts, round-trip passes.
 6. **pyasn1 backend.**
 7. **RustCrypto `der` backend.**

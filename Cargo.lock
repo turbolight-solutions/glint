@@ -777,8 +777,10 @@ version = "0.1.0"
 dependencies = [
  "glint-check",
  "glint-corpus",
+ "glint-decode",
  "glint-diag",
  "glint-extract",
+ "glint-ir",
  "glint-sema",
  "glint-syntax",
  "serde",

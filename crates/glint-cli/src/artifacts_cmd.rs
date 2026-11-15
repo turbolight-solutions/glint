@@ -198,13 +198,7 @@ fn get(data: &ArtifactsData, id: &str, format: Option<Format>, output: Option<&P
             if canonical.is_none() {
                 eprintln!("glint: `{id}` is labelled `{}`", artifact.label);
             }
-            let encoded = glint_decode::base64_encode(&der);
-            let mut text = String::new();
-            for chunk in encoded.as_bytes().chunks(64) {
-                text.push_str(&String::from_utf8_lossy(chunk));
-                text.push('\n');
-            }
-            text.into_bytes()
+            glint_decode::base64_lines(&der).into_bytes()
         }
     };
     let written = match output {

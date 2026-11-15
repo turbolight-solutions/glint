@@ -3,10 +3,14 @@
 
 mod complete;
 mod service;
+mod workbench;
 
 pub use complete::{Completion, Item, byte_to_utf16, complete, utf16_to_byte};
 pub use service::{
     CheckRequest, DocumentFormat, DocumentRequest, FormatName, GLINT_VERSION, Service, ServiceError,
+};
+pub use workbench::{
+    ArtifactQuery, DecodeRequest, InputFormat, ModuleSpec, SchemaSpec, UserDocument,
 };
 
 use serde::Serialize;
@@ -112,6 +116,55 @@ impl Glint {
     pub fn oid(&self, dotted: &str, names: Vec<String>) -> Result<String, JsError> {
         self.service
             .oid(dotted, &names)
+            .map(|r| json(&r))
+            .map_err(|e| js_error(&e))
+    }
+
+    /// Loads `artifacts.json`, which must be of the corpus's build; answers with its counts.
+    #[wasm_bindgen(js_name = loadArtifacts)]
+    pub fn load_artifacts(&mut self, bytes: &[u8]) -> Result<String, JsError> {
+        self.service
+            .load_artifacts(bytes)
+            .map(|info| json(&info))
+            .map_err(|e| js_error(&e))
+    }
+
+    #[wasm_bindgen(js_name = hasArtifacts)]
+    pub fn has_artifacts(&self) -> bool {
+        self.service.has_artifacts()
+    }
+
+    /// `query` is `{ document?, label?, type?, confidence?, errors? }`.
+    pub fn artifacts(&self, query: &str) -> Result<String, JsError> {
+        let query: ArtifactQuery = parse(query)?;
+        self.service
+            .artifacts(&query)
+            .map(|r| json(&r))
+            .map_err(|e| js_error(&e))
+    }
+
+    /// One artifact with its octets and its download text.
+    pub fn artifact(&self, id: &str) -> Result<String, JsError> {
+        self.service
+            .artifact(id)
+            .map(|r| json(&r))
+            .map_err(|e| js_error(&e))
+    }
+
+    /// `request` is `{ module?, document? }`: the types of a corpus module, or of the modules of a document.
+    pub fn types(&self, request: &str) -> Result<String, JsError> {
+        let request: SchemaSpec = parse(request)?;
+        self.service
+            .types(&request)
+            .map(|r| json(&r))
+            .map_err(|e| js_error(&e))
+    }
+
+    /// Decodes `bytes` (PEM or base64 text, or DER); `request` is `{ input?, module?, document?, type?, no_schema? }`.
+    pub fn decode(&self, request: &str, bytes: &[u8]) -> Result<String, JsError> {
+        let request: DecodeRequest = parse(request)?;
+        self.service
+            .decode(&request, bytes)
             .map(|r| json(&r))
             .map_err(|e| js_error(&e))
     }

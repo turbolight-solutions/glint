@@ -83,10 +83,10 @@ pub fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
-/// `bytes` as a PEM block with `label` (RFC 7468): base64 in lines of 64 characters.
-pub fn pem_armor(label: &str, bytes: &[u8]) -> String {
+/// `bytes` in base64, in lines of 64 characters, each ended by a newline.
+pub fn base64_lines(bytes: &[u8]) -> String {
     let encoded = base64_encode(bytes);
-    let mut out = format!("-----BEGIN {label}-----\n");
+    let mut out = String::new();
     let mut rest = encoded.as_str();
     while !rest.is_empty() {
         let (line, tail) = rest.split_at(rest.len().min(64));
@@ -94,8 +94,15 @@ pub fn pem_armor(label: &str, bytes: &[u8]) -> String {
         out.push('\n');
         rest = tail;
     }
-    out.push_str(&format!("-----END {label}-----\n"));
     out
+}
+
+/// `bytes` as a PEM block with `label` (RFC 7468): base64 in lines of 64 characters.
+pub fn pem_armor(label: &str, bytes: &[u8]) -> String {
+    format!(
+        "-----BEGIN {label}-----\n{}-----END {label}-----\n",
+        base64_lines(bytes)
+    )
 }
 
 /// The label a PEM block is served with: the canonical form of a label the label map knows (`X509 CERTIFICATE` →

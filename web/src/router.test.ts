@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { corpusHash, draftHash, hashForTarget, moduleHash, parseHash, rfcHash } from "./router";
+import { corpusHash, draftHash, hashForTarget, moduleHash, parseHash, rfcHash, rootRoute, workbenchHash } from "./router";
 
 describe("parseHash", () => {
   it("defaults to the checker", () => {
@@ -91,3 +91,40 @@ describe("hashForTarget", () => {
     expect(hashForTarget("")).toBeNull();
   });
 });
+
+describe("workbench routes", () => {
+  it("reads the picked module and type, the tab and the artifact", () => {
+    expect(parseHash("#workbench")).toEqual({ view: "workbench", tab: "decode" });
+    expect(parseHash("#/workbench/rfc5912/PKIX1Explicit-2009/Certificate")).toEqual({
+      view: "workbench",
+      tab: "decode",
+      source: "rfc5912",
+      module: "PKIX1Explicit-2009",
+      type: "Certificate",
+    });
+    expect(parseHash("#workbench?tab=artifacts&document=rfc9500")).toEqual({ view: "workbench", tab: "artifacts", document: "rfc9500" });
+    expect(parseHash("#workbench/rfc4998/ERS?oid=1.3.6.1.5.5.11.0.2.1&artifact=rfc4998-1")).toEqual({
+      view: "workbench",
+      tab: "decode",
+      source: "rfc4998",
+      module: "ERS",
+      moduleOid: "1.3.6.1.5.5.11.0.2.1",
+      artifact: "rfc4998-1",
+    });
+  });
+
+  it("writes hashes that read back", () => {
+    const route = { tab: "decode" as const, source: "X.509", module: "Auth Framework", type: "Certificate", artifact: "rfc1-1" };
+    const hash = workbenchHash(route);
+    expect(hash).toBe("#workbench/X.509/Auth%20Framework/Certificate?artifact=rfc1-1");
+    expect(parseHash(hash)).toEqual({ view: "workbench", ...route });
+    expect(workbenchHash({ tab: "artifacts", document: "rfc9500" })).toBe("#workbench?tab=artifacts&document=rfc9500");
+    expect(workbenchHash({ tab: "decode" })).toBe("#workbench");
+  });
+
+  it("splits a root type into the picker's module and type", () => {
+    expect(rootRoute("rfc5912#PKIX1Explicit-2009.Certificate")).toEqual({ source: "rfc5912", module: "PKIX1Explicit-2009", type: "Certificate" });
+    expect(rootRoute("Mine.T")).toBeNull();
+  });
+});
+

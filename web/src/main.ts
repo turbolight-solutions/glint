@@ -3,6 +3,7 @@ import { createChecker } from "./checker";
 import { createCorpusBrowser, createOidPage } from "./corpus";
 import { safeStorage } from "./dom";
 import { parseHash } from "./router";
+import { createWorkbench } from "./workbench";
 import "./style.css";
 
 function element(id: string): HTMLElement {
@@ -52,10 +53,12 @@ function main(): void {
     checker: element("view-checker"),
     corpus: element("view-corpus"),
     oid: element("view-oid"),
+    workbench: element("view-workbench"),
   };
   const checker = createChecker(views.checker);
   const corpus = createCorpusBrowser(views.corpus);
   const oids = createOidPage(views.oid);
+  const workbench = createWorkbench(views.workbench, { checkerDocument: () => checker.activeDocument() });
 
   function route(): void {
     const current = parseHash(window.location.hash);
@@ -72,6 +75,9 @@ function main(): void {
         break;
       case "oid":
         oids.show(current.oid);
+        break;
+      case "workbench":
+        workbench.show(current);
         break;
     }
   }

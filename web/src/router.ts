@@ -10,7 +10,29 @@ import { type Sort, formatSort, parseSort } from "./modulesort";
 export type Route =
   | { view: "checker"; draft?: string; rfc?: number; xml?: boolean; document?: string; module?: string; moduleOid?: string }
   | { view: "corpus"; q: string; sort?: Sort }
-  | { view: "oid"; oid?: string };
+  | { view: "oid"; oid?: string }
+  | WorkbenchRoute;
+
+export type WorkbenchTab = "decode" | "artifacts";
+
+/**
+ * The workbench: the picked module and type (`source` is a corpus document, or {@link CHECKER_SOURCE} for a module of the
+ * document open in the checker), the tab, an artifact the Decode tab holds, and the Artifacts tab's document filter.
+ * Pasted or dropped input is never part of the hash.
+ */
+export interface WorkbenchRoute {
+  view: "workbench";
+  tab: WorkbenchTab;
+  source?: string;
+  module?: string;
+  moduleOid?: string;
+  type?: string;
+  artifact?: string;
+  document?: string;
+}
+
+/** The workbench source that stands for the modules of the document open in the checker. */
+export const CHECKER_SOURCE = "checker";
 
 const DRAFT = /^draft-[a-z0-9-]+$/;
 const DRAFT_VIEW = /^(draft-[a-z0-9-]+)(\.xml)?$/;
@@ -25,6 +47,22 @@ export function parseHash(hash: string): Route {
   const first = (parts[0] ?? "").toLowerCase();
   if (first === "corpus") return { view: "corpus", q: params.get("q") ?? "", sort: parseSort(params.get("sort")) ?? undefined };
   if (first === "oid") return { view: "oid", oid: parts[1] || undefined };
+  if (first === "workbench") {
+    const route: WorkbenchRoute = { view: "workbench", tab: params.get("tab") === "artifacts" ? "artifacts" : "decode" };
+    const [, source, moduleName, type] = parts;
+    if (source && moduleName) {
+      route.source = source;
+      route.module = moduleName;
+      if (type) route.type = type;
+      const oid = params.get("oid");
+      if (oid) route.moduleOid = oid;
+    }
+    const artifact = params.get("artifact");
+    if (artifact) route.artifact = artifact;
+    const document = params.get("document");
+    if (document) route.document = document;
+    return route;
+  }
   const module = params.get("module") || undefined;
   const moduleOid = params.get("oid") || undefined;
   const draft = DRAFT_VIEW.exec(first);
@@ -71,4 +109,26 @@ export function hashForTarget(input: string): string | null {
   if (number?.[1]) return rfcHash(Number(number[1]), number[2] === ".xml");
   const draft = /^(.*?)(\.txt|\.xml)?$/.exec(text);
   return draft?.[1] && DRAFT.test(draft[1]) ? draftHash(draft[1], draft[2] === ".xml") : null;
+}
+
+/** The hash of a workbench route; the Decode tab, the default, is not written. */
+export function workbenchHash(route: Omit<WorkbenchRoute, "view">): string {
+  let path = "#workbench";
+  if (route.source && route.module) {
+    path += `/${encodeURIComponent(route.source)}/${encodeURIComponent(route.module)}`;
+    if (route.type) path += `/${encodeURIComponent(route.type)}`;
+  }
+  const params = new URLSearchParams();
+  if (route.tab === "artifacts") params.set("tab", "artifacts");
+  if (route.source && route.module && route.moduleOid) params.set("oid", route.moduleOid);
+  if (route.artifact) params.set("artifact", route.artifact);
+  if (route.document) params.set("document", route.document);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+/** The workbench route of a root type written `doc#Module.Type`, the form decodes and artifacts name it in. */
+export function rootRoute(root: string): Pick<WorkbenchRoute, "source" | "module" | "type"> | null {
+  const match = /^([^#]+)#([^.]+)\.(.+)$/.exec(root);
+  return match ? { source: match[1], module: match[2], type: match[3] } : null;
 }
