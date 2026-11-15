@@ -595,7 +595,11 @@ fn corpus_queries_answer_like_the_old_api() {
     assert_eq!(page["total"], 1);
     assert_eq!(page["modules"][0]["name"], "Base");
     for query in ["rfc1000", "1000", "RFC1000#ba", "rfc1000#Base"] {
-        assert_eq!(json(&service.modules(query, 0, None))["total"], 1, "{query}");
+        assert_eq!(
+            json(&service.modules(query, 0, None))["total"],
+            1,
+            "{query}"
+        );
     }
     assert_eq!(json(&service.modules("rfc1001", 0, None))["total"], 0);
     let detail = json(&service.module("rfc1000", "Base", None).unwrap());
