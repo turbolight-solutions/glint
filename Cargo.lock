@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "glint-asn1"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "clap",
  "etcetera",
@@ -643,7 +643,7 @@ dependencies = [
 
 [[package]]
 name = "glint-check"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-corpus",
  "glint-decode",
@@ -663,7 +663,7 @@ dependencies = [
 
 [[package]]
 name = "glint-codegen"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-check",
  "glint-corpus",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "glint-corpus"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -686,7 +686,7 @@ dependencies = [
 
 [[package]]
 name = "glint-corpus-build"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "clap",
  "flate2",
@@ -709,7 +709,7 @@ dependencies = [
 
 [[package]]
 name = "glint-decode"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-diag",
  "glint-ir",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "glint-diag"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "ariadne",
  "serde",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "glint-errata"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-extract",
  "proptest",
@@ -743,7 +743,7 @@ dependencies = [
 
 [[package]]
 name = "glint-extract"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-decode",
  "glint-syntax",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "glint-ir"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "glint-sema"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-corpus",
  "glint-diag",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "glint-syntax"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "insta",
  "logos",
@@ -788,7 +788,7 @@ dependencies = [
 
 [[package]]
 name = "glint-wasm"
-version = "0.1.0"
+version = "0.0.4"
 dependencies = [
  "glint-check",
  "glint-codegen",
