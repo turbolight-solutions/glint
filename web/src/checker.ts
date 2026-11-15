@@ -554,7 +554,7 @@ export function createChecker(root: HTMLElement): CheckerView {
     const { response, offsets } = tab.result;
     renderDiagnostics(tab, response, offsets);
     renderModules(tab, response, offsets);
-    renderImports(response);
+    renderImports(response, offsets);
   }
 
   function labelLink(label: Label, response: CheckResponse, offsets: OffsetMap): HTMLElement {
@@ -731,8 +731,22 @@ export function createChecker(root: HTMLElement): CheckerView {
     );
   }
 
-  function renderImports(response: CheckResponse): void {
+  function renderImports(response: CheckResponse, offsets: OffsetMap): void {
     const withImports = response.modules.filter((m) => m.imports.length > 0);
+    // An import resolved to a module of the document itself names that module; it links to the module in the editor.
+    // Two modules of one name (RFC 4998's ERS) point at the other one than the importer.
+    const local = (importer: ModuleInfo, name: string): HTMLElement | string => {
+      const named = response.modules.filter((x) => x.name === name);
+      const found = named.find((x) => x.start !== importer.start) ?? named[0];
+      const label = `${name} (this document)`;
+      if (!found) return label;
+      const open = (event: Event) => {
+        event.preventDefault();
+        const index = offsets.toIndex(found.start);
+        editor.reveal(index, index);
+      };
+      return h("a", { href: "#", title: "Show in the editor", onclick: open }, label);
+    };
     if (withImports.length === 0) {
       replace(importsPane, h("div", { class: "p-3 text-secondary" }, "No imports."));
       return;
@@ -762,7 +776,7 @@ export function createChecker(root: HTMLElement): CheckerView {
                     i.target
                       ? h("a", { href: moduleHash(i.target.source, i.target.name, i.target.oid) }, moduleLabel(i.target))
                       : i.resolved_to
-                        ? `${i.resolved_to} (this document)`
+                        ? local(m, i.resolved_to)
                         : h("span", { class: "text-warning-emphasis" }, "not resolved"),
                   ),
                   h("td", { class: "small font-monospace" }, i.symbols.join(", ")),

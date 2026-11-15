@@ -141,6 +141,42 @@ describe("checker view", () => {
     expect(links).toContain("rfc4998#ERS (1.2.3.2)");
     expect(links).toContain("defined here — rfc4998#ERS@1.2.3.2:2:1");
   });
+
+  it("links an import resolved in the document itself to that module in the editor", async () => {
+    const content = "User DEFINITIONS ::= BEGIN END\nCommon DEFINITIONS ::= BEGIN END\n";
+    const common = content.indexOf("Common");
+    const module = (name: string, start: number, imports: ModuleInfo["imports"]): ModuleInfo => ({
+      name,
+      oid: null,
+      section: null,
+      start,
+      end: start + 30,
+      imports,
+    });
+    answerWith({
+      ...RESPONSE,
+      document: { name: "draft-a-b-01", format: "text" as const, content },
+      diagnostics: [],
+      modules: [
+        module("User", 0, [
+          { module: "Common", resolved_to: "Common", target: null, symbols: ["X"] },
+          { module: "Elsewhere", resolved_to: "Elsewhere", target: null, symbols: ["Y"] },
+        ]),
+        module("Common", common, []),
+      ],
+    });
+    const root = mount();
+    createChecker(root).show({ view: "checker", draft: "draft-a-b-01" });
+    await vi.waitFor(() => expect(mainView(root).state.doc.toString()).toBe(content));
+    const pane = root.querySelector("#pane-imports") as HTMLElement;
+    const link = [...pane.querySelectorAll("a")].find((a) => a.textContent === "Common (this document)");
+    expect(link).toBeDefined();
+    link?.click();
+    expect(mainView(root).state.selection.main.from).toBe(common);
+    // A name the document has no module of (a built-in) stays plain text.
+    expect(pane.textContent).toContain("Elsewhere (this document)");
+    expect([...pane.querySelectorAll("a")].some((a) => a.textContent === "Elsewhere (this document)")).toBe(false);
+  });
 });
 
 describe("checker tabs", () => {
