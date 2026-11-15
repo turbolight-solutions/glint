@@ -210,3 +210,5 @@ main { flex: 1 1 auto; min-height: 0; }
   .workbench-tree-wrap, .workbench-hex-wrap { flex: 0 0 auto; overflow: visible; }
   .workbench-hex-wrap { border-left: 0; border-top: 1px solid var(--bs-border-color); }
 }
+.combobox-menu { top: 100%; left: 0; right: 0; max-height: 20rem; overflow-y: auto; }
+.combobox-menu .dropdown-item { cursor: pointer; }

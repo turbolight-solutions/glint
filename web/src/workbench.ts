@@ -30,6 +30,7 @@ import {
   parseArtifactSort,
   sortArtifacts,
 } from "./artifactsort";
+import { createCombobox } from "./combobox";
 import { debounce, h, replace } from "./dom";
 import { type EditorHandle, createEditor } from "./editor";
 import { CHECKER_SOURCE, type WorkbenchRoute, type WorkbenchTab, hashForTarget, moduleHash, rootRoute, workbenchHash } from "./router";
@@ -190,15 +191,8 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     "aria-label": "Module",
     autocomplete: "off",
   });
-  const typeList = h("datalist", { id: "workbench-types" });
-  const typeInput = h("input", {
-    class: "form-control form-control-sm",
-    type: "search",
-    list: "workbench-types",
-    placeholder: "Type: Certificate",
-    "aria-label": "Type",
-    autocomplete: "off",
-  });
+  const typeCombo = createCombobox({ id: "workbench-type", placeholder: "Type: Certificate", label: "Type", toggleLabel: "Show the module's types" });
+  const typeInput = typeCombo.input;
   const noSchema = h("input", { class: "form-check-input", type: "checkbox", id: "workbench-no-schema" });
   const pickerNote = h("div", { class: "small text-secondary" });
   /** The corpus modules the module list offers, by the text an option puts in the input. */
@@ -287,7 +281,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
 
   async function loadTypes(module: ModuleRef | null): Promise<void> {
     typesController?.abort();
-    replace(typeList);
+    typeCombo.setOptions([]);
     if (!module) return;
     const schema = schemaOf(module);
     if (typeof schema === "string") return;
@@ -297,7 +291,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
       const answer = await api.types(schema, run.signal);
       if (run.signal.aborted) return;
       const types = answer.modules.find((m) => m.name === module.name)?.types ?? [];
-      replace(typeList, ...types.map((name) => h("option", { value: name })));
+      typeCombo.setOptions(types);
     } catch (error) {
       if (!isAbort(error)) pickerNote.textContent = describe(error);
     }
@@ -362,9 +356,6 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
   });
   moduleInput.addEventListener("change", pickModule);
   typeInput.addEventListener("change", pickModule);
-  typeInput.addEventListener("input", () => {
-    if (Array.from(typeList.options).some((o) => o.value === typeInput.value)) pickModule();
-  });
   noSchema.addEventListener("change", () => {
     describePick();
     void runDecode();
@@ -376,7 +367,7 @@ export function createWorkbench(root: HTMLElement, options: WorkbenchOptions): W
     { class: "d-flex flex-wrap align-items-center gap-2" },
     sourceSelect,
     h("div", { class: "workbench-module" }, moduleInput, moduleList),
-    h("div", { class: "workbench-type" }, typeInput, typeList),
+    h("div", { class: "workbench-type" }, typeCombo.element),
     noSchemaCheck,
   );
   /** The picker, above the Decode and Codegen tabs; an element of its own, since `d-flex` would override `hidden`. */
