@@ -625,6 +625,7 @@ dependencies = [
  "glint-check",
  "glint-corpus",
  "glint-corpus-build",
+ "glint-decode",
  "glint-diag",
  "glint-errata",
  "glint-extract",
@@ -644,8 +645,10 @@ name = "glint-check"
 version = "0.1.0"
 dependencies = [
  "glint-corpus",
+ "glint-decode",
  "glint-diag",
  "glint-extract",
+ "glint-ir",
  "glint-sema",
  "glint-syntax",
  "insta",
@@ -686,6 +689,17 @@ dependencies = [
  "serde_json",
  "sha2",
  "toml",
+]
+
+[[package]]
+name = "glint-decode"
+version = "0.1.0"
+dependencies = [
+ "glint-diag",
+ "glint-ir",
+ "proptest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

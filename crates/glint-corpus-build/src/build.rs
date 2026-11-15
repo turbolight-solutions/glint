@@ -7,8 +7,8 @@ use std::path::Path;
 use glint_corpus::{
     AllowedOid, AppliedErratum, BODY_RFC, CORPUS_FILE, Corpus, CorpusData, CorpusInfo,
     DOCUMENTS_FILE, DocumentRecord, DocumentText, Documents, ErrataFailure, ErratumPatch, Exports,
-    HunkLines, ModuleRecord, ModuleSource, Oid, OidAssignment, OidLabels, ParseStatus, Pointer,
-    SourceKind, build_dir, latest_path,
+    HunkLines, ModuleRecord, ModuleSource, Oid, OidAssignment, OidHint, OidLabels, ParseStatus,
+    Pointer, SourceKind, SyntaxEra, build_dir, latest_path,
 };
 use glint_diag::Severity;
 use glint_errata::LineRange;
@@ -28,7 +28,9 @@ use crate::index::{RfcMeta, read_drafts, read_index};
 use crate::overrides::{
     Override, check_extraction_tier, errata_documents, read_allowlist, read_overrides,
 };
-use crate::report::{AuditLine, FindingLine, ModuleOutcome, ReportData, render_report};
+use crate::report::{
+    AuditLine, FindingLine, HintConflict, ModuleOutcome, ReportData, render_report,
+};
 use crate::sources::{Defined, Fetched, Manifest, Need, fetch, read_manifest, select};
 
 const RFC_NOTICE: &str = "Modules extracted from RFCs and Internet-Drafts are code components under the IETF Trust's Revised BSD License (BCP 78, BCP 79).";
@@ -285,10 +287,12 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     let unmaintained = unmaintained(&records, &imports);
     let mut oid_assignments: Vec<OidAssignment> = Vec::new();
     let mut label_triples: Vec<(Oid, String, String)> = Vec::new();
+    let mut hint_rows: Vec<(usize, OidHint)> = Vec::new();
     let mut outcome_list = Vec::new();
-    for (record, checked) in records.iter_mut().zip(outcomes) {
+    for (index, (record, checked)) in records.iter_mut().zip(outcomes).enumerate() {
         record.parse_status = checked.outcome.status;
         oid_assignments.extend(checked.assignments);
+        hint_rows.extend(checked.hints.into_iter().map(|hint| (index, hint)));
         // Drafts may still change: they are no evidence of how an arc is labelled.
         if record.source.is_draft() {
             outcome_list.push(checked.outcome);
@@ -305,6 +309,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
     oid_assignments.sort_by(|a, b| (&a.oid, &a.module, &a.name).cmp(&(&b.oid, &b.module, &b.name)));
     oid_assignments.dedup();
     let labels = OidLabels::collect(label_triples, allowlist);
+    let (oid_hints, hint_conflicts) = hint_table(&records, hint_rows);
 
     // Every module against the label table, leaving out its own document's evidence: what a user checking the
     // document would be told.
@@ -332,6 +337,7 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         oid_nodes: labels.nodes(),
         oid_allowlist: labels.allowlist().to_vec(),
         iana_module_ids,
+        oid_hints,
         ..CorpusData::default()
     };
     // The build id names the content: the same data built twice on one day gets the same id.
@@ -364,6 +370,8 @@ pub fn run(settings: &Settings) -> Result<String, String> {
         allowlist: &corpus_data.oid_allowlist,
         label_audit: &audit,
         iana_module_ids: corpus_data.iana_module_ids.len(),
+        oid_hints: corpus_data.oid_hints.len(),
+        hint_conflicts: &hint_conflicts,
     };
     let report = render_report(&data);
     if let Some(path) = &settings.dump_findings {
@@ -929,10 +937,59 @@ fn line_of(text: &str, offset: usize) -> u32 {
 struct Checked {
     outcome: ModuleOutcome,
     assignments: Vec<OidAssignment>,
+    /// The module's rows for the OID hint table: published 2002-syntax modules only.
+    hints: Vec<OidHint>,
     /// The labels the module writes, with the OIDs of their arcs: its evidence for the label table.
     labels: Vec<(Oid, String)>,
     /// The corpus modules its imports resolve to, as indexes into the records.
     imports: Vec<usize>,
+}
+
+/// The OID hint table: per OID, class and field, the row of the module ranked first by import resolution (a current RFC
+/// before an obsoleted one, then the more recent document), and every OID, class and field whose modules disagree on
+/// the type.
+fn hint_table(
+    records: &[ModuleRecord],
+    rows: Vec<(usize, OidHint)>,
+) -> (Vec<OidHint>, Vec<HintConflict>) {
+    let mut grouped: BTreeMap<(Oid, String, String), Vec<(usize, OidHint)>> = BTreeMap::new();
+    for (index, hint) in rows {
+        grouped
+            .entry((hint.oid.clone(), hint.class.clone(), hint.field.clone()))
+            .or_default()
+            .push((index, hint));
+    }
+    let mut table = Vec::new();
+    let mut conflicts = Vec::new();
+    for ((oid, class, field), mut candidates) in grouped {
+        candidates.sort_by(|(a, x), (b, y)| {
+            let rank = |i: &usize| records.get(*i).map(ModuleRecord::rank);
+            rank(b)
+                .cmp(&rank(a))
+                .then_with(|| (&x.module, &x.set).cmp(&(&y.module, &y.set)))
+        });
+        let Some((_, winner)) = candidates.first() else {
+            continue;
+        };
+        let losers: Vec<String> = candidates
+            .iter()
+            .filter(|(_, h)| h.ty != winner.ty)
+            .map(|(_, h)| format!("{} `{}` in {}#{}", h.ty, h.set, h.document, h.module))
+            .collect();
+        if !losers.is_empty() {
+            conflicts.push(HintConflict {
+                oid: oid.to_string(),
+                field: format!("{class}.{field}"),
+                kept: format!(
+                    "{} `{}` in {}#{}",
+                    winner.ty, winner.set, winner.document, winner.module
+                ),
+                others: losers,
+            });
+        }
+        table.push(winner.clone());
+    }
+    (table, conflicts)
 }
 
 /// Which modules are unmaintained: a module of an obsoleted RFC that no maintained module of another document
@@ -1077,6 +1134,25 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]
                 .collect()
         })
         .unwrap_or_default();
+    let hints = match analysis.drafts.first() {
+        Some(&module) if record.syntax_era == SyntaxEra::Y2002 && !record.source.is_draft() => {
+            glint_sema::ir::oid_hints(&analysis.graph, module)
+                .into_iter()
+                .filter_map(|row| {
+                    Some(OidHint {
+                        oid: row.oid.parse().ok()?,
+                        class: row.class,
+                        field: row.field,
+                        document: record.source.document.clone(),
+                        module: record.name.clone(),
+                        set: row.set,
+                        ty: row.ty,
+                    })
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
     syntax.extend(findings);
     Checked {
         outcome: ModuleOutcome {
@@ -1084,6 +1160,7 @@ fn check_record(record: &ModuleRecord, corpus: &Corpus, allowlist: &[AllowedOid]
             findings: syntax,
         },
         assignments,
+        hints,
         labels,
         imports,
     }

@@ -1,0 +1,83 @@
+---
+source: crates/glint-check/tests/decode.rs
+expression: render_text(&decoded)
+---
+    0:d=0  hl=4 l= 532 cons: SEQUENCE                       Certificate
+    4:d=1  hl=4 l= 442 cons:  SEQUENCE                      tbsCertificate: TBSCertificate
+    8:d=2  hl=2 l=   3 cons:   [0] EXPLICIT                 version: Version
+   10:d=3  hl=2 l=   1 prim:    INTEGER                     2 (v3)
+   13:d=2  hl=2 l=  20 prim:   INTEGER                      serialNumber: CertificateSerialNumber 0x282F8FB0071EED66C3DB9DDAC1FF5C225387AD3D
+   35:d=2  hl=2 l=  10 cons:   SEQUENCE                     signature: AlgorithmIdentifier
+   37:d=3  hl=2 l=   8 prim:    OBJECT IDENTIFIER           algorithm: 1.2.840.10045.4.3.2
+   47:d=2  hl=2 l=  58 cons:   SEQUENCE                     issuer.rdnSequence: Name
+   49:d=3  hl=2 l=  11 cons:    SET                         RelativeDistinguishedName
+   51:d=4  hl=2 l=   9 cons:     SEQUENCE                   AttributeTypeAndValue
+   53:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         type: AttributeType 2.5.4.6
+   58:d=5  hl=2 l=   2 prim:      PrintableString           ~ value: US
+   62:d=3  hl=2 l=  19 cons:    SET                         RelativeDistinguishedName
+   64:d=4  hl=2 l=  17 cons:     SEQUENCE                   AttributeTypeAndValue
+   66:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         type: AttributeType 2.5.4.10
+   71:d=5  hl=2 l=  10 prim:      UTF8String                ~ value.uTF8String: DirectoryString{ub-common-name} Glint Test
+   83:d=3  hl=2 l=  22 cons:    SET                         RelativeDistinguishedName
+   85:d=4  hl=2 l=  20 cons:     SEQUENCE                   AttributeTypeAndValue
+   87:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         type: AttributeType 2.5.4.3
+   92:d=5  hl=2 l=  13 prim:      UTF8String                ~ value.uTF8String: X520CommonName glint.example
+  107:d=2  hl=2 l=  30 cons:   SEQUENCE                     validity: Validity
+  109:d=3  hl=2 l=  13 prim:    UTCTime                     notBefore.utcTime: Time 261115154555Z (2026-11-15T15:45:55Z)
+  124:d=3  hl=2 l=  13 prim:    UTCTime                     notAfter.utcTime: Time 271115154555Z (2027-11-15T15:45:55Z)
+  139:d=2  hl=2 l=  58 cons:   SEQUENCE                     subject.rdnSequence: Name
+  141:d=3  hl=2 l=  11 cons:    SET                         RelativeDistinguishedName
+  143:d=4  hl=2 l=   9 cons:     SEQUENCE                   AttributeTypeAndValue
+  145:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         type: AttributeType 2.5.4.6
+  150:d=5  hl=2 l=   2 prim:      PrintableString           ~ value: US
+  154:d=3  hl=2 l=  19 cons:    SET                         RelativeDistinguishedName
+  156:d=4  hl=2 l=  17 cons:     SEQUENCE                   AttributeTypeAndValue
+  158:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         type: AttributeType 2.5.4.10
+  163:d=5  hl=2 l=  10 prim:      UTF8String                ~ value.uTF8String: DirectoryString{ub-common-name} Glint Test
+  175:d=3  hl=2 l=  22 cons:    SET                         RelativeDistinguishedName
+  177:d=4  hl=2 l=  20 cons:     SEQUENCE                   AttributeTypeAndValue
+  179:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         type: AttributeType 2.5.4.3
+  184:d=5  hl=2 l=  13 prim:      UTF8String                ~ value.uTF8String: X520CommonName glint.example
+  199:d=2  hl=2 l=  89 cons:   SEQUENCE                     subjectPublicKeyInfo: SubjectPublicKeyInfo
+  201:d=3  hl=2 l=  19 cons:    SEQUENCE                    algorithm: AlgorithmIdentifier
+  203:d=4  hl=2 l=   7 prim:     OBJECT IDENTIFIER          algorithm: 1.2.840.10045.2.1
+  212:d=4  hl=2 l=   8 prim:     OBJECT IDENTIFIER          ~ parameters.namedCurve: ECParameters 1.2.840.10045.3.1.7 secp256r1
+  222:d=3  hl=2 l=  66 prim:    BIT STRING                  subjectPublicKey: 0 unused bits: 049CEDCF9C738FDC5522A30B96B526682B67D0AF7B1E9958FB7F8123F02AC6C9… (65 octets)
+  290:d=2  hl=3 l= 157 cons:   [3] EXPLICIT                 extensions: Extensions
+  293:d=3  hl=3 l= 154 cons:    SEQUENCE                    
+  296:d=4  hl=2 l=  29 cons:     SEQUENCE                   Extension
+  298:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         extnID: 2.5.29.14
+  303:d=5  hl=2 l=  22 prim:      OCTET STRING              extnValue: CONTAINING
+  305:d=6  hl=2 l=  20 prim:       OCTET STRING             ~ KeyIdentifier D490F377279B6CF8552C7C7AC16DC2997523C404
+  327:d=4  hl=2 l=  43 cons:     SEQUENCE                   Extension
+  329:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         extnID: 2.5.29.17
+  334:d=5  hl=2 l=  36 prim:      OCTET STRING              extnValue: CONTAINING
+  336:d=6  hl=2 l=  34 cons:       SEQUENCE                 ~ GeneralNames
+  338:d=7  hl=2 l=  13 prim:        [2] IMPLICIT            ~ dNSName: GeneralName glint.example
+  353:d=7  hl=2 l=  17 prim:        [2] IMPLICIT            ~ dNSName: GeneralName www.glint.example
+  372:d=4  hl=2 l=  14 cons:     SEQUENCE                   Extension
+  374:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         extnID: 2.5.29.15
+  379:d=5  hl=2 l=   1 prim:      BOOLEAN                   critical: TRUE
+  382:d=5  hl=2 l=   4 prim:      OCTET STRING              extnValue: CONTAINING
+  384:d=6  hl=2 l=   2 prim:       BIT STRING               ~ KeyUsage digitalSignature, keyCertSign
+  388:d=4  hl=2 l=  19 cons:     SEQUENCE                   Extension
+  390:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         extnID: 2.5.29.37
+  395:d=5  hl=2 l=  12 prim:      OCTET STRING              extnValue: CONTAINING
+  397:d=6  hl=2 l=  10 cons:       SEQUENCE                 ~ ExtKeyUsageSyntax
+  399:d=7  hl=2 l=   8 prim:        OBJECT IDENTIFIER       ~ KeyPurposeId 1.3.6.1.5.5.7.3.1
+  409:d=4  hl=2 l=  18 cons:     SEQUENCE                   Extension
+  411:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         extnID: 2.5.29.19
+  416:d=5  hl=2 l=   1 prim:      BOOLEAN                   critical: TRUE
+  419:d=5  hl=2 l=   8 prim:      OCTET STRING              extnValue: CONTAINING
+  421:d=6  hl=2 l=   6 cons:       SEQUENCE                 ~ BasicConstraints
+  423:d=7  hl=2 l=   1 prim:        BOOLEAN                 ~ cA: TRUE
+  426:d=7  hl=2 l=   1 prim:        INTEGER                 ~ pathLenConstraint: 0
+  429:d=4  hl=2 l=  19 cons:     SEQUENCE                   Extension
+  431:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER         extnID: 2.5.29.32
+  436:d=5  hl=2 l=  12 prim:      OCTET STRING              extnValue: CONTAINING
+  438:d=6  hl=2 l=  10 cons:       SEQUENCE                 ~ CertificatePolicies
+  440:d=7  hl=2 l=   8 cons:        SEQUENCE                ~ PolicyInformation
+  442:d=8  hl=2 l=   6 prim:         OBJECT IDENTIFIER      ~ policyIdentifier: CertPolicyId 2.23.140.1.2.1
+  450:d=1  hl=2 l=  10 cons:  SEQUENCE                      signatureAlgorithm: AlgorithmIdentifier
+  452:d=2  hl=2 l=   8 prim:   OBJECT IDENTIFIER            algorithm: 1.2.840.10045.4.3.2
+  462:d=1  hl=2 l=  72 prim:  BIT STRING                    signature: 0 unused bits: 30450220675F3ECEA90BA523FFB5EF490423BC452721B5B64ED5DE860CC56C2A… (71 octets)

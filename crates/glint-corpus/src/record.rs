@@ -231,6 +231,22 @@ pub struct OidAssignment {
     pub document: String,
 }
 
+/// A row of the decoder's OID hint table: in the object set `set` of a 2002-syntax module, the object keyed by `oid`
+/// sets the type field `field` of `class` to `ty`. The decoder uses it for 1988-syntax modules, which have no tables.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OidHint {
+    pub oid: Oid,
+    pub class: String,
+    /// `&ExtnType`.
+    pub field: String,
+    /// The document id of the module that defines the set.
+    pub document: String,
+    pub module: String,
+    pub set: String,
+    /// The type, briefly: the name it refers to, or a built-in type.
+    pub ty: String,
+}
+
 /// An entry of an IANA registry of ASN.1 module identifiers (the "SMI Security for ... Module Identifier"
 /// registries): the authority for which module an identifier in those arcs belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -352,6 +368,9 @@ pub struct CorpusData {
     /// The IANA registries of module identifiers; absent from data built without them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub iana_module_ids: Vec<IanaModuleId>,
+    /// The decoder's OID hint table, one row per OID, class and field; absent from data built without it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub oid_hints: Vec<OidHint>,
 }
 
 impl Default for CorpusData {
@@ -365,6 +384,7 @@ impl Default for CorpusData {
             oid_nodes: Vec::new(),
             oid_allowlist: Vec::new(),
             iana_module_ids: Vec::new(),
+            oid_hints: Vec::new(),
         }
     }
 }

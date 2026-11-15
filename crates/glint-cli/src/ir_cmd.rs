@@ -38,7 +38,7 @@ fn failure(message: &str) -> ExitCode {
 }
 
 /// The corpus module `reference` names: `DOC#NAME[@OID]`, or a bare name only one document defines.
-fn find_module(corpus: &Corpus, reference: &str) -> Result<usize, String> {
+pub(crate) fn find_module(corpus: &Corpus, reference: &str) -> Result<usize, String> {
     if reference.contains('#') {
         return corpus_module(corpus, reference).map_err(|e| format!("{reference}: {e}"));
     }

@@ -59,6 +59,19 @@ pub struct ReportData<'a> {
     pub label_audit: &'a [AuditLine],
     /// Entries read from the IANA module identifier registries.
     pub iana_module_ids: usize,
+    /// Rows of the decoder's OID hint table.
+    pub oid_hints: usize,
+    pub hint_conflicts: &'a [HintConflict],
+}
+
+/// An OID, class and field that two modules bind to different types; the hint table keeps one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HintConflict {
+    pub oid: String,
+    /// `EXTENSION.&ExtnType`.
+    pub field: String,
+    pub kept: String,
+    pub others: Vec<String>,
 }
 
 fn status_name(status: ParseStatus) -> &'static str {
@@ -166,6 +179,7 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         "| IANA module identifier entries | {} |",
         data.iana_module_ids
     );
+    let _ = writeln!(out, "| OID hint table rows | {} |", data.oid_hints);
     let _ = writeln!(
         out,
         "| Label table and registry findings (W142, W143, W144, W146) | {} |",
@@ -307,6 +321,28 @@ pub fn render_report(data: &ReportData<'_>) -> String {
         let _ = writeln!(out, "- {}: {}", allowed.oid, allowed.reason);
     }
     let _ = writeln!(out);
+
+    let _ = writeln!(out, "## OID hint conflicts\n");
+    let _ = writeln!(
+        out,
+        "OIDs whose objects set a type field to different types in different 2002-syntax modules. The decoder's hint \
+         table keeps the module of the most recent current RFC.\n"
+    );
+    if data.hint_conflicts.is_empty() {
+        let _ = writeln!(out, "None.\n");
+    } else {
+        for conflict in data.hint_conflicts {
+            let _ = writeln!(
+                out,
+                "- {} {}: kept {}; also {}",
+                conflict.oid,
+                conflict.field,
+                conflict.kept,
+                conflict.others.join(", ")
+            );
+        }
+        let _ = writeln!(out);
+    }
 
     let _ = writeln!(out, "## Modules needing attention\n");
     let _ = writeln!(

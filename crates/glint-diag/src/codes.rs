@@ -496,6 +496,66 @@ const CODES: &[CodeInfo] = &[
         title: "Module defines a name that the text neither shows nor mentions (reverse check, off by default)",
         basis: "policy",
     },
+    CodeInfo {
+        code: "E400",
+        severity: Severity::Error,
+        title: "Malformed encoding: identifier or length octets that cannot be read, a length past the end of the input, a missing end-of-contents, or constructed encodings nested too deeply",
+        basis: "X.690 8.1",
+    },
+    CodeInfo {
+        code: "E401",
+        severity: Severity::Error,
+        title: "Contents not valid for the type: a BOOLEAN or NULL of the wrong length, an empty or non-minimal INTEGER, a bad OBJECT IDENTIFIER subidentifier, too many unused bits, an invalid time, a character the string type cannot hold",
+        basis: "X.690 8.2–8.23; X.680 41, 46, 47",
+    },
+    CodeInfo {
+        code: "W402",
+        severity: Severity::Warning,
+        title: "Valid BER that DER forbids: indefinite or non-minimal length, constructed string, BOOLEAN TRUE not FF, non-zero unused bits, trailing zero named bits, DEFAULT value encoded, SET or SET OF out of order, time not in the DER form",
+        basis: "X.690 10, 11",
+    },
+    CodeInfo {
+        code: "E403",
+        severity: Severity::Error,
+        title: "A TLV does not match its type (tag or form); it is decoded without a schema",
+        basis: "X.690 8.1.2, 8.14",
+    },
+    CodeInfo {
+        code: "E404",
+        severity: Severity::Error,
+        title: "A required component of a SEQUENCE or SET is missing",
+        basis: "X.690 8.9, 8.11",
+    },
+    CodeInfo {
+        code: "E405",
+        severity: Severity::Error,
+        title: "A TLV that is not a component of a type that is not extensible, a second TLV inside an explicit tag, or octets after a contained value",
+        basis: "X.690 8.9, 8.14",
+    },
+    CodeInfo {
+        code: "I406",
+        severity: Severity::Info,
+        title: "A TLV that matches no component of an extensible type: an extension addition the schema does not know",
+        basis: "X.680 52",
+    },
+    CodeInfo {
+        code: "E407",
+        severity: Severity::Error,
+        title: "A value outside the constraints of its type: value range, size, permitted alphabet, or a simple table constraint",
+        basis: "X.680 49–51; X.682 10",
+    },
+    CodeInfo {
+        code: "W408",
+        severity: Severity::Warning,
+        title: "An open type whose key the object set does not resolve: the key component was not decoded, or no object of the set has the key (an error when the set is not extensible)",
+        basis: "X.682 10",
+    },
+    CodeInfo {
+        code: "E409",
+        severity: Severity::Error,
+        title: "Octets follow the top-level value",
+        basis: "X.690 8.1.1",
+    },
 ];
 
 /// Every registered code.

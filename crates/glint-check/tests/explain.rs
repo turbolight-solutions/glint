@@ -2,15 +2,43 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
-    clippy::indexing_slicing
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects
 )]
 
 //! Every `bad` example in `glint explain` raises its code; every `good` example does not.
 
-use glint_check::{CheckOptions, check_document};
+use glint_check::{CheckOptions, check_document, lower_user_type};
 use glint_corpus::EmptyCorpus;
-use glint_diag::{examples, explain, explained_codes};
+use glint_decode::{NoOracle, decode};
+use glint_diag::{Example, examples, explain, explained_codes};
 use glint_extract::{Format, detect_format};
+
+/// The codes `glint decode` raises for a `der` example: decoded as the type its tags name (`M.T`) of the section's
+/// `asn1 schema` module, or without a schema.
+fn decoder_codes(example: &Example<'_>, found: &[Example<'_>]) -> Vec<&'static str> {
+    let hex: String = example.text.split_whitespace().collect();
+    let bytes: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect();
+    let set = example.tags.iter().find(|t| t.contains('.')).map(|root| {
+        let (module, ty) = root.split_once('.').unwrap();
+        let schema = found
+            .iter()
+            .find(|e| e.language == "asn1" && e.tags.contains(&"schema"))
+            .expect("a `der` example that names a type needs an `asn1 schema` example");
+        lower_user_type(
+            &[schema.text.to_owned()],
+            &EmptyCorpus::default(),
+            module,
+            ty,
+        )
+        .unwrap()
+    });
+    let decoded = decode(&bytes, set.as_ref().map(|s| (s, s.root)), &NoOracle);
+    decoded.all_findings().iter().map(|f| f.code).collect()
+}
 
 fn codes_of(language: &str, text: &str) -> Vec<&'static str> {
     let format = match language {
@@ -42,7 +70,11 @@ fn examples_behave_as_the_explanation_says() {
             if example.tags.contains(&"untested") {
                 continue;
             }
-            let raised = codes_of(example.language, example.text);
+            let raised = if example.language == "der" {
+                decoder_codes(example, &found)
+            } else {
+                codes_of(example.language, example.text)
+            };
             if example.tags.contains(&"bad") && !raised.contains(&code) {
                 failures.push(format!(
                     "{code}: bad example does not raise it (got {raised:?}):\n{}",

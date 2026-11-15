@@ -55,6 +55,124 @@ pub fn lower(graph: &ModuleGraph<'_>, module: ModuleId, name: &str) -> Option<Ir
     Some(set)
 }
 
+/// Lowers the object set assignment `name` of `module` to a table, with the types its rows reach. The root of the set
+/// is a placeholder definition named after the object set; the table is the returned id.
+pub fn lower_object_set(
+    graph: &ModuleGraph<'_>,
+    module: ModuleId,
+    name: &str,
+) -> Option<(IrSet, ObjectSetId)> {
+    let loaded = graph.module(module)?;
+    let index = *loaded.model.local(name).first()?;
+    let sym = SymRef { module, index };
+    let eval = Evaluator::new(graph);
+    let sem = Sem::new(graph);
+    if sem.kind(sym) != SymKind::ObjectSet {
+        return None;
+    }
+    let ClassRes::Class(class) = sem.governor_class(sym) else {
+        return None;
+    };
+    let group = sem
+        .symbol(sym)
+        .and_then(|s| s.value_node.as_ref())
+        .and_then(|v| crate::view::child(v, SyntaxKind::BraceGroup))?;
+    let mut lowerer = Lowerer::new(graph, &eval, &sem);
+    lowerer.at = format!("{}.{name}", lowerer.module_name(module));
+    let root = lowerer.placeholder(module, name, Type::opaque("an object set"));
+    let table = lowerer.object_set(&group, &Env::new(module), Some(class))?;
+    let mut set = IrSet {
+        version: glint_ir::IR_VERSION,
+        root,
+        types: lowerer.types,
+        object_sets: lowerer.sets,
+        oids: lowerer.oids.into_values().collect(),
+        notes: lowerer.notes,
+    };
+    glint_ir::summarize(&mut set);
+    Some((set, table))
+}
+
+/// A row of the decoder's OID hint table: the object set `set` of the module binds `field` of `class` to `ty` for the
+/// objects keyed by `oid` (Codegen and Decoder Design, "OID hints").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HintRow {
+    pub oid: String,
+    pub class: String,
+    pub field: String,
+    pub set: String,
+    /// The type, briefly: a definition name or a built-in type.
+    pub ty: String,
+}
+
+/// The hint rows of every object set assignment of `module` whose class is keyed by an object identifier.
+pub fn oid_hints(graph: &ModuleGraph<'_>, module: ModuleId) -> Vec<HintRow> {
+    let Some(loaded) = graph.module(module) else {
+        return Vec::new();
+    };
+    let mut rows = Vec::new();
+    for symbol in &loaded.model.symbols {
+        let Some((set, table)) = lower_object_set(graph, module, &symbol.name) else {
+            continue;
+        };
+        let Some(table) = set.object_set(table) else {
+            continue;
+        };
+        for row in &table.rows {
+            let Some(Value::Oid(oid)) = &row.key else {
+                continue;
+            };
+            for (field, ty) in &row.types {
+                if matches!(ty.kind, Kind::Opaque { .. }) {
+                    continue;
+                }
+                rows.push(HintRow {
+                    oid: oid.clone(),
+                    class: table.class.clone(),
+                    field: field.clone(),
+                    set: symbol.name.clone(),
+                    ty: brief(&set, ty),
+                });
+            }
+        }
+    }
+    rows.sort_by(|a, b| {
+        (&a.oid, &a.class, &a.field, &a.set).cmp(&(&b.oid, &b.class, &b.field, &b.set))
+    });
+    rows.dedup_by(|a, b| {
+        (&a.oid, &a.class, &a.field, &a.ty) == (&b.oid, &b.class, &b.field, &b.ty)
+    });
+    rows
+}
+
+/// A type in a few words: the name it refers to, or its built-in kind.
+fn brief(set: &IrSet, ty: &Type) -> String {
+    match &ty.kind {
+        Kind::Reference { target } => set
+            .get(*target)
+            .map_or_else(|| "?".to_owned(), |def| def.origin.asn1_name.clone()),
+        Kind::Boolean => "BOOLEAN".to_owned(),
+        Kind::Integer { .. } => "INTEGER".to_owned(),
+        Kind::Enumerated { .. } => "ENUMERATED".to_owned(),
+        Kind::Real => "REAL".to_owned(),
+        Kind::Null => "NULL".to_owned(),
+        Kind::BitString { .. } => "BIT STRING".to_owned(),
+        Kind::OctetString => "OCTET STRING".to_owned(),
+        Kind::ObjectIdentifier => "OBJECT IDENTIFIER".to_owned(),
+        Kind::RelativeOid => "RELATIVE-OID".to_owned(),
+        Kind::String { string } => format!("{string:?}"),
+        Kind::Time { time } => format!("{time:?}"),
+        Kind::Sequence(_) => "SEQUENCE".to_owned(),
+        Kind::Set(_) => "SET".to_owned(),
+        Kind::Choice(_) => "CHOICE".to_owned(),
+        Kind::SequenceOf(c) => format!("SEQUENCE OF {}", brief(set, &c.element)),
+        Kind::SetOf(c) => format!("SET OF {}", brief(set, &c.element)),
+        Kind::OpenType(_) => "open type".to_owned(),
+        Kind::Other { name } => name.clone(),
+        Kind::Opaque { .. } => "opaque".to_owned(),
+    }
+}
+
 /// What a dummy reference stands for inside one instantiation (X.683 9).
 #[derive(Debug, Clone)]
 enum Actual {

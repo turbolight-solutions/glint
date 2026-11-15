@@ -21,6 +21,6 @@ pub use oid::{Oid, OidParseError};
 pub use record::{
     AppliedErratum, BODY_DRAFT, BODY_RFC, CorpusData, CorpusInfo, DocumentRecord, ErrataFailure,
     ErratumPatch, Exports, HunkLines, IanaModuleId, ModuleRecord, ModuleSource, OidAssignment,
-    OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title, draft_name, rfc_number,
-    same_document,
+    OidHint, OverrideTier, ParseStatus, SourceKind, SyntaxEra, document_title, draft_name,
+    rfc_number, same_document,
 };

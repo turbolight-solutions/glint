@@ -3,6 +3,7 @@
 
 mod closure;
 mod config;
+mod decode;
 mod pipeline;
 mod source;
 
@@ -11,6 +12,9 @@ pub use closure::{
     ClosureOptions, FIRST_AUTO_ARC, ModuleRename, OidKey, Problem, Rename, Role, Warning, closure,
 };
 pub use config::{Config, ConfigError, SeveritySetting};
+pub use decode::{
+    CorpusOracle, find_corpus_module, lower_corpus_root, lower_corpus_type, lower_user_type,
+};
 pub use pipeline::{
     BlockSummary, CheckOptions, ImportSummary, ModuleSummary, Report, check_document,
     check_extraction, document_id,

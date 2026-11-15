@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     CorpusData, CorpusInfo, DocumentRecord, IanaModuleId, ModuleRecord, Oid, OidAssignment,
-    OidLabels, draft_name,
+    OidHint, OidLabels, draft_name,
 };
 
 /// Read access to the corpus. The check pipeline sees only this trait, so it stays free of I/O.
@@ -22,6 +22,10 @@ pub trait CorpusProvider {
     /// The IANA module identifier entry for `oid`, or for the nearest arc above it that IANA registers.
     fn iana_module_id(&self, _oid: &Oid) -> Option<&IanaModuleId> {
         None
+    }
+    /// The decoder's OID hint table rows for exactly `oid`, the preferred first.
+    fn oid_hints(&self, _oid: &Oid) -> &[OidHint] {
+        &[]
     }
 }
 
@@ -73,6 +77,7 @@ pub struct Corpus {
     documents: Vec<DocumentRecord>,
     labels: OidLabels,
     iana: BTreeMap<Oid, IanaModuleId>,
+    hints: BTreeMap<Oid, Vec<OidHint>>,
 }
 
 impl Corpus {
@@ -96,6 +101,10 @@ impl Corpus {
                 .or_default()
                 .push(assignment);
         }
+        let mut hints: BTreeMap<Oid, Vec<OidHint>> = BTreeMap::new();
+        for hint in data.oid_hints {
+            hints.entry(hint.oid.clone()).or_default().push(hint);
+        }
         Self {
             info: data.info,
             modules: data.modules,
@@ -109,6 +118,7 @@ impl Corpus {
                 .into_iter()
                 .map(|entry| (entry.oid.clone(), entry))
                 .collect(),
+            hints,
         }
     }
 
@@ -127,6 +137,7 @@ impl Corpus {
             oid_nodes: self.labels.nodes(),
             oid_allowlist: self.labels.allowlist().to_vec(),
             iana_module_ids: self.iana.into_values().collect(),
+            oid_hints: self.hints.into_values().flatten().collect(),
         }
     }
 }
@@ -205,6 +216,10 @@ impl CorpusProvider for Corpus {
             current = arc.parent();
         }
         None
+    }
+
+    fn oid_hints(&self, oid: &Oid) -> &[OidHint] {
+        self.hints.get(oid).map_or(&[], Vec::as_slice)
     }
 }
 

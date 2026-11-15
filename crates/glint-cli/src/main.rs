@@ -4,6 +4,7 @@ mod check_cmd;
 mod closure_cmd;
 mod common;
 mod corpus_cmd;
+mod decode_cmd;
 mod errata_cmd;
 mod explain_cmd;
 mod extract_cmd;
@@ -46,6 +47,17 @@ enum Command {
     Closure(closure_cmd::Args),
     /// Browse the module corpus (RFCs, active Internet-Drafts and standalone modules) and update its data
     Corpus(corpus_cmd::Args),
+    /// Decode a BER or DER encoding (PEM, base64 or binary) as a type, like `openssl asn1parse` with names
+    ///
+    /// Every TLV is shown with the component and type it encodes and its value: OIDs named from the corpus, the
+    /// contents of `CONTAINING` octet strings and of open types decoded through their object sets, and for 1988-syntax
+    /// modules, which have no object sets, through the corpus's OID hint table (marked `~`, heuristic). Findings:
+    /// malformed encodings, invalid contents, DER violations, tag mismatches, missing or unknown components,
+    /// constraint violations, unresolved open types and trailing data (`glint explain E400` ... `E409`). A TLV that
+    /// does not match its type is decoded without a schema, and decoding carries on.
+    ///
+    /// Exits 1 when the encoding has errors (and with --strict-der, DER violations).
+    Decode(decode_cmd::Args),
     /// Triage the RFC Editor's Verified errata of RFCs with ASN.1, and keep the corpus's errata patches
     ///
     /// A Verified erratum that corrects ASN.1, in a module or inline, is recorded as a patch to the RFC's source
@@ -74,6 +86,7 @@ fn main() -> ExitCode {
         Command::Check(args) => check_cmd::run(&args),
         Command::Closure(args) => closure_cmd::run(&args),
         Command::Corpus(args) => corpus_cmd::run(&args),
+        Command::Decode(args) => decode_cmd::run(&args),
         Command::Errata(args) => errata_cmd::run(&args),
         Command::Explain(args) => explain_cmd::run(&args),
         Command::Extract(args) => extract_cmd::run(&args),

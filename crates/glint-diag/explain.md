@@ -2,6 +2,8 @@
 
 Each section is the text of `glint explain <code>`. Fenced examples tagged `bad` must raise the code and examples tagged `good` must not (`crates/glint-check/tests/explain.rs`); `untested` examples need a corpus or a configuration the test does not have.
 
+The decoder's codes (`E400`–`E409`) have `der` examples: an encoding in hexadecimal, decoded by `glint decode`. An example that names a type (`M.T`) is decoded as that type of the section's `asn1 schema` module; one that names none is decoded without a schema.
+
 ## E001
 
 The parser expected a token or construct and found something else. Glint reports the first problem in a construct and then resynchronizes, so one mistake does not hide the rest of the module.
@@ -1131,4 +1133,173 @@ A type or class defined in a draft module that the text neither shows in a snipp
 M DEFINITIONS ::= BEGIN
   Hidden ::= INTEGER
 END
+```
+
+## E400
+
+The identifier or length octets cannot be read (a tag number or length cut off, the reserved length octet `FF`, an indefinite length on a primitive encoding), a length runs past the end of the input, an indefinite length has no end-of-contents octets, or constructed encodings nest more than 64 deep (X.690 8.1). The octets from there on are shown as they are.
+
+```der bad
+04 05 01 02
+```
+
+The length says 5 octets, but only 2 follow.
+
+```der good
+04 02 01 02
+```
+
+## E401
+
+The contents octets are not a valid encoding of a value of the type: a BOOLEAN with other than one octet, a NULL with any, an empty INTEGER or one not written in the fewest octets, an OBJECT IDENTIFIER subidentifier that starts with `80` or is cut off, a BIT STRING with more than 7 unused bits, a UTCTime or GeneralizedTime that is not a valid time, a character the string type cannot hold, or an ENUMERATED value that is not an item of a type that is not extensible (X.690 8.2–8.23).
+
+```der bad
+02 02 00 05
+```
+
+The leading `00` is not needed: 5 is `02 01 05`.
+
+```der good
+02 01 05
+```
+
+## W402
+
+The encoding is valid BER but not DER (X.690 10, 11): an indefinite length, a length not written in the fewest octets, a string in the constructed form, BOOLEAN TRUE written as other than `FF`, unused bits of a BIT STRING that are not zero, a BIT STRING with named bits that ends in a zero bit, a component encoded with its `DEFAULT` value, `SET` components out of tag order, `SET OF` elements out of order, or a UTCTime or GeneralizedTime not in the form DER requires. Certificates and other signed structures must be DER, because the signature covers the exact octets. `glint decode --strict-der` fails on these.
+
+```der bad
+01 01 01
+```
+
+TRUE in DER is `01 01 FF`.
+
+```der good
+01 01 FF
+```
+
+## E403
+
+The TLV does not match the type the schema expects at its place: another tag, or the primitive form where the type is constructed. The TLV and everything in it are decoded without a schema, and decoding carries on with the next TLV.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE OF INTEGER
+END
+```
+
+```der bad M.T
+30 03 01 01 FF
+```
+
+The element is a BOOLEAN, not an INTEGER.
+
+```der good M.T
+30 03 02 01 05
+```
+
+## E404
+
+A component that is neither `OPTIONAL` nor `DEFAULT` is missing from a `SEQUENCE` or `SET`. Components of extension addition groups may be absent: a sender may use an earlier version of the type.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER, b BOOLEAN }
+END
+```
+
+```der bad M.T
+30 03 02 01 05
+```
+
+```der good M.T
+30 06 02 01 05 01 01 FF
+```
+
+## E405
+
+A TLV that is not a component of its `SEQUENCE` or `SET`, when the type is not extensible; a second TLV inside an explicit tag; or octets after the value inside a `CONTAINING` octet string. The TLV is decoded without a schema.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER }
+END
+```
+
+```der bad M.T
+30 06 02 01 05 01 01 FF
+```
+
+```der good M.T
+30 03 02 01 05
+```
+
+## I406
+
+A TLV that matches no component of an extensible `SEQUENCE`, `SET` or `CHOICE`: an extension addition from a later version of the type than the schema. X.680 52 asks a decoder to accept it; it is decoded without a schema.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a INTEGER, ... }
+END
+```
+
+```der bad M.T
+30 06 02 01 05 01 01 FF
+```
+
+```der good M.T
+30 03 02 01 05
+```
+
+## E407
+
+The value is outside the constraints of its type: an integer outside its value range, a string, octet string, bit string or collection outside its size range, a character outside the permitted alphabet, or a value that is not the key of any object of the set in a simple table constraint of a set that is not extensible. Extensible constraints (`(1..10, ...)`) are not checked, since a later version may permit more.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= INTEGER (1..10)
+END
+```
+
+```der bad M.T
+02 01 0B
+```
+
+```der good M.T
+02 01 0A
+```
+
+## W408
+
+An open type (a type field read through a component relation constraint, X.682 10) whose type the object set does not give: the component that holds the key was not decoded, the set has no object with the key, or the object does not set the field. The contents are decoded through the OID hint table when it names a type for the key, otherwise without a schema. When the set is not extensible, a key outside it is an error.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  ALG ::= CLASS { &id OBJECT IDENTIFIER UNIQUE, &Params OPTIONAL } WITH SYNTAX { ID &id [PARAMS &Params] }
+  alg-a ALG ::= { ID { 1 2 3 } PARAMS INTEGER }
+  Algs ALG ::= { alg-a, ... }
+  T ::= SEQUENCE { id ALG.&id({Algs}), params ALG.&Params({Algs}{@id}) }
+END
+```
+
+```der bad M.T
+30 07 06 02 2A 04 02 01 05
+```
+
+`1.2.4` is not the identifier of an object of `Algs`.
+
+```der good M.T
+30 07 06 02 2A 03 02 01 05
+```
+
+## E409
+
+Octets follow the top-level value: the input holds more than one value, or junk after it. Each further TLV is shown, decoded without a schema.
+
+```der bad
+05 00 05 00
+```
+
+```der good
+05 00
 ```

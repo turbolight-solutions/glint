@@ -17,6 +17,7 @@ etcetera = { workspace = true }
 glint-check = { workspace = true }
 glint-corpus = { workspace = true }
 glint-corpus-build = { workspace = true }
+glint-decode = { workspace = true }
 glint-errata = { workspace = true }
 glint-diag = { workspace = true }
 glint-extract = { workspace = true }

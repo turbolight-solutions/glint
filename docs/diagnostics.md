@@ -2,7 +2,7 @@
 
 Every code has a fixture (a test named after the clause it enforces), an `explain` entry (`crates/glint-diag/explain.md`, shown by `glint explain <code>`; its `bad` and `good` examples are tested by `crates/glint-check/tests/explain.rs`) and a row here. Codes are stable; severities can be remapped in `glint.toml`.
 
-Implemented so far (M1, M2, M3, M4, M5):
+Implemented so far (M1, M2, M3, M4, M5, and the decoder of the codegen and decoder design, its milestone 2):
 
 | Code | Default | Meaning | Basis | Fixtures |
 | --- | --- | --- | --- | --- |
@@ -88,6 +88,16 @@ Implemented so far (M1, M2, M3, M4, M5):
 | `I303` | info | The snippet's name is defined by several modules; says which one the snippet matches | policy | `tests/snippets.rs` |
 | `W304` | warning | Unknown `-- glint:` directive, or `module=` names a module that is neither in the draft nor in the corpus | policy | `tests/snippets.rs` |
 | `W310` | warning | A type or class defined in a draft module that the text neither shows in a snippet nor mentions by name. Off unless `snippets.reverse_check = true` | policy | `tests/snippets.rs` |
+| `E400` | error | Malformed encoding: identifier or length octets that cannot be read (cut off, the reserved length `FF`, indefinite length on a primitive), a length past the end of the input, no end-of-contents octets, nesting deeper than 64; the rest is shown as it is | X.690 8.1 | `glint-decode` `ber.rs`, `crates/glint-check/tests/decode.rs` |
+| `E401` | error | Contents not valid for the type: BOOLEAN or NULL of the wrong length, empty or non-minimal INTEGER or ENUMERATED, bad OBJECT IDENTIFIER subidentifier, more than 7 unused bits, an invalid UTCTime or GeneralizedTime, a character the string type cannot hold, a segment of a constructed string of another type, an ENUMERATED value outside a type that is not extensible | X.690 8.2–8.23 | `glint-decode` `value.rs` |
+| `W402` | warning | Valid BER that DER forbids: indefinite or non-minimal length, high-tag-number form for a small tag, constructed string, BOOLEAN TRUE not `FF`, non-zero unused bits, trailing zero named bits, a component encoded with its `DEFAULT`, `SET` out of tag order, `SET OF` out of order, UTCTime or GeneralizedTime not in the DER form. `glint decode --strict-der` fails on it | X.690 10, 11 | `glint-decode` `ber.rs`, `value.rs`, `tests/decode.rs` |
+| `E403` | error | A TLV does not match its type (tag or form); it is decoded without a schema and decoding carries on | X.690 8.1.2, 8.14 | `tests/decode.rs` |
+| `E404` | error | A required component of a `SEQUENCE` or `SET` is missing (extension additions may be absent) | X.690 8.9, 8.11 | explain example |
+| `E405` | error | A TLV that is not a component of a type that is not extensible, a second TLV inside an explicit tag, or octets after a contained value | X.690 8.9, 8.14 | explain example |
+| `I406` | info | A TLV that matches no component or alternative of an extensible type: an unknown extension addition | X.680 52 | explain example |
+| `E407` | error | A value outside the constraints of its type (value range, size, permitted alphabet, simple table constraint of a set that is not extensible); extensible constraints are not checked | X.680 49–51; X.682 10 | `tests/decode_cli.rs`, explain example |
+| `W408` | warning | An open type the object set does not resolve: the key component was not decoded, no object has the key, or the object does not set the field; decoded through the OID hint table when it can be. An error when the set is not extensible and has no object with the key | X.682 10 | explain example |
+| `E409` | error | Octets follow the top-level value | X.690 8.1.1 | `tests/decode.rs` |
 
 ### Snippet comparison (M5)
 

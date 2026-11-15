@@ -1,0 +1,16 @@
+---
+source: crates/glint-check/tests/decode.rs
+expression: render_text(&decoded)
+---
+    0:d=0  hl=2 l= inf cons: SEQUENCE                       
+       ! W402 warning: indefinite length (X.690 10.1)
+    2:d=1  hl=2 l= inf cons:  OCTET STRING                  
+        ! W402 warning: indefinite length (X.690 10.1)
+    4:d=2  hl=2 l=   1 prim:   OCTET STRING                 AA
+    7:d=2  hl=2 l=   1 prim:   OCTET STRING                 BB
+   12:d=1  hl=3 l=   1 prim:  INTEGER                       5
+        ! W402 warning: length 1 not written in the fewest octets (X.690 10.1)
+   16:d=1  hl=2 l=   1 prim:  BOOLEAN                       TRUE
+        ! W402 warning: BOOLEAN TRUE written as 01, not FF (X.690 11.1)
+   21:d=0  hl=2 l=   0 prim: NULL                           
+! E409 2 octets follow the value, from offset 21

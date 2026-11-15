@@ -1,0 +1,21 @@
+[package]
+name = "glint-decode"
+version = "0.1.0"
+description = "Glint's schema-driven BER/DER decoder"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+glint-diag = { workspace = true }
+glint-ir = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }

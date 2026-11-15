@@ -165,13 +165,15 @@ pub struct Tlv {
     pub offset: usize,
     pub header_len: usize,
     pub len: Length,                 // Definite(n) | Indefinite
-    pub tag: Tag,                    // class, number, constructed
-    pub field: Option<String>,       // component name, or CHOICE alternative
-    pub type_name: Option<String>,   // Module.Type as declared
+    pub end: usize,                  // end-of-contents octets included
+    pub tag: Option<Tag>,            // class, number, constructed; None for octets that are not a TLV
+    pub tagging: Option<TagMode>,    // a tag the module writes: EXPLICIT or IMPLICIT
+    pub field: Option<String>,       // component name, or component.alternative for a CHOICE
+    pub type_name: Option<String>,   // Module.Type as declared, with actual parameters
     pub value: Option<Rendered>,
-    pub children: Vec<Tlv>,
+    pub children: Vec<Tlv>,          // constructed contents, or the value a CONTAINING octet string holds
     pub findings: Vec<DecodeFinding>,
-    pub schema: SchemaState,         // Matched | Unmatched (decoded without a schema)
+    pub schema: SchemaState,         // Matched | Unmatched (decoded without a schema) | Hinted { from }
 }
 ```
 
@@ -179,7 +181,7 @@ pub struct Tlv {
 - integers: decimal, plus hex for large ones, plus the named number;
 - `ENUMERATED`: the name;
 - bit strings: the set bits by name, plus unused bits;
-- OIDs: dotted form plus labels and the assigning module from the corpus label table (`oid_nodes`);
+- OIDs: dotted form plus the names the corpus assigns them (`oid_assignments`), with module and document, then the OID constants of the IR;
 - times: parsed and normalized;
 - strings: decoded text, with a finding when it is not valid for the type;
 - octet strings: hex, with `CONTAINING` and open-type contents decoded as children.
@@ -192,7 +194,7 @@ pub struct Tlv {
 - unresolved open-type keys;
 - trailing data.
 
-Findings carry codes in the existing diagnostics scheme, documented in `explain`.
+Findings carry codes in the existing diagnostics scheme, documented in `explain`: `E400` (malformed), `E401` (invalid contents), `W402` (DER), `E403` (tag mismatch), `E404` (missing component), `E405` (unexpected TLV), `I406` (unknown extension addition), `E407` (constraint), `W408` (unresolved open type), `E409` (trailing data). The 3xx range this spec first sketched belongs to the snippet checks. Constraints are checked from the IR's summaries (value, size, alphabet) and simple table constraints; extensible constraints are not checked, and `WITH COMPONENTS` presence constraints are not yet.
 
 ### Mismatch behaviour
 
@@ -200,9 +202,11 @@ When a TLV does not match the expected type, it is marked `Unmatched`, its subtr
 
 ### OID hints for tables the module doesn't have
 
-1988-syntax modules carry no information object sets: RFC 5280's `extnValue` is a plain `OCTET STRING`, and `AlgorithmIdentifier.parameters` is `ANY DEFINED BY algorithm`. In that situation the decoder looks up the sibling OID in a **hint table** and decodes the contents as the type the table names. The table is built by corpus-build from the object sets of 2002-syntax modules: rows of (OID, class field) → (module, type). It is published in `corpus.json`.
+1988-syntax modules carry no information object sets: RFC 5280's `extnValue` is a plain `OCTET STRING`, and `AlgorithmIdentifier.parameters` is `ANY DEFINED BY algorithm`. In that situation the decoder looks up the sibling OID in a **hint table** and decodes the contents as the type the table names. The table is built by corpus-build from the object sets of published 2002-syntax modules: one row per (OID, class, field) → (document, module, object set, type), the type also in brief for the report. It is published in `corpus.json` as `oid_hints`, an optional field, so the data schema does not change. At decode time the hinted object set is lowered from its module (`glint_sema::ir::lower_object_set`) and the row's type read from it.
 
-A hinted decode is marked `SchemaState::Hinted { from: "rfc5912#PKIX1Implicit-2009" }`. The web and CLI show it as heuristic (a distinct badge, `~` in the text output), and its findings are capped at warning severity. `ANY DEFINED BY` also uses hints when the module's own text does not resolve the key. Codegen never uses hints: generated code reflects only the selected modules.
+The sibling OID is the value of `DEFINED BY`, else the OID of the nearest component decoded before in the innermost record (a nested one, like `algorithm.algorithm`, when no direct one is). Hints apply to open types without a table and to plain `OCTET STRING`s (not `BIT STRING`s) that have no contents constraint. The decoder tries the hinted types in order and keeps the first that fits: one TLV whose decode has no `E400`, `E401`, `E403`, `E404` or `E405`; otherwise the contents stay as they are.
+
+A hinted decode is marked `SchemaState::Hinted { from: "rfc5912#PKIX1Implicit-2009" }`. The web and CLI show it as heuristic (a distinct badge, `~` in the text output), and its findings are capped at warning severity. `ANY DEFINED BY` also uses hints when the module's own text does not resolve the key, and so does an open type whose (extensible) table has no object with the key. Codegen never uses hints: generated code reflects only the selected modules.
 
 ### Selecting types
 
@@ -211,10 +215,10 @@ A decode is driven by a **root type**. Besides the CLI and web picker, roots com
 ### CLI
 
 ```
-glint decode <module> <Type> [FILE|-] [--input auto|pem|base64|der] [--json]
+glint decode [<module> <Type>] [FILE|-] [--file x.asn]... [--input auto|pem|base64|der] [--json] [--strict-der] [--no-schema]
 ```
 
-`<module>` is `source#Name` (`rfc5912#PKIX1Explicit-2009`), a bare module name resolved as an import would be, or `--file x.asn` for user ASN.1. Text output extends asn1parse's columns:
+`<module>` is `source#Name` (`rfc5912#PKIX1Explicit-2009`), a bare module name only one document defines, or with `--file x.asn` the name of a module of user ASN.1. Without a module and type, each PEM block's label chooses the first root of the label map that the corpus has, or the input is decoded without a schema. Text output extends asn1parse's columns:
 
 ```
     0:d=0  hl=4 l=1234 cons: SEQUENCE                    Certificate
@@ -222,13 +226,13 @@ glint decode <module> <Type> [FILE|-] [--input auto|pem|base64|der] [--json]
     8:d=2  hl=2 l=   3 cons:   [0] EXPLICIT              version: Version
    10:d=3  hl=2 l=   1 prim:    INTEGER                  2 (v3)
    ...
-  512:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER      extnID: 2.5.29.15 id-ce-keyUsage
-  517:d=5  hl=2 l=   4 prim:      OCTET STRING           extnValue: CONTAINING KeyUsage
-  519:d=6  hl=2 l=   2 prim:       BIT STRING            digitalSignature, keyCertSign
-         ! W3xx DER: ...
+  374:d=5  hl=2 l=   3 prim:      OBJECT IDENTIFIER      extnID: 2.5.29.15 id-ce-keyUsage
+  382:d=5  hl=2 l=   4 prim:      OCTET STRING           extnValue: CONTAINING
+  384:d=6  hl=2 l=   2 prim:       BIT STRING            KeyUsage digitalSignature, keyCertSign
+         ! W402 warning: ...
 ```
 
-`--json` prints the `Tlv` tree. The exit code is non-zero on errors (not on DER notes alone, unless `--strict-der`).
+A hinted TLV has `~` before its field. `--json` prints, per input, its encoding and label, the root type, and the `Tlv` trees. The exit code is non-zero on errors (not on DER notes alone, unless `--strict-der`).
 
 ## Codegen
 
@@ -404,8 +408,8 @@ glint artifacts extract FILE           # scan a local document, no corpus data n
 
 ## Milestones
 
-1. **IR and lowering.** Constraint algebra, effective summaries, object-set tables, monomorphization, naming inputs. *Accept:* IR snapshots for the fixture roots with no `Opaque` constraints in the RFC 5912 `Certificate` closure.
-2. **Decoder, CLI.** Sniffing, BER walk, rendering, DER and constraint findings, mismatch fallback, OID hint table, `glint decode`. *Accept:* a real certificate decoded with the RFC 5912 modules shows every extension's contents decoded through the `ExtensionSet` table, with OID labels. The same certificate decoded with the RFC 5280 modules shows its extensions decoded through hints, marked heuristic.
+1. **IR and lowering** (done). Constraint algebra, effective summaries, object-set tables, monomorphization, naming inputs. *Accept:* IR snapshots for the fixture roots with no `Opaque` constraints in the RFC 5912 `Certificate` closure.
+2. **Decoder, CLI** (done). Sniffing, BER walk, rendering, DER and constraint findings, mismatch fallback, OID hint table, `glint decode`. *Accept:* a real certificate decoded with the RFC 5912 modules shows every extension's contents decoded through the `ExtensionSet` table, with OID labels. The same certificate decoded with the RFC 5280 modules shows its extensions decoded through hints, marked heuristic.
 3. **Artifacts.** PEM extraction, identification, `artifacts.json`, the report section, `corpus/artifacts.expected`, `glint artifacts`, example checks in `check`. *Accept:* every PEM example in the corpus is extracted or has an extraction finding; every decode failure is triaged as a decoder bug (fixed) or an erratum candidate (listed).
 4. **Workbench web route: Decode and Artifacts tabs.** *Accept:* drag-and-drop of PEM, base64 and DER files; tree and hex linked both ways; a shareable hash route; artifact download in the right format; Open in Decode.
 5. **Codegen middle layer, registry, rasn backend + runtime.** *Accept:* fixture roots compile, the differential test passes over the vectors and artifacts, round-trip passes.
