@@ -62,8 +62,10 @@ jobs:
           set -euo pipefail
           tag="$TAG"
           [ -n "$tag" ] || tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
-          site="$(find in/site -name 'glint-site-*.zip' 2>/dev/null | head -n 1)"
-          data="$(find in/data -name 'glint-data-*.zip' 2>/dev/null | head -n 1)"
+          # Each input is optional; find fails on a directory that was never downloaded.
+          site="" data=""
+          [ ! -d in/site ] || site="$(find in/site -name 'glint-site-*.zip' | head -n 1)"
+          [ ! -d in/data ] || data="$(find in/data -name 'glint-data-*.zip' | head -n 1)"
           deploy/pages-site.sh "$tag" "$site" "$data"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
