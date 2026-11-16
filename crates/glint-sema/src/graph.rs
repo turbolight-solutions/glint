@@ -113,7 +113,7 @@ pub struct Lookup {
     pub found: Found,
     /// The import clause the name came through, if any.
     pub via_clause: Option<usize>,
-    /// The name is defined locally and imported, or imported more than once (X.680 13.20).
+    /// The name is imported more than once and not defined locally (X.680 13.20).
     pub ambiguous: bool,
 }
 
@@ -554,23 +554,23 @@ impl<'c> ModuleGraph<'c> {
 
     // ---- name lookup ------------------------------------------------------------------------
 
-    /// Finds what the unqualified `name` refers to in `from` (X.680 13.19, 13.20).
+    /// Finds what the unqualified `name` refers to in `from` (X.680 13.19, 13.20). A local definition wins over an
+    /// import of its name: the import can then only be written `Module.name` (13.20), and the local one only bare
+    /// (14.6).
     pub fn lookup(&self, from: ModuleId, name: &str) -> Option<Lookup> {
         let module = self.module(from)?;
-        let local = module.model.local(name).first().copied();
         let imported = module.model.imported(name);
-        let count = usize::from(local.is_some()).saturating_add(imported.len());
-        let ambiguous = count > 1;
-        if let Some(index) = local {
+        if let Some(&index) = module.model.local(name).first() {
             return Some(Lookup {
                 found: Found::Symbol {
                     module: from,
                     index,
                 },
                 via_clause: None,
-                ambiguous,
+                ambiguous: false,
             });
         }
+        let ambiguous = imported.len() > 1;
         let Some(&(clause, _)) = imported.first() else {
             let builtin = self.builtin?;
             let &index = self.module(builtin)?.model.local(name).first()?;

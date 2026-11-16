@@ -138,13 +138,13 @@ fn symbol_imported_from_two_modules_must_be_qualified() {
     assert!(findings.is_empty(), "{:?}", codes(&findings));
 }
 
+// X.680 13.20, 14.6: the import of a name the module also defines can only be written `A.X`, and the module's own
+// definition can only be written bare, so a bare `X` is the local one: no E114, and `TRUE` is a value of it.
 #[test]
-fn symbol_defined_locally_and_imported_must_be_qualified() {
+fn bare_name_defined_locally_and_imported_is_the_local_one() {
     let a = "A DEFINITIONS ::= BEGIN X ::= INTEGER END";
-    let b = "M DEFINITIONS ::= BEGIN IMPORTS X FROM A; X ::= BOOLEAN T ::= SEQUENCE { a X } END";
-    let mut found = two(a, b);
-    found.sort_unstable();
-    assert_eq!(found, ["E114", "W115"]);
+    let b = "M DEFINITIONS ::= BEGIN IMPORTS X FROM A; X ::= BOOLEAN T ::= SEQUENCE { a X, b A.X } v X ::= TRUE END";
+    assert_eq!(two(a, b), ["W115"]);
 }
 
 // X.680 13.20: valid when every use is qualified, but deprecated.

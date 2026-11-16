@@ -208,7 +208,7 @@ pub(super) fn check_reference(
                 let finding = Finding::new(
                     "E114",
                     format!(
-                        "`{name}` is defined or imported more than once and must be written `Module.{name}`"
+                        "`{name}` is imported from more than one module and must be written `Module.{name}`"
                     ),
                     ctx.loc(range),
                 );

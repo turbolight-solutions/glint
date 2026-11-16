@@ -4,17 +4,17 @@ The errors corpus-build and `glint check` still report once every Verified RFC e
 and what would fix them. `corpus/errata/to-file.md` lists the defects to report to the RFC Editor; this file is the
 wider picture, Glint's own gaps included. Update it when a fix lands (see "How to update").
 
-As of 2026-11-15: corpus build `3204450b` (482 modules) from a mirror of 2026-11-07.
+As of 2026-11-15: corpus build `03b7fa9a` (482 modules) from a mirror of 2026-11-07.
 
 ## Summary
 
-With every Verified erratum triaged (369 decisions, 111 applied), Glint still reports **834 errors in 65 RFC modules
+With every Verified erratum triaged (369 decisions, 111 applied), Glint still reports **833 errors in 64 RFC modules
 from 54 RFCs**, plus 239 inline mismatches (E300). Many of the module errors are not separate defects: two single
 defects repeated line after line account for 240 of them.
 
 | Where | Errors | Modules or RFCs | Notes |
 | --- | --- | --- | --- |
-| RFC modules, maintained | 546 | 48 modules | A current RFC, or still imported by one |
+| RFC modules, maintained | 545 | 47 modules | A current RFC, or still imported by one |
 | RFC modules, unmaintained | 288 | 17 modules | Obsoleted RFC that no maintained module imports |
 | Internet-Draft modules | 64 | 17 modules | Drafts can be fixed in their next revision |
 | ITU-T and other modules | 10 | 4 modules | From `corpus/sources.toml` |
@@ -32,11 +32,11 @@ The largest cause is two defects repeated line after line, which are two errata 
 | Pre-X.680 or non-standard notation | 22 | 208 | 97 | Written before or outside X.680: `OCTETSTRING`, `SEQUENCE` as a name, macros, X.208 forms | RFC 1507, 1142, 1487, the GSS-API modules | Mostly none: historic or obsoleted |
 | Cascade from one syntax error | 10 | 196 | 179 | One broken clause (often `IMPORTS`) makes the rest of the module fail | RFC 3126 (two modules), 4683, 2797 | One fix per module |
 | Imported module missing from corpus | 4 | 144 | 7 | Imports from X.500 and other modules Glint does not bundle, so every use is "not defined" | RFC 1801, 2510, 3125 | Add the modules to `corpus/sources.toml` |
-| Individual semantic defects | 22 | 46 | 5 | Real, isolated errors: tag clashes, wrong classes, duplicate `UNIQUE` values, names a module does not export | RFC 3029, 9690, 4357, 5911, 2459 | Errata, most already in `to-file.md` |
+| Individual semantic defects | 21 | 45 | 5 | Real, isolated errors: tag clashes, wrong classes, duplicate `UNIQUE` values, names a module does not export | RFC 3029, 9690, 4357, 5911, 2459 | Errata, most already in `to-file.md` |
 
 ## Every RFC module with errors
 
-The 65 RFC modules that still have errors, worst first. Cause is assigned from each module's first findings and
+The 64 RFC modules that still have errors, worst first. Cause is assigned from each module's first findings and
 needs confirming for the smaller entries; "To file" is the section of `corpus/errata/to-file.md` the defect
 sits in, blank when no entry exists yet.
 
@@ -90,7 +90,6 @@ sits in, blank when no entry exists yet.
 | 1224 | `MIB` | Exp | yes | 1 | E110 1 | Semantic defect |  |
 | 1495 | `MIME-MHS` | PS (obs. by 2156) | yes | 1 | E110 1 | Semantic defect |  |
 | 1901 | `COMMUNITY-BASED-SNMPv2` | Hist | yes | 1 | E001 1 | Old notation |  |
-| 2459 | `PKIX1Implicit93` | PS (obs. by 3280) | yes | 1 | E114 1 | Semantic defect | worth filing |
 | 2630 | `CryptographicMessageSyntax` | PS (obs. by 3369, 3370) | yes | 1 | E101 1 | Semantic defect |  |
 | 2649 | `SIGNEDOPERATIONS` | Exp | yes | 1 | E110 1 | Semantic defect |  |
 | 2985 | `PKCS-9` | Info | yes | 1 | E101 1 | Semantic defect |  |

@@ -31,7 +31,7 @@ Implemented so far (M1, M2, M3, M4, M5, the decoder of the codegen and decoder d
 | `E111` | error | Two assignments with the same name | X.680 13.21; X.683 8.2 | `tests/symbols.rs` |
 | `W112` | warning | Unused import (no mention of the name outside IMPORTS/EXPORTS) | policy | `tests/symbols.rs` |
 | `E113` | error | Duplicate identifier among components (after `COMPONENTS OF`) or alternatives | X.680 25.14, 29.10 | `tests/tags.rs` |
-| `E114` | error | Symbol imported twice or also defined locally, used without `Module.symbol` | X.680 13.20 | `tests/symbols.rs` |
+| `E114` | error | Symbol imported from two modules, used without `Module.symbol`. A bare name the module also defines is its own definition (see `W115`) | X.680 13.20, 14.6 | `tests/symbols.rs` |
 | `W115` | warning | Symbol both imported and defined in the module: valid with every use of the import written `Module.symbol`, but deprecated. Once per name, on the definition | X.680 13.20 | `tests/symbols.rs` |
 | `E120` | error | Tag clash among `CHOICE` alternatives or `SET` components, with the conceptually added element and open types | X.680 27.3, 29.3, 29.9, 52.7; X.681 14.2 b | `tests/tags.rs` |
 | `E121` | error | Tag clash in a run of `OPTIONAL`/`DEFAULT` `SEQUENCE` components, or between extension additions and following root components | X.680 25.6, 25.7, 52.7 | `tests/tags.rs` |

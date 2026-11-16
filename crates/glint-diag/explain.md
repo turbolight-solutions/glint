@@ -321,21 +321,24 @@ END
 
 ## E114
 
-A symbol is imported from two modules, or is imported and also defined here, and is used without a `Module.symbol` qualification (X.680 13.20).
+A symbol is imported from two modules and is used without a `Module.symbol` qualification (X.680 13.20). A bare name that the module also defines is its own definition, which can only be written bare (14.6); the import then needs `Module.symbol` (see W115).
 
 ```asn1 bad
 A DEFINITIONS ::= BEGIN
   X ::= INTEGER
 END
 
-M DEFINITIONS ::= BEGIN
-  IMPORTS X FROM A;
+B DEFINITIONS ::= BEGIN
   X ::= BOOLEAN
+END
+
+M DEFINITIONS ::= BEGIN
+  IMPORTS X FROM A X FROM B;
   T ::= SEQUENCE { a X }
 END
 ```
 
-Write `A.X` for the imported one.
+Write `A.X` or `B.X`.
 
 ## W115
 

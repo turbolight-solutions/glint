@@ -49,7 +49,7 @@ const CODES: &[CodeInfo] = &[
     CodeInfo {
         code: "E114",
         severity: Severity::Error,
-        title: "Symbol imported from two modules, or also defined locally, used without Module.symbol",
+        title: "Symbol imported from two modules used without Module.symbol",
         basis: "13.20",
     },
     CodeInfo {
