@@ -1304,7 +1304,7 @@ END
 
 ## W408
 
-An open type (a type field read through a component relation constraint, X.682 10) whose type the object set does not give: the component that holds the key was not decoded, the set has no object with the key, or the object does not set the field. The contents are decoded through the OID hint table when it names a type for the key, otherwise without a schema. When the set is not extensible, a key outside it is an error.
+An open type (a type field read through a component relation constraint, X.682 10) whose type the object set does not give: the component that holds the key was not decoded, the set has no object with the key, or the object does not set the field. The contents are decoded through the OID hint table when it names a type for the key, otherwise without a schema. When the set is not extensible, a key outside it is an error. A value for a field the object does not set is an error too, extensible set or not: the object's cell for the field is empty, so no value satisfies the constraint (X.682 10.20) and the component must be absent, as for an algorithm whose parameters are absent.
 
 ```asn1 schema
 M DEFINITIONS ::= BEGIN

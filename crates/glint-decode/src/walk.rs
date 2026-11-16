@@ -997,16 +997,19 @@ impl<'b> Walker<'b> {
                 Key::Integer(_) => None,
             };
             if row.is_some() {
+                // The object's cell for the field is empty (X.681 13.4), so no value satisfies the constraint
+                // (X.682 10.20, 10.6 a), whether the set is extensible or not: the component must be absent.
                 return Lookup::Absent {
                     finding: DecodeFinding::new(
                         "W408",
                         format!(
-                            "the object of {} keyed by {} does not set {}",
+                            "the object of {} keyed by {} does not set {}, so this component must be absent",
                             objects.name,
                             key.text(),
                             table.field
                         ),
-                    ),
+                    )
+                    .with_severity(Severity::Error),
                     oid,
                 };
             }

@@ -159,6 +159,51 @@ fn constraint_violations_fail_and_der_notes_fail_only_when_strict() {
     assert_eq!(decode(&long, true).status.code(), Some(1));
 }
 
+/// One object sets `&Params`, the other leaves it unset (an AlgorithmIdentifier's `PARAMS ARE absent`).
+const PARAMS_MODULE: &str = "P DEFINITIONS ::= BEGIN
+  ALG ::= CLASS { &id OBJECT IDENTIFIER UNIQUE, &Params OPTIONAL } WITH SYNTAX { ID &id [PARAMS &Params] }
+  alg-int ALG ::= { ID { 1 2 3 } PARAMS INTEGER }
+  alg-none ALG ::= { ID { 1 2 4 } }
+  Algs ALG ::= { alg-int | alg-none, ... }
+  AlgId ::= SEQUENCE { id ALG.&id({Algs}), params ALG.&Params({Algs}{@id}) OPTIONAL }
+END
+";
+
+// X.682 10.20 and 10.6 a with X.681 13.4: the key selects the object's row, whose &Params cell is empty when the
+// object does not set the field, so no value of the component satisfies the constraint, extensible set or not.
+#[test]
+fn a_value_for_a_field_the_object_does_not_set_is_an_error() {
+    let dir = scratch("params");
+    let asn1 = dir.join("p.asn");
+    std::fs::write(&asn1, PARAMS_MODULE).unwrap();
+    let decode = |bytes: &[u8]| {
+        let mut command = glint();
+        command
+            .args(["decode", "P", "AlgId", "-", "--file"])
+            .arg(&asn1);
+        run(command, bytes)
+    };
+    // alg-int with an INTEGER, alg-none without parameters
+    assert!(
+        decode(&[0x30, 0x07, 0x06, 0x02, 0x2a, 0x03, 0x02, 0x01, 0x05])
+            .status
+            .success()
+    );
+    assert!(
+        decode(&[0x30, 0x04, 0x06, 0x02, 0x2a, 0x04])
+            .status
+            .success()
+    );
+    // alg-none with NULL parameters
+    let output = decode(&[0x30, 0x06, 0x06, 0x02, 0x2a, 0x04, 0x05, 0x00]);
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("W408 error: the object of Algs keyed by 1.2.4 does not set &Params, so this component must be absent"),
+        "{text}"
+    );
+}
+
 #[test]
 fn json_and_pem_blocks() {
     let pem = "-----BEGIN FIRST-----\nMAMCAQU=\n-----END FIRST-----\n-----BEGIN SECOND-----\nBQA=\n-----END SECOND-----\n";
