@@ -404,6 +404,22 @@ impl<'b> Walker<'b> {
         let Some(tag) = raw.tag else {
             return node;
         };
+        // Universal types with one form keep it here too, as inside an open type no object set resolves.
+        if tag.class == TagClass::Universal {
+            let form = match tag.number {
+                // BOOLEAN, INTEGER, NULL, OBJECT IDENTIFIER, REAL, ENUMERATED, RELATIVE-OID
+                1 | 2 | 5 | 6 | 9 | 10 | 13 if tag.constructed => Some("primitive"),
+                // SEQUENCE, SET
+                16 | 17 if !tag.constructed => Some("constructed"),
+                _ => None,
+            };
+            if let Some(form) = form {
+                node.findings.push(finding::invalid(format!(
+                    "a {} is encoded in the {form} form (X.690 8.1.2.5)",
+                    tag_text(TagClass::Universal, tag.number)
+                )));
+            }
+        }
         if tag.constructed {
             node.children = raw.children.iter().map(|c| self.schemaless(c)).collect();
             return node;

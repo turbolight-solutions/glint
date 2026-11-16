@@ -105,6 +105,50 @@ fn decodes_der_from_stdin_without_a_schema() {
     assert!(text.contains("prim:  INTEGER"), "{text}");
 }
 
+// X.690 8.1.2.5: the universal types that have only one form keep it without a schema too (as inside an open type
+// that no object set resolves).
+#[test]
+fn universal_types_in_the_wrong_form_are_errors_without_a_schema() {
+    let decode = |bytes: &[u8]| {
+        let mut command = glint();
+        command.arg("decode");
+        run(command, bytes)
+    };
+    for (bytes, expected) in [
+        (&[0x21, 0x03, 0x01, 0x01, 0xff][..], "BOOLEAN"),
+        (&[0x22, 0x03, 0x02, 0x01, 0x05][..], "INTEGER"),
+        (&[0x25, 0x00][..], "NULL"),
+        (
+            &[0x26, 0x04, 0x06, 0x02, 0x2a, 0x03][..],
+            "OBJECT IDENTIFIER",
+        ),
+        (&[0x30, 0x05, 0x22, 0x03, 0x02, 0x01, 0x05][..], "INTEGER"),
+    ] {
+        let output = decode(bytes);
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(1), "{bytes:02x?}\n{text}");
+        assert!(
+            text.contains(&format!(
+                "E401 error: a {expected} is encoded in the primitive form"
+            )),
+            "{text}"
+        );
+    }
+    for (bytes, expected) in [(&[0x10, 0x00][..], "SEQUENCE"), (&[0x11, 0x00][..], "SET")] {
+        let output = decode(bytes);
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(1), "{bytes:02x?}\n{text}");
+        assert!(
+            text.contains(&format!(
+                "E401 error: a {expected} is encoded in the constructed form"
+            )),
+            "{text}"
+        );
+    }
+    // a string may be constructed in BER
+    assert!(decode(&[0x24, 0x03, 0x04, 0x01, 0x05]).status.success());
+}
+
 #[test]
 fn decodes_a_corpus_type_with_oid_names() {
     let dir = scratch("corpus");
