@@ -421,6 +421,9 @@ impl<'b> Walker<'b> {
             }
         }
         if tag.constructed {
+            if tag.class == TagClass::Universal {
+                self.schemaless_der(raw, tag.number, &mut node);
+            }
             node.children = raw.children.iter().map(|c| self.schemaless(c)).collect();
             return node;
         }
@@ -438,6 +441,38 @@ impl<'b> Walker<'b> {
         node.value = rendered;
         node.findings.extend(findings);
         node
+    }
+
+    /// The DER rules a constructed universal TLV can be checked against without its type (X.690 10.2, 10.3, 11.6).
+    fn schemaless_der(&self, raw: &Raw, number: u64, node: &mut Tlv) {
+        // BIT STRING, OCTET STRING, UTCTime, GeneralizedTime and the character strings
+        if matches!(number, 3 | 4 | 23 | 24) || string_kind(number).is_some() {
+            node.findings.push(finding::der(
+                "a string in the constructed form (X.690 10.2)",
+            ));
+        }
+        // A SET cannot be told from a SET OF here: either order is DER. A SET's components have distinct tags, so
+        // equal tags are a SET OF.
+        if number == 17 {
+            let tags: Vec<Tag> = raw.children.iter().filter_map(|c| c.tag).collect();
+            let tag_order = tags.windows(2).all(|w| match w {
+                [a, b] => (class_rank(a.class), a.number) < (class_rank(b.class), b.number),
+                _ => true,
+            });
+            let encodings: Vec<&[u8]> = raw
+                .children
+                .iter()
+                .map(|c| self.bytes.get(c.offset..c.end).unwrap_or_default())
+                .collect();
+            let encoding_order = encodings
+                .windows(2)
+                .all(|w| !matches!(w, [a, b] if compare_padded(a, b) == Ordering::Greater));
+            if !tag_order && !encoding_order {
+                node.findings.push(finding::der(
+                    "the elements of a SET are in neither tag order (X.690 10.3) nor ascending order of their encodings (X.690 11.6)",
+                ));
+            }
+        }
     }
 
     /// The value of a primitive of universal tag `number`, with what is wrong with it.

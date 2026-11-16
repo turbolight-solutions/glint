@@ -105,6 +105,49 @@ fn decodes_der_from_stdin_without_a_schema() {
     assert!(text.contains("prim:  INTEGER"), "{text}");
 }
 
+// X.690 10.2, 10.3, 11.6 without a schema. A SET cannot be told from a SET OF there, so either order is DER.
+#[test]
+fn der_rules_apply_without_a_schema() {
+    let decode = |bytes: &[u8], strict: bool| {
+        let mut command = glint();
+        command.arg("decode");
+        if strict {
+            command.arg("--strict-der");
+        }
+        run(command, bytes)
+    };
+    let constructed_string = [0x24, 0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x02, 0x03, 0x04];
+    let unsorted_set = [0x31, 0x06, 0x02, 0x01, 0x02, 0x02, 0x01, 0x01];
+    for (bytes, expected) in [
+        (
+            &constructed_string[..],
+            "W402 warning: a string in the constructed form",
+        ),
+        (
+            &unsorted_set[..],
+            "W402 warning: the elements of a SET are in neither tag order",
+        ),
+    ] {
+        assert!(decode(bytes, false).status.success(), "{bytes:02x?}");
+        let output = decode(bytes, true);
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(output.status.code(), Some(1), "{bytes:02x?}\n{text}");
+        assert!(text.contains(expected), "{text}");
+    }
+    // [1] then [0] constructed: encoding order only (a SET OF); [0] constructed then [1]: tag order only (a SET)
+    for bytes in [
+        &[0x31, 0x05, 0x81, 0x01, 0x00, 0xa0, 0x00][..],
+        &[0x31, 0x05, 0xa0, 0x00, 0x81, 0x01, 0x00][..],
+    ] {
+        let output = decode(bytes, true);
+        assert!(
+            output.status.success(),
+            "{bytes:02x?}\n{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+}
+
 // X.690 8.1.2.5: the universal types that have only one form keep it without a schema too (as inside an open type
 // that no object set resolves).
 #[test]

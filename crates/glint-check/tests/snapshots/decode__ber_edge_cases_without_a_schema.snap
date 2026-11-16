@@ -6,6 +6,7 @@ expression: render_text(&decoded)
        ! W402 warning: indefinite length (X.690 10.1)
     2:d=1  hl=2 l= inf cons:  OCTET STRING                  
         ! W402 warning: indefinite length (X.690 10.1)
+        ! W402 warning: a string in the constructed form (X.690 10.2)
     4:d=2  hl=2 l=   1 prim:   OCTET STRING                 AA
     7:d=2  hl=2 l=   1 prim:   OCTET STRING                 BB
    12:d=1  hl=3 l=   1 prim:  INTEGER                       5

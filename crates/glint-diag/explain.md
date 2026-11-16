@@ -1198,7 +1198,7 @@ The leading `00` is not needed: 5 is `02 01 05`.
 
 ## W402
 
-The encoding is valid BER but not DER (X.690 10, 11): an indefinite length, a length not written in the fewest octets, a string in the constructed form, BOOLEAN TRUE written as other than `FF`, unused bits of a BIT STRING that are not zero, a BIT STRING with named bits that ends in a zero bit, a component encoded with its `DEFAULT` value, `SET` components out of tag order, `SET OF` elements out of order, or a UTCTime or GeneralizedTime not in the form DER requires. Certificates and other signed structures must be DER, because the signature covers the exact octets. `glint decode --strict-der` fails on these.
+The encoding is valid BER but not DER (X.690 10, 11): an indefinite length, a length not written in the fewest octets, a string in the constructed form, BOOLEAN TRUE written as other than `FF`, unused bits of a BIT STRING that are not zero, a BIT STRING with named bits that ends in a zero bit, a component encoded with its `DEFAULT` value, `SET` components out of tag order, `SET OF` elements out of order, or a UTCTime or GeneralizedTime not in the form DER requires. Content decoded without a schema, such as an open type no object set resolves, is checked too; there a `SET` cannot be told from a `SET OF`, so its elements may be in either order. Certificates and other signed structures must be DER, because the signature covers the exact octets. `glint decode --strict-der` fails on these.
 
 ```der bad
 01 01 01
