@@ -337,6 +337,36 @@ END
 
 Write `A.X` for the imported one.
 
+## W115
+
+A symbol is imported and also defined in the module. X.680 13.20 allows it, as long as every use of the imported one is written `Module.symbol`, but deprecates it: two definitions under one name are easy to confuse.
+
+```asn1 bad
+A DEFINITIONS ::= BEGIN
+  X ::= INTEGER
+END
+
+M DEFINITIONS ::= BEGIN
+  IMPORTS X FROM A;
+  X ::= BOOLEAN
+  T ::= SEQUENCE { a A.X }
+END
+```
+
+```asn1 good
+A DEFINITIONS ::= BEGIN
+  X ::= INTEGER
+END
+
+M DEFINITIONS ::= BEGIN
+  IMPORTS X FROM A;
+  LocalX ::= BOOLEAN
+  T ::= SEQUENCE { a X, b LocalX }
+END
+```
+
+Give the local definition another name.
+
 ## E120
 
 Two `CHOICE` alternatives or two `SET` components have the same tag (X.680 27.3, 29.3, 29.9, 52.7). Every tag of an untagged `CHOICE` counts, so does the conceptually added extension element, and so does the indeterminate tag of an untagged open type.

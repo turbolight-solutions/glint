@@ -173,6 +173,12 @@ const CODES: &[CodeInfo] = &[
         basis: "policy",
     },
     CodeInfo {
+        code: "W115",
+        severity: Severity::Warning,
+        title: "Symbol both imported and defined in the module (deprecated)",
+        basis: "13.20",
+    },
+    CodeInfo {
         code: "W140",
         severity: Severity::Warning,
         title: "OID assigned in the draft is already assigned in the corpus to a different name",

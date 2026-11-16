@@ -177,6 +177,7 @@ Checks run per module after import resolution. Each code has a default severity,
 | `W112` | Unused import | policy | warning |
 | `E113` | Duplicate identifier among components (after `COMPONENTS OF`) or alternatives | 25.14, 29.10 | error |
 | `E114` | Symbol imported from two modules, or also defined locally, used without `Module.symbol` | 13.20 | error |
+| `W115` | Symbol both imported and defined in the module (deprecated) | 13.20 | warning |
 | `E120` | Tag clash among `CHOICE` alternatives or `SET` components, counting every tag of an untagged `CHOICE`, the conceptually added extension element, and the indeterminate tag of an untagged open type | 27.3, 29.3, 29.9, 52.7; X.681 14.2 b | error |
 | `E121` | Tag clash between a run of `OPTIONAL`/`DEFAULT` `SEQUENCE` components and the next component, across extension additions | 25.6, 25.7, 52.7 | error |
 | `E122` | `IMPLICIT` on an untagged `CHOICE`, open type or `DummyReference` | 31.2.9; X.681 14.2 c | error |

@@ -142,7 +142,35 @@ fn symbol_imported_from_two_modules_must_be_qualified() {
 fn symbol_defined_locally_and_imported_must_be_qualified() {
     let a = "A DEFINITIONS ::= BEGIN X ::= INTEGER END";
     let b = "M DEFINITIONS ::= BEGIN IMPORTS X FROM A; X ::= BOOLEAN T ::= SEQUENCE { a X } END";
-    assert_eq!(two(a, b), ["E114"]);
+    let mut found = two(a, b);
+    found.sort_unstable();
+    assert_eq!(found, ["E114", "W115"]);
+}
+
+// X.680 13.20: valid when every use is qualified, but deprecated.
+#[test]
+fn symbol_defined_locally_and_imported_is_deprecated() {
+    let a = "A DEFINITIONS ::= BEGIN X ::= INTEGER END";
+    let b = "M DEFINITIONS ::= BEGIN IMPORTS X FROM A; X ::= BOOLEAN T ::= SEQUENCE { a A.X } END";
+    let corpus = corpus(&[Rec {
+        name: "A",
+        oid: None,
+        rfc: 1,
+        text: a,
+    }]);
+    let findings = without_notes(check_with(b, &corpus, &Options::default()));
+    assert_eq!(codes(&findings), ["W115"]);
+    let finding = findings.first().expect("one finding");
+    assert!(
+        finding
+            .message
+            .contains("`X` is imported from `A` and also defined here"),
+        "{}",
+        finding.message
+    );
+    // Reported on the local definition, not on the import.
+    let at = b.find("X ::=").expect("the definition");
+    assert_eq!(usize::from(finding.primary.range.start()), at);
 }
 
 #[test]

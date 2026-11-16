@@ -1,4 +1,4 @@
-//! Reference checks: E110, E111, W112, E114 (X.680 13.19-13.21, 14.4-14.7).
+//! Reference checks: E110, E111, W112, E114, W115 (X.680 13.19-13.21, 14.4-14.7).
 
 use std::collections::HashSet;
 
@@ -14,6 +14,7 @@ const BUILTIN_CLASSES: &[&str] = &["TYPE-IDENTIFIER", "ABSTRACT-SYNTAX"];
 
 pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
     check_duplicates(ctx);
+    check_defined_and_imported(ctx);
     let symbols = ctx.loaded.model.symbols.clone();
     for symbol in &symbols {
         if matches!(
@@ -44,6 +45,57 @@ fn check_duplicates(ctx: &mut Ctx<'_, '_, '_>) {
         } else {
             seen.push((symbol.name.as_str(), symbol.name_range));
         }
+    }
+    for finding in findings {
+        ctx.report(finding);
+    }
+}
+
+// X.680 13.20: a symbol both imported and assigned is valid (the import must be written `Module.symbol`) but
+// deprecated. Reported once per name, on its first local definition; a second one is E111.
+fn check_defined_and_imported(ctx: &mut Ctx<'_, '_, '_>) {
+    let model = &ctx.loaded.model;
+    let mut findings = Vec::new();
+    let mut reported: HashSet<&str> = HashSet::new();
+    for symbol in &model.symbols {
+        let imports = model.imported(&symbol.name);
+        if imports.is_empty() || !reported.insert(symbol.name.as_str()) {
+            continue;
+        }
+        let clauses: Vec<_> = imports
+            .iter()
+            .filter_map(|&(clause, index)| {
+                let clause = model.imports.get(clause)?;
+                Some((
+                    clause.module_name.as_str(),
+                    clause.symbols.get(index)?.range,
+                ))
+            })
+            .collect();
+        let Some(&(first_module, _)) = clauses.first() else {
+            continue;
+        };
+        let from = clauses
+            .iter()
+            .map(|(module, _)| format!("`{module}`"))
+            .collect::<Vec<_>>()
+            .join(" and ");
+        let mut finding = Finding::new(
+            "W115",
+            format!(
+                "`{name}` is imported from {from} and also defined here, which X.680 13.20 deprecates",
+                name = symbol.name
+            ),
+            ctx.loc(symbol.name_range),
+        )
+        .with_help(format!(
+            "give this definition another name; until then the imported one can only be written `{first_module}.{name}`",
+            name = symbol.name
+        ));
+        for (_, range) in &clauses {
+            finding = finding.with_secondary(ctx.loc(*range), "imported here");
+        }
+        findings.push(finding);
     }
     for finding in findings {
         ctx.report(finding);
