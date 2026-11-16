@@ -521,6 +521,29 @@ fn snippets_can_be_switched_off() {
     assert_eq!(snippet_findings(&report), []);
 }
 
+// A bare ASN.1 file has no prose, so nothing in it is a snippet: a module whose header does not parse is still
+// checked when snippets are switched off.
+#[test]
+fn switching_snippets_off_keeps_a_bare_file_whose_module_header_is_broken() {
+    let text = "M DEFINITIONS ::=\nBEGINN\nT ::= INTEGER\nEND\n";
+    let options = CheckOptions {
+        no_snippets: true,
+        ..CheckOptions::default()
+    };
+    let report = check_document(
+        "m.asn",
+        text,
+        Format::Bare,
+        &EmptyCorpus::default(),
+        &options,
+    );
+    assert!(
+        report.diagnostics.iter().any(|d| d.code == "E001"),
+        "{:?}",
+        report.diagnostics
+    );
+}
+
 #[test]
 fn the_label_points_into_the_snippet_and_the_module() {
     let text = draft(

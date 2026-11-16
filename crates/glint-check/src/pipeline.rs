@@ -196,7 +196,9 @@ pub fn check_extraction(
     let mut fragment_blocks = Vec::new();
     for (index, block) in extraction.blocks.iter().enumerate() {
         let is_fragment = block.kind == BlockKind::Fragment;
-        if is_fragment && options.no_snippets {
+        // A bare ASN.1 file has no prose to quote ASN.1 in: a block of it without a module header (a header that does
+        // not parse) is not a snippet, so it is checked even with snippets switched off.
+        if is_fragment && options.no_snippets && extraction.format != Format::Bare {
             continue;
         }
         let parse = parse_source_with(&block.text, ParseOptions::corpus());
