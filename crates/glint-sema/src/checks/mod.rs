@@ -1,6 +1,8 @@
 pub(crate) mod components;
 mod constraints;
 mod imports;
+
+pub(crate) use imports::unique_identity;
 mod oids;
 mod policy;
 mod references;

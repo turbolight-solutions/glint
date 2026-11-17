@@ -5,8 +5,8 @@ use glint_corpus::CorpusProvider;
 use glint_diag::{Diagnostic, FileId, Files, Label, LineIndex, Severity};
 use glint_extract::{Block, BlockKind, Extraction, Format, extract};
 use glint_sema::{
-    DraftSource, Finding, FragmentSource, Loc, Matched, Options, Origin, SnippetOptions,
-    analyze_with_fragments, is_ignored, reverse_check,
+    DraftSource, Finding, FragmentSource, Loc, Matched, ModuleId, Options, Origin, SnippetOptions,
+    SourceId, analyze_with_context, is_ignored, reverse_check,
 };
 use glint_syntax::{ParseOptions, parse_source_with};
 
@@ -20,6 +20,17 @@ pub struct CheckOptions {
     pub pins: Vec<(String, String)>,
     /// Do not compare the snippets in the text with the modules.
     pub no_snippets: bool,
+    /// The other documents checked in the same run. Their modules form one set with the document's: the document's
+    /// imports resolve to them before the corpus. Each document reports its own findings.
+    pub others: Vec<OtherDocument>,
+}
+
+/// Another document checked in the same run ([`CheckOptions::others`]).
+#[derive(Debug, Clone)]
+pub struct OtherDocument {
+    pub name: String,
+    pub text: String,
+    pub format: Format,
 }
 
 /// How one import of a draft module was resolved.
@@ -97,6 +108,11 @@ struct Mapper<'a> {
     block_of_source: Vec<usize>,
     corpus_files: HashMap<usize, (FileId, LineIndex)>,
     corpus: &'a dyn CorpusProvider,
+    others: &'a [OtherDocument],
+    other_blocks: &'a [Vec<Block>],
+    /// For each context source id, the other document and the index of its block.
+    other_of_source: HashMap<SourceId, (usize, usize)>,
+    other_files: HashMap<usize, (FileId, LineIndex)>,
 }
 
 impl Mapper<'_> {
@@ -121,30 +137,62 @@ impl Mapper<'_> {
         };
         match unit.origin {
             Origin::Builtin => Label::new(self.document, 0..0, &self.document_index),
-            Origin::Draft => {
-                let block = usize::try_from(loc.source.0)
-                    .ok()
-                    .and_then(|i| self.block_of_source.get(i))
-                    .copied()
-                    .unwrap_or(0);
-                self.draft_label(block, range)
-            }
-            Origin::Corpus { record } => {
-                if !self.corpus_files.contains_key(&record)
-                    && let Some(module) = self.corpus.modules().get(record)
-                {
-                    let entry = self.files.add(
-                        glint_corpus::unique_label(self.corpus, module),
-                        module.text.clone(),
-                    );
-                    self.corpus_files.insert(record, entry);
+            Origin::Draft => match self.other_of_source.get(&loc.source).copied() {
+                Some((other, block)) => self.other_label(other, block, range),
+                None => {
+                    let block = usize::try_from(loc.source.0)
+                        .ok()
+                        .and_then(|i| self.block_of_source.get(i))
+                        .copied()
+                        .unwrap_or(0);
+                    self.draft_label(block, range)
                 }
-                match self.corpus_files.get(&record) {
-                    Some((file, index)) => Label::new(*file, range, index),
-                    None => Label::new(self.document, 0..0, &self.document_index),
-                }
-            }
+            },
+            Origin::Corpus { record } => self.corpus_label(record, range),
         }
+    }
+
+    /// A label in the text of the corpus module `record`, a file named after the module.
+    fn corpus_label(&mut self, record: usize, range: Range<usize>) -> Label {
+        if !self.corpus_files.contains_key(&record)
+            && let Some(module) = self.corpus.modules().get(record)
+        {
+            let entry = self.files.add(
+                glint_corpus::unique_label(self.corpus, module),
+                module.text.clone(),
+            );
+            self.corpus_files.insert(record, entry);
+        }
+        match self.corpus_files.get(&record) {
+            Some((file, index)) => Label::new(*file, range, index),
+            None => Label::new(self.document, 0..0, &self.document_index),
+        }
+    }
+
+    /// A label in another document of the run, at `range` of its block `block`.
+    fn other_label(&mut self, other: usize, block: usize, range: Range<usize>) -> Label {
+        let (Some(document), Some(block)) = (
+            self.others.get(other),
+            self.other_blocks.get(other).and_then(|b| b.get(block)),
+        ) else {
+            return Label::new(self.document, 0..0, &self.document_index);
+        };
+        let (file, index) = self
+            .other_files
+            .entry(other)
+            .or_insert_with(|| {
+                self.files
+                    .add_document(document.name.clone(), document.text.clone())
+            })
+            .clone();
+        let mapped = block
+            .original_range(range)
+            .unwrap_or_else(|| block.origin.span.clone());
+        let mut label = Label::new(file, mapped, &index);
+        if let Some(section) = &block.origin.section {
+            label = label.with_section(section.to_string());
+        }
+        label
     }
 }
 
@@ -255,8 +303,38 @@ pub fn check_extraction(
     let snippet_options = SnippetOptions {
         elision_comments: options.config.snippets.elision_comments.clone(),
     };
-    let analysis =
-        analyze_with_fragments(sources, fragments, &snippet_options, corpus, &sema_options);
+    // The modules of the run's other documents: their blocks that define modules, not their snippets.
+    let other_blocks: Vec<Vec<Block>> = options
+        .others
+        .iter()
+        .map(|other| extract(&other.text, other.format).blocks)
+        .collect();
+    let mut context = Vec::new();
+    let mut context_blocks = Vec::new();
+    for (other, blocks) in other_blocks.iter().enumerate() {
+        for (index, block) in blocks.iter().enumerate() {
+            if block.kind == BlockKind::Fragment {
+                continue;
+            }
+            let parse = parse_source_with(&block.text, ParseOptions::corpus());
+            if is_ignored(&parse.syntax()) {
+                continue;
+            }
+            context.push(DraftSource {
+                text: block.text.clone(),
+                parse,
+            });
+            context_blocks.push((other, index));
+        }
+    }
+    let analysis = analyze_with_context(
+        sources,
+        fragments,
+        context,
+        &snippet_options,
+        corpus,
+        &sema_options,
+    );
     let mut findings = analysis.findings.clone();
     if options.config.snippets.reverse_check && !options.no_snippets {
         let mentioned = mentioned_names(text, &extraction.blocks);
@@ -271,9 +349,21 @@ pub fn check_extraction(
         block_of_source,
         corpus_files: HashMap::new(),
         corpus,
+        others: &options.others,
+        other_blocks: &other_blocks,
+        other_of_source: analysis
+            .context
+            .iter()
+            .copied()
+            .zip(context_blocks)
+            .collect(),
+        other_files: HashMap::new(),
     };
     for finding in &findings {
         diagnostics.push(to_diagnostic(&mut mapper, &analysis.graph, finding));
+    }
+    for record in dependencies(&analysis) {
+        diagnostics.extend(dependency_diagnostics(&mut mapper, record));
     }
 
     if options.config.examples.check {
@@ -465,6 +555,97 @@ fn example_diagnostics(
         }
     }
     out
+}
+
+/// The corpus modules the document's modules import, directly or through other modules (of the corpus or of the run's
+/// other documents), in corpus order.
+fn dependencies(analysis: &glint_sema::Analysis<'_>) -> Vec<usize> {
+    let graph = &analysis.graph;
+    let mut seen: Vec<ModuleId> = analysis.drafts.clone();
+    let mut next = 0;
+    while let Some(&id) = seen.get(next) {
+        next = next.saturating_add(1);
+        for target in graph
+            .module(id)
+            .into_iter()
+            .flat_map(|m| &m.imports)
+            .filter_map(|import| import.target)
+        {
+            if !seen.contains(&target) {
+                seen.push(target);
+            }
+        }
+    }
+    let mut records: Vec<usize> = seen
+        .iter()
+        .filter_map(|&id| match graph.module(id)?.origin {
+            Origin::Corpus { record } => Some(record),
+            Origin::Draft | Origin::Builtin => None,
+        })
+        .collect();
+    records.sort_unstable();
+    records.dedup();
+    records
+}
+
+/// The findings of the corpus module `record`, as the corpus build finds them (its syntax errors, then the findings of
+/// the module checked on its own), labelled in the module's text: a module the document imports is checked too.
+fn dependency_diagnostics(mapper: &mut Mapper<'_>, record: usize) -> Vec<Diagnostic> {
+    let corpus = mapper.corpus;
+    let Some(module) = corpus.modules().get(record) else {
+        return Vec::new();
+    };
+    let label = glint_corpus::unique_label(corpus, module);
+    let note = format!("in `{label}`, a module this document imports");
+    crate::decode::with_corpus_module(corpus, record, |analysis, _| {
+        let graph = &analysis.graph;
+        let mut out = Vec::new();
+        // Locations in the module itself (source 0) are in the corpus text of `record`.
+        let place = |mapper: &mut Mapper<'_>, loc: Loc| -> Label {
+            let range = usize::from(loc.range.start())..usize::from(loc.range.end());
+            match graph.unit(loc.source).map(|u| u.origin) {
+                Some(Origin::Corpus { record: other }) => mapper.corpus_label(other, range),
+                Some(Origin::Draft) => mapper.corpus_label(record, range),
+                _ => mapper.corpus_label(record, 0..0),
+            }
+        };
+        if let Some(unit) = graph.unit(SourceId(0)) {
+            for error in &unit.syntax_errors {
+                let loc = Loc {
+                    source: SourceId(0),
+                    range: error.range,
+                };
+                let primary = place(mapper, loc);
+                out.push(
+                    Diagnostic::new(error.code, error.message.clone(), primary)
+                        .with_severity(convert_severity(error.severity))
+                        .with_note(note.clone()),
+                );
+            }
+        }
+        for finding in analysis
+            .findings
+            .iter()
+            .filter(|f| f.primary.source == SourceId(0))
+        {
+            let primary = place(mapper, finding.primary);
+            let mut diagnostic = Diagnostic::new(finding.code, finding.message.clone(), primary)
+                .with_severity(finding.severity);
+            for (loc, text) in &finding.secondary {
+                diagnostic = diagnostic.with_secondary(place(mapper, *loc).with_text(text.clone()));
+            }
+            for extra in &finding.notes {
+                diagnostic = diagnostic.with_note(extra.clone());
+            }
+            diagnostic = diagnostic.with_note(note.clone());
+            if let Some(help) = &finding.help {
+                diagnostic = diagnostic.with_help(help.clone());
+            }
+            out.push(diagnostic);
+        }
+        Some(out)
+    })
+    .unwrap_or_default()
 }
 
 fn to_diagnostic(

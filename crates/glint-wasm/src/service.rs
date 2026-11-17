@@ -665,6 +665,7 @@ impl OptionsInput {
             },
             pins,
             no_snippets: self.snippets == Some(false),
+            others: Vec::new(),
         })
     }
 }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args as ClapArgs, ValueEnum};
-use glint_check::{CheckOptions, Config, DocumentRef, Report, check_document};
+use glint_check::{CheckOptions, Config, DocumentRef, OtherDocument, Report, check_document};
 use glint_corpus::CorpusProvider;
 use glint_diag::{SarifInput, Severity, Versions, render_human, render_json, render_sarif};
 use glint_extract::{Format, detect_format};
@@ -101,7 +101,7 @@ pub fn run(args: &Args) -> ExitCode {
     };
     let mut exit = EXIT_OK;
     let mut reports: Vec<Report> = Vec::new();
-    for input in &inputs {
+    for (position, input) in inputs.iter().enumerate() {
         let config = match load_config(args, &input.config_from) {
             Ok(config) => config,
             Err(message) => {
@@ -113,6 +113,16 @@ pub fn run(args: &Args) -> ExitCode {
             config,
             pins: pins.clone(),
             no_snippets: args.no_snippets,
+            others: inputs
+                .iter()
+                .enumerate()
+                .filter(|&(other, _)| other != position)
+                .map(|(_, other)| OtherDocument {
+                    name: other.name.clone(),
+                    text: other.text.clone(),
+                    format: other.format,
+                })
+                .collect(),
         };
         let report = check_document(&input.name, &input.text, input.format, &corpus, &options);
         let output = match args.format {
@@ -128,7 +138,7 @@ pub fn run(args: &Args) -> ExitCode {
                 writeln!(
                     std::io::stdout(),
                     "{}",
-                    render_json(&report.diagnostics, versions)
+                    render_json(&report.diagnostics, &report.files, versions)
                 )
             }
             OutputFormat::Sarif => Ok(()),

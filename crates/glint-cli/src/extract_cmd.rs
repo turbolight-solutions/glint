@@ -127,6 +127,7 @@ pub fn run(args: &Args) -> ExitCode {
             "{}",
             render_json(
                 &diagnostics,
+                &files,
                 Versions {
                     glint: env!("CARGO_PKG_VERSION"),
                     data: None,

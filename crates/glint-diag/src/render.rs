@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::{Diagnostic, FileId, LineIndex, Severity};
 
-const JSON_SCHEMA_VERSION: u32 = 1;
+const JSON_SCHEMA_VERSION: u32 = 2;
 
 /// The files that diagnostics refer to, by [`FileId`].
 #[derive(Debug, Default)]
@@ -153,6 +153,9 @@ struct JsonReport<'a> {
     glint_version: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     data_build: Option<&'a str>,
+    /// The name of each file, indexed by the `file` of a label: the document, then the corpus modules and other
+    /// documents that labels point into (`rfc5280#PKIX1Explicit88`).
+    files: Vec<&'a str>,
     diagnostics: &'a [Diagnostic],
 }
 
@@ -176,11 +179,12 @@ impl Versions<'_> {
 }
 
 /// Renders diagnostics as JSON with `schema_version`, `glint_version` and `data_build` fields.
-pub fn render_json(diagnostics: &[Diagnostic], versions: Versions<'_>) -> String {
+pub fn render_json(diagnostics: &[Diagnostic], files: &Files, versions: Versions<'_>) -> String {
     let report = JsonReport {
         schema_version: JSON_SCHEMA_VERSION,
         glint_version: versions.glint,
         data_build: versions.data,
+        files: files.iter().map(|(_, name)| name).collect(),
         diagnostics,
     };
     serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".to_owned())
@@ -211,10 +215,11 @@ mod tests {
     }
 
     #[test]
-    fn json_output_carries_a_schema_version() {
-        let (_, diagnostics) = sample();
+    fn json_output_carries_a_schema_version_and_the_file_names() {
+        let (files, diagnostics) = sample();
         let value: serde_json::Value = serde_json::from_str(&render_json(
             &diagnostics,
+            &files,
             Versions {
                 glint: "1.2.3",
                 data: Some("2026-11-05.0123abcd"),
@@ -223,7 +228,9 @@ mod tests {
         .unwrap();
         assert_eq!(value["glint_version"], "1.2.3");
         assert_eq!(value["data_build"], "2026-11-05.0123abcd");
-        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["files"][0], "draft.asn");
+        assert_eq!(value["diagnostics"][0]["primary"]["file"], 0);
         assert_eq!(value["diagnostics"][0]["code"], "E001");
         assert_eq!(value["diagnostics"][0]["severity"], "error");
         assert_eq!(

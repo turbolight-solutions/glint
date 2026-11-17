@@ -103,6 +103,8 @@ pub struct Analysis<'c> {
     pub drafts: Vec<ModuleId>,
     /// The source id of each fragment, in the order given.
     pub fragments: Vec<SourceId>,
+    /// The source id of each context source ([`analyze_with_context`]), in the order given.
+    pub context: Vec<SourceId>,
     pub findings: Vec<Finding>,
 }
 
@@ -130,6 +132,21 @@ pub fn analyze_with_fragments<'c>(
     corpus: &'c dyn CorpusProvider,
     options: &'c Options,
 ) -> Analysis<'c> {
+    analyze_with_context(sources, fragments, Vec::new(), snippets, corpus, options)
+}
+
+/// Like [`analyze_with_fragments`], with `context`: the modules of other documents checked in the same run, which the
+/// draft's imports resolve to as they resolve to the draft's own (by identifier, then by name, before the corpus). They
+/// are not checked here; each document is checked with the others as its context. Source ids of the context follow
+/// those of the fragments.
+pub fn analyze_with_context<'c>(
+    sources: Vec<DraftSource>,
+    fragments: Vec<FragmentSource>,
+    context: Vec<DraftSource>,
+    snippets: &SnippetOptions,
+    corpus: &'c dyn CorpusProvider,
+    options: &'c Options,
+) -> Analysis<'c> {
     let mut graph = ModuleGraph::new(corpus, options);
     let mut drafts = Vec::new();
     for source in sources {
@@ -142,6 +159,14 @@ pub fn analyze_with_fragments<'c>(
     let fragment_ids: Vec<SourceId> = (first_fragment..graph.units.len())
         .filter_map(|i| u32::try_from(i).ok().map(SourceId))
         .collect();
+    let first_context = graph.units.len();
+    let mut context_modules = Vec::new();
+    for source in context {
+        context_modules.extend(graph.add_draft(source.text, &source.parse));
+    }
+    let context_ids: Vec<SourceId> = (first_context..graph.units.len())
+        .filter_map(|i| u32::try_from(i).ok().map(SourceId))
+        .collect();
     graph.resolve_all();
     for name in snippet::names_needing_corpus(&graph, &fragment_ids) {
         graph.load_corpus_defining(&name);
@@ -151,12 +176,14 @@ pub fn analyze_with_fragments<'c>(
     let mut findings = Vec::new();
     for &module in &drafts {
         checks::check_module(&graph, module, &mut findings);
+        checks::unique_identity(&graph, module, &drafts, &context_modules, &mut findings);
     }
     snippet::check(&graph, &fragment_ids, snippets, &mut findings);
     Analysis {
         graph,
         drafts,
         fragments: fragment_ids,
+        context: context_ids,
         findings,
     }
 }

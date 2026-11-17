@@ -179,6 +179,12 @@ const CODES: &[CodeInfo] = &[
         basis: "13.20",
     },
     CodeInfo {
+        code: "E116",
+        severity: Severity::Error,
+        title: "Two modules among the ones an import resolves to first (the document's and those of the other documents checked with it) share an identifier, or a name without differing identifiers",
+        basis: "X.680 13.7, 13.8",
+    },
+    CodeInfo {
         code: "W140",
         severity: Severity::Warning,
         title: "OID assigned in the draft is already assigned in the corpus to a different name",

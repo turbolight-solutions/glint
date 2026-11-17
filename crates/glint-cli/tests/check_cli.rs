@@ -279,10 +279,10 @@ fn sarif_with_several_files_is_one_run() {
     let corpus = corpus_file(&dir);
     let one = dir.join("one.asn");
     let two = dir.join("two.asn");
-    for file in [&one, &two] {
+    for (file, name) in [(&one, "One"), (&two, "Two")] {
         std::fs::write(
             file,
-            "M DEFINITIONS ::= BEGIN T ::= SEQUENCE { n Missing } END",
+            format!("{name} DEFINITIONS ::= BEGIN T ::= SEQUENCE {{ n Missing }} END"),
         )
         .unwrap();
     }
@@ -424,4 +424,228 @@ fn every_output_names_the_code_version_and_the_data_build() {
         .unwrap();
     let sarif: serde_json::Value = serde_json::from_slice(&sarif.stdout).unwrap();
     assert_eq!(sarif["runs"][0]["properties"]["glintDataBuild"], BUILD);
+}
+
+fn record(name: &str, rfc: u32, oid: &str, text: &str) -> ModuleRecord {
+    ModuleRecord {
+        name: name.to_owned(),
+        oid: Some(oid.parse().unwrap()),
+        source: ModuleSource::rfc(rfc, None, SourceKind::Extracted),
+        rfc_status: Some("proposed standard".to_owned()),
+        obsoleted_by: Vec::new(),
+        syntax_era: SyntaxEra::Neutral,
+        text: text.to_owned(),
+        exports: Exports::All,
+        parse_status: ParseStatus::Clean,
+        sha256: "abc".to_owned(),
+    }
+}
+
+/// `Direct` (RFC 1001) imports `Deep` (RFC 1002), which refers to a type it does not define; `Elsewhere` (RFC 1003) has
+/// the same defect and nothing imports it.
+fn closure_corpus(dir: &std::path::Path) -> PathBuf {
+    let data = CorpusData {
+        info: CorpusInfo {
+            build: BUILD.to_owned(),
+            notices: Vec::new(),
+        },
+        modules: vec![
+            record(
+                "Direct",
+                1001,
+                "1.3.6.1.4.1.99.11",
+                "Direct { 1 3 6 1 4 1 99 11 } DEFINITIONS ::= BEGIN
+  IMPORTS Inner FROM Deep { 1 3 6 1 4 1 99 12 };
+  Outer ::= SEQUENCE { inner Inner }
+END",
+            ),
+            record(
+                "Deep",
+                1002,
+                "1.3.6.1.4.1.99.12",
+                "Deep { 1 3 6 1 4 1 99 12 } DEFINITIONS ::= BEGIN
+  Inner ::= SEQUENCE { missing Undefined }
+END",
+            ),
+            record(
+                "Elsewhere",
+                1003,
+                "1.3.6.1.4.1.99.13",
+                "Elsewhere { 1 3 6 1 4 1 99 13 } DEFINITIONS ::= BEGIN
+  Lonely ::= SEQUENCE { missing Undefined }
+END",
+            ),
+        ],
+        ..CorpusData::default()
+    };
+    let path = dir.join("corpus.json");
+    std::fs::write(&path, data.to_json()).unwrap();
+    path
+}
+
+/// Every diagnostic of a `--format json` stream, one JSON object per document: (document object index, code, file).
+fn json_diagnostics(stdout: &[u8]) -> Vec<(usize, String, String)> {
+    let text = String::from_utf8(stdout.to_vec()).unwrap();
+    let mut out = Vec::new();
+    let stream = serde_json::Deserializer::from_str(&text).into_iter::<serde_json::Value>();
+    for (index, value) in stream.enumerate() {
+        let value = value.unwrap();
+        for diagnostic in value["diagnostics"].as_array().unwrap() {
+            let file = &value["files"][diagnostic["primary"]["file"].as_u64().unwrap() as usize];
+            out.push((
+                index,
+                diagnostic["code"].as_str().unwrap().to_owned(),
+                file.as_str().unwrap().to_owned(),
+            ));
+        }
+    }
+    out
+}
+
+#[test]
+fn the_modules_a_document_imports_are_checked_too() {
+    let dir = scratch("closure");
+    let corpus = closure_corpus(&dir);
+    let file = dir.join("draft.asn");
+    std::fs::write(
+        &file,
+        "Draft DEFINITIONS ::= BEGIN
+  IMPORTS Outer FROM Direct { 1 3 6 1 4 1 99 11 };
+  T ::= SEQUENCE { outer Outer }
+END",
+    )
+    .unwrap();
+    let output = glint()
+        .args(["check", "--format", "json", "--corpus"])
+        .arg(&corpus)
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let diagnostics = json_diagnostics(&output.stdout);
+    let files: Vec<&str> = diagnostics.iter().map(|(_, _, f)| f.as_str()).collect();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|(_, code, file)| code == "E110" && file == "rfc1002#Deep"),
+        "{diagnostics:?}"
+    );
+    assert!(!files.contains(&"rfc1003#Elsewhere"), "{diagnostics:?}");
+    assert!(
+        !files.iter().any(|f| f.ends_with("draft.asn")),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn the_files_of_one_run_resolve_against_each_other() {
+    let dir = scratch("set");
+    let corpus = corpus_file(&dir);
+    let importer = dir.join("importer.asn");
+    std::fs::write(
+        &importer,
+        "Importer DEFINITIONS ::= BEGIN
+  IMPORTS Small FROM Dep { 1 3 6 1 4 1 99 9 };
+  Holder ::= SEQUENCE { value Small }
+END",
+    )
+    .unwrap();
+    let dep = dir.join("dep.asn");
+    std::fs::write(
+        &dep,
+        "Dep { 1 3 6 1 4 1 99 9 } DEFINITIONS ::= BEGIN
+  EXPORTS Other;
+  Small ::= INTEGER (0..9)
+  Other ::= BOOLEAN
+END",
+    )
+    .unwrap();
+    let check = |files: &[&PathBuf]| {
+        let mut command = glint();
+        command
+            .args(["check", "--format", "json", "--corpus"])
+            .arg(&corpus);
+        for file in files {
+            command.arg(file);
+        }
+        command.output().unwrap()
+    };
+    // alone, the importer's import is not resolved
+    let alone = json_diagnostics(&check(&[&importer]).stdout);
+    assert!(alone.iter().any(|(_, code, _)| code == "W100"), "{alone:?}");
+    // with the dependency, it is, and `Small` is not exported (X.680 13.13)
+    let together = json_diagnostics(&check(&[&importer, &dep]).stdout);
+    assert!(
+        !together.iter().any(|(_, code, _)| code == "W100"),
+        "{together:?}"
+    );
+    assert!(
+        together
+            .iter()
+            .any(|(index, code, _)| *index == 0 && code == "E101"),
+        "{together:?}"
+    );
+    // each document reports its own findings: none of the importer's in the dependency's report
+    assert!(
+        !together
+            .iter()
+            .any(|(index, code, _)| *index == 1 && code == "E101"),
+        "{together:?}"
+    );
+}
+
+// X.680 13.7, 13.8 and the NOTE to 13.10: editions share a name and differ in their identifiers; nothing else may share
+// a name or an identifier, or an import could not tell the modules apart.
+#[test]
+fn two_documents_defining_one_module_are_an_error() {
+    let dir = scratch("twice");
+    let corpus = corpus_file(&dir);
+    let module =
+        |oid: &str, body: &str| format!("Dep {{ {oid} }} DEFINITIONS ::= BEGIN {body} END");
+    let a = dir.join("a.asn");
+    let b = dir.join("b.asn");
+    let check = || {
+        glint()
+            .args(["check", "--format", "json", "--corpus"])
+            .arg(&corpus)
+            .arg(&a)
+            .arg(&b)
+            .output()
+            .unwrap()
+    };
+    std::fs::write(&a, module("1 3 6 1 4 1 99 9", "X ::= INTEGER")).unwrap();
+    std::fs::write(&b, module("1 3 6 1 4 1 99 9", "X ::= BOOLEAN")).unwrap();
+    let output = check();
+    assert_eq!(output.status.code(), Some(1));
+    let twice = json_diagnostics(&output.stdout);
+    for document in [0, 1] {
+        assert!(
+            twice
+                .iter()
+                .any(|(index, code, _)| *index == document && code == "E116"),
+            "{twice:?}"
+        );
+    }
+    // two editions: the same name, different identifiers
+    std::fs::write(&b, module("1 3 6 1 4 1 99 10", "X ::= BOOLEAN")).unwrap();
+    let editions = json_diagnostics(&check().stdout);
+    assert!(
+        !editions.iter().any(|(_, code, _)| code == "E116"),
+        "{editions:?}"
+    );
+    // one document showing a module twice (a header with a stub body, then the full module) shows one module
+    let twice_in_one = format!(
+        "{}\n\n{}",
+        module("1 3 6 1 4 1 99 9", "X ::= INTEGER"),
+        module("1 3 6 1 4 1 99 9", "X ::= INTEGER Y ::= BOOLEAN")
+    );
+    std::fs::write(&a, twice_in_one).unwrap();
+    let output = glint()
+        .args(["check", "--format", "json", "--corpus"])
+        .arg(&corpus)
+        .arg(&a)
+        .output()
+        .unwrap();
+    let one = json_diagnostics(&output.stdout);
+    assert!(!one.iter().any(|(_, code, _)| code == "E116"), "{one:?}");
 }

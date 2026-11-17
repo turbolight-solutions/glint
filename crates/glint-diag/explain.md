@@ -370,6 +370,32 @@ END
 
 Give the local definition another name.
 
+## E116
+
+Two modules that an import resolves to before the corpus, the document's own and those of the other documents checked in the same run, cannot be told apart: they have the same identifier, or the same name without both having identifiers that differ. X.680 uses a module name only once (13.7) and gives each module an identifier that names it alone (13.8); editions of a module share its name and differ in their identifiers (the NOTE to 13.10), which an import tells apart by identifier. Within one document, a module shown twice with the same name and identifier (a header with a stub body before the full module) is one module, as the corpus takes it.
+
+```asn1 bad
+A-88 { 1 2 3 } DEFINITIONS ::= BEGIN
+  X ::= INTEGER
+END
+
+A-08 { 1 2 3 } DEFINITIONS ::= BEGIN
+  X ::= INTEGER
+END
+```
+
+```asn1 good
+A-88 { 1 2 3 } DEFINITIONS ::= BEGIN
+  X ::= INTEGER
+END
+
+A-08 { 1 2 4 } DEFINITIONS ::= BEGIN
+  X ::= INTEGER
+END
+```
+
+Give each module its own identifier. Across documents, the same module defined in two documents of one run is reported too: check only one of them, or give the new edition its own identifier.
+
 ## E120
 
 Two `CHOICE` alternatives or two `SET` components have the same tag (X.680 27.3, 29.3, 29.9, 52.7). Every tag of an untagged `CHOICE` counts, so does the conceptually added extension element, and so does the indeterminate tag of an untagged open type.

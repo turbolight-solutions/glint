@@ -7,7 +7,7 @@ How Glint is packaged and run outside a development checkout (milestone M7).
 `glint check --format human|json|sarif`.
 
 - `human` (default) prints excerpts to standard error, then `glint <version>, data <build>`.
-- `json` prints `{ "schema_version": 1, "glint_version", "data_build", "diagnostics": [...] }` to standard output, one object per document.
+- `json` prints `{ "schema_version": 2, "glint_version", "data_build", "files": [...], "diagnostics": [...] }` to standard output, one object per document. `files` names the files that labels point into, indexed by a label's `file`: the document first, then the corpus modules (`rfc5280#PKIX1Explicit88`) and other documents of the run.
 - `sarif` prints one SARIF 2.1.0 log to standard output, with one run for all documents. Each code that occurred is a rule (`id`, title, default level, `helpUri`, and the `glint explain` text as help). Primary locations are in the checked document, with a region in characters (`columnKind: unicodeCodePoints`). Secondary labels become `relatedLocations`; a label in a corpus module links to the RFC at the RFC Editor. A finding whose primary label is inside a corpus module is anchored at the top of the checked document, with the real place in the message.
 
 The run's `properties.glintDataBuild` names the data build, beside the tool's version.

@@ -1,12 +1,12 @@
-//! Import checks: W100, E101, W102, I103, E104, I105, W106, E107, I109 (X.680 13.9-13.16).
+//! Import checks: W100, E101, W102, I103, E104, I105, W106, E107, I109, E116 (X.680 13.7-13.16).
 
 use std::collections::HashSet;
 
 use glint_corpus::{IanaVerdict, ModuleRecord, Oid, SourceKind, iana_conflict, iana_verdict};
 
 use super::Ctx;
-use crate::finding::Finding;
-use crate::graph::{Found, Matched, Origin};
+use crate::finding::{Finding, Loc};
+use crate::graph::{Found, Matched, ModuleGraph, ModuleId, Origin};
 use crate::model::{AssignedId, ExportsModel, SymbolKind};
 
 pub(super) fn check(ctx: &mut Ctx<'_, '_, '_>) {
@@ -332,4 +332,56 @@ fn curated_note(rec: &glint_corpus::ModuleRecord) -> Option<String> {
         rec.name,
         ids.join(", ")
     ))
+}
+
+// X.680 13.7 (a module name is used once), 13.8 (a module identifier identifies one module) and the NOTE to 13.10
+// (editions of a module share its name and differ in their identifiers): among `modules`, the modules an import
+// resolves to before the corpus (the draft's and those of the other documents checked with it, not snippets that
+// quote a module header), no two may share an identifier, nor a name unless both have identifiers and they differ. An
+// import could not tell them apart. Within one document (`own`), a module shown twice with the same name and
+// identifier is one module, as the corpus build takes it: a document may quote a module's header with a stub body
+// before the full module (RFC 4120 Section 5 and Appendix A).
+pub(crate) fn unique_identity(
+    graph: &ModuleGraph<'_>,
+    module: ModuleId,
+    own: &[ModuleId],
+    others: &[ModuleId],
+    findings: &mut Vec<Finding>,
+) {
+    let Some(loaded) = graph.module(module) else {
+        return;
+    };
+    let candidates = own
+        .iter()
+        .map(|&id| (id, true))
+        .chain(others.iter().map(|&id| (id, false)));
+    for (id, same_document) in candidates {
+        let Some(other) = graph.module(id).filter(|_| id != module) else {
+            continue;
+        };
+        let same_oid = loaded.oid.is_some() && loaded.oid == other.oid;
+        let editions = loaded.oid.is_some() && other.oid.is_some() && loaded.oid != other.oid;
+        let same_name = loaded.model.name == other.model.name;
+        let shown_twice = same_document && same_name && loaded.oid == other.oid;
+        if shown_twice || !(same_oid || (same_name && !editions)) {
+            continue;
+        }
+        let what = if same_name {
+            format!("module `{}` is defined twice", loaded.model.name)
+        } else {
+            format!(
+                "module `{}` has the identifier of module `{}`",
+                loaded.model.name, other.model.name
+            )
+        };
+        let at = |m: &crate::graph::LoadedModule| Loc {
+            source: m.source,
+            range: m.model.name_range,
+        };
+        findings.push(
+            Finding::new("E116", what, at(loaded))
+                .with_secondary(at(other), "also defined here")
+                .with_note("an import of the module cannot tell the two apart"),
+        );
+    }
 }

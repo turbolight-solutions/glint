@@ -432,7 +432,7 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 
 | Command | Purpose |
 | --- | --- |
-| `glint check <files...>` | Extract, parse, check; format auto-detected from extension and content (`-` reads stdin) |
+| `glint check <files...>` | Extract, parse, check; format auto-detected from extension and content (`-` reads stdin). The documents of one run form one module set, and each is checked with every module it imports (see "What `glint check` checks" below) |
 | `glint check --draft draft-ietf-lamps-foo-03` | Fetch a draft from the IETF archive, then check |
 | `glint extract <file> -o <dir>` | Write each extracted module to `<dir>/<ModuleName>.asn`; when the document defines several modules of one name, each goes to `<ModuleName>-<oid>.asn`, as overrides name them |
 | `glint extract <file> --format json [-o <dir>]` | List the blocks on stdout as JSON: kind, section, title, line range, and each module's name, dotted OID (`null` unless every arc is a number) and line range; with `-o`, also the file each module (and, with `--fragments`, each fragment) was written to, holding its text as the corpus build records it |
@@ -447,6 +447,12 @@ The binary is `glint`, built with `clap`. It carries no corpus: `glint corpus up
 Common flags: `--format human|json|sarif`, `--config <path>` (default: nearest `glint.toml` upward from the input), `--deny-warnings`, `--corpus <corpus.json>`, `--pin Name=rfcNNNN|<oid>`, `--no-snippets`, `--color auto|always|never`.
 
 Exit codes: `0` no errors, `1` errors found (or warnings with `--deny-warnings`), `2` usage or I/O failure.
+
+### What `glint check` checks
+
+- **The documents of one run are one module set.** Every document named on the command line (files, `-`, `--draft`) is checked with the others' modules in view: its imports resolve to them as they resolve to its own modules (by identifier, then by name, before the corpus; `--pin` still wins). Each document is reported on its own, with its own findings, so `glint check drafts/*.xml` checks a repository of interdependent Internet-Drafts in one run, as CI wants. Two modules of the set that an import could not tell apart (one identifier, or one name without differing identifiers) are `E116`; a module a document shows twice with the same name and identifier is one module, as the corpus build takes it.
+- **Each document is checked with its closure.** The corpus modules a document imports, directly or through other modules, are checked too, each as the corpus build checks it (on its own, with its document as home), so their findings are the ones `report.md` gives for them. They are reported with the document's findings, labelled with the module (`rfc5280#PKIX1Explicit88:120`) and noted as a module the document imports, at their own severity: an error in a dependency fails the run. A corpus module loaded only to compare a snippet with it is not a dependency. Findings in a dependency cannot be fixed in the document itself; suppressing them, with the suppression still shown in the report, is issue #11.
+- **Later, for CI: a workspace in `glint.toml`** (`[workspace] documents = [...]`) so that a plain `glint check` in a repository checks the documents it lists, as one set, with no file list in the CI job. The command-line form stays: the workspace names the files a run is given.
 
 ### Import closures (`glint closure`)
 
