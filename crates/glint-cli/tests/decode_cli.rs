@@ -370,6 +370,38 @@ END
     );
 }
 
+#[test]
+fn a_pem_block_that_cannot_be_read_fails_the_decode() {
+    let dir = scratch("pem");
+    let good = "-----BEGIN PAIR-----\nMAMCAQU=\n-----END PAIR-----\n";
+    let decode = |text: &str, input: &str| {
+        let path = dir.join("input.pem");
+        std::fs::write(&path, text).unwrap();
+        glint()
+            .args(["decode", "--input", input])
+            .arg(&path)
+            .output()
+            .unwrap()
+    };
+    let two = format!("{good}{good}");
+    for input in ["pem", "auto"] {
+        let output = decode(&two, input);
+        assert!(output.status.success(), "{input}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("block 2 of 2"));
+        for bad in [
+            "-----BEGIN PAIR-----\nMAMCAQ!=\n-----END PAIR-----\n",
+            "-----BEGIN PAIR-----\nMAMCAQU=\n-----END OTHER-----\n",
+            "-----BEGIN PAIR-----\nMAMCAQU=\n",
+            "-----BEGIN PAIR-----\nMAMCAQUAB\n-----END PAIR-----\n",
+        ] {
+            let output = decode(&format!("{good}{bad}"), input);
+            assert_eq!(output.status.code(), Some(2), "{input}: {bad}");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains("PEM block 2 (PAIR)"), "{stderr}");
+        }
+    }
+}
+
 /// One object sets `&Params`, the other leaves it unset (an AlgorithmIdentifier's `PARAMS ARE absent`).
 const PARAMS_MODULE: &str = "P DEFINITIONS ::= BEGIN
   ALG ::= CLASS { &id OBJECT IDENTIFIER UNIQUE, &Params OPTIONAL } WITH SYNTAX { ID &id [PARAMS &Params] }

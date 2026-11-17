@@ -21,7 +21,7 @@ fn certificate() -> Vec<u8> {
             .join("../glint-check/tests/fixtures/decode/ec-ca.pem"),
     )
     .unwrap();
-    glint_decode::sniff(pem.as_bytes()).remove(0).bytes
+    glint_decode::sniff(pem.as_bytes()).unwrap().remove(0).bytes
 }
 
 #[test]

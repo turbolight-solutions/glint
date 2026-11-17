@@ -152,7 +152,7 @@ Every backend has its own namer with three jobs: case conversion (`Rust: UpperCa
 
 `sniff(bytes) -> Vec<Input>`:
 
-1. PEM armor: base64-decode each block and keep its label. Several blocks become several inputs; the CLI decodes all of them and the web lets the user pick.
+1. PEM armor: base64-decode each block and keep its label. Several blocks become several inputs; the CLI decodes all of them and the web lets the user pick. Text around the blocks is ignored (RFC 7468 Section 2), but a block's body is read as RFC 7468's lax grammar (Figure 2: whitespace and the standard base64 alphabet, `=` only at the end), with no headers, whole octets and zero pad bits, and its `END` line must name its label; a block that breaks any of this fails the whole input, so what is decoded is exactly what was written.
 2. Base64 alphabet only (whitespace ignored): decode it.
 3. Otherwise the bytes are DER/BER.
 

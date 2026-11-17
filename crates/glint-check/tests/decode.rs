@@ -57,7 +57,7 @@ fn rfc5280_texts() -> Vec<String> {
 
 fn certificate() -> Vec<u8> {
     let pem = read("tests/fixtures/decode/ec-ca.pem");
-    sniff(pem.as_bytes()).remove(0).bytes
+    sniff(pem.as_bytes()).unwrap().remove(0).bytes
 }
 
 /// A corpus record of an RFC 5912 module, with its module identifier so that imports by OID resolve.

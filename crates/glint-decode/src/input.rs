@@ -127,78 +127,146 @@ pub fn canonical_label(label: &str) -> Option<&'static str> {
     })
 }
 
-/// The PEM blocks of `text` (RFC 7468): label and decoded bytes. Explanatory text around them is ignored, and so are
-/// RFC 1421 headers (`Proc-Type: ...`) inside a block.
-pub fn pem_blocks(text: &str) -> Vec<(String, Option<Vec<u8>>)> {
+/// The base64 of a PEM block's body, read as RFC 7468's lax grammar (Section 3, Figure 2): whitespace and the
+/// standard alphabet (RFC 4648 Section 4), with at most two `=` at the end. Everything else is refused rather than
+/// skipped, so the octets decoded are exactly the octets written: a header line (Section 2: textual encoding does not
+/// permit headers), a character of another alphabet, characters that do not make a whole octet, and pad bits that are
+/// not zero (RFC 4648 Section 3.5).
+fn pem_base64(body: &str) -> Result<Vec<u8>, String> {
+    let is_space = |c: char| matches!(c, ' ' | '\t' | '\n' | '\r' | '\x0b' | '\x0c');
+    if body.lines().any(|line| line.contains(':')) {
+        return Err("a header line; RFC 7468 permits none".to_owned());
+    }
+    let mut symbols = 0usize;
+    let mut padding = 0usize;
+    for c in body.chars() {
+        if is_space(c) {
+            continue;
+        }
+        if c == '=' {
+            padding = padding.saturating_add(1);
+            if padding > 2 {
+                return Err("more than two `=`".to_owned());
+            }
+            continue;
+        }
+        if padding > 0 {
+            return Err(format!("`{c}` after `=`"));
+        }
+        if !(c.is_ascii_alphanumeric() || c == '+' || c == '/') {
+            return Err(format!(
+                "`{}` is not a base64 character",
+                c.escape_default()
+            ));
+        }
+        symbols = symbols.saturating_add(1);
+    }
+    let complete = match symbols % 4 {
+        0 => padding == 0,
+        2 => padding == 0 || padding == 2,
+        3 => padding <= 1,
+        _ => false,
+    };
+    if !complete {
+        return Err("the base64 does not end on a whole octet".to_owned());
+    }
+    let compact: String = body.chars().filter(|&c| !is_space(c) && c != '=').collect();
+    let last = compact.bytes().last().and_then(base64_value).unwrap_or(0);
+    let pad_bits = match symbols % 4 {
+        2 => last & 0x0f,
+        3 => last & 0x03,
+        _ => 0,
+    };
+    if pad_bits != 0 {
+        return Err("the pad bits of the last base64 character are not zero".to_owned());
+    }
+    base64(compact.as_bytes()).ok_or_else(|| "the input is not base64".to_owned())
+}
+
+/// The PEM blocks of `text` (RFC 7468): label, and the decoded octets or what is wrong with the block. Text before,
+/// between and after the blocks is ignored, as Section 2 asks of parsers; inside a block, the body is read strictly
+/// (`pem_base64`), and the post-encapsulation boundary must name the label of the pre-encapsulation one.
+pub fn pem_blocks(text: &str) -> Vec<(String, Result<Vec<u8>, String>)> {
     let mut out = Vec::new();
-    let mut lines = text.lines();
+    // RFC 7468 Section 2: lines end with CRLF, CR or LF
+    let mut lines = text.split(['\r', '\n']);
     while let Some(line) = lines.next() {
-        let line = line.trim();
         let Some(label) = line
+            .trim()
             .strip_prefix("-----BEGIN ")
             .and_then(|rest| rest.strip_suffix("-----"))
         else {
             continue;
         };
-        let end = format!("-----END {label}-----");
         let mut body = String::new();
-        let mut closed = false;
+        let mut result = Err(format!("no `-----END {label}-----` line"));
         for line in lines.by_ref() {
             let line = line.trim();
-            if line == end {
-                closed = true;
+            if let Some(end) = line
+                .strip_prefix("-----END ")
+                .and_then(|rest| rest.strip_suffix("-----"))
+            {
+                result = if end == label {
+                    pem_base64(&body)
+                } else {
+                    Err(format!("its END line names `{end}`"))
+                };
                 break;
             }
-            if line.contains(':') {
-                continue;
+            if line.starts_with("-----BEGIN ") {
+                break;
             }
             body.push_str(line);
+            body.push('\n');
         }
-        let bytes = if closed {
-            base64(body.as_bytes())
-        } else {
-            None
-        };
-        out.push((label.to_owned(), bytes));
+        out.push((label.to_owned(), result));
     }
     out
 }
 
-/// Reads `bytes` as PEM, then base64, then DER, and returns every encoding found in it.
-pub fn sniff(bytes: &[u8]) -> Vec<Input> {
+/// The blocks of `text` as inputs, or the first block that cannot be read.
+fn pem_inputs(text: &str) -> Result<Vec<Input>, String> {
+    let mut inputs = Vec::new();
+    for (index, (label, bytes)) in pem_blocks(text).into_iter().enumerate() {
+        let bytes = bytes.map_err(|problem| {
+            format!("PEM block {} ({label}): {problem}", index.saturating_add(1))
+        })?;
+        inputs.push(Input {
+            encoding: Encoding::Pem,
+            label: Some(label),
+            bytes,
+        });
+    }
+    if inputs.is_empty() {
+        return Err("the input has no PEM block".to_owned());
+    }
+    Ok(inputs)
+}
+
+/// Reads `bytes` as PEM, then base64, then DER, and returns every encoding found in it. Text with a
+/// pre-encapsulation boundary is PEM, and a block that cannot be read is an error.
+pub fn sniff(bytes: &[u8]) -> Result<Vec<Input>, String> {
     if let Ok(text) = std::str::from_utf8(bytes)
         && text.contains("-----BEGIN ")
     {
-        let blocks: Vec<Input> = pem_blocks(text)
-            .into_iter()
-            .filter_map(|(label, bytes)| {
-                Some(Input {
-                    encoding: Encoding::Pem,
-                    label: Some(label),
-                    bytes: bytes?,
-                })
-            })
-            .collect();
-        if !blocks.is_empty() {
-            return blocks;
-        }
+        return pem_inputs(text);
     }
     let looks_like_text = !bytes.is_empty()
         && bytes
             .iter()
             .all(|b| b.is_ascii_whitespace() || base64_value(*b).is_some() || *b == b'=');
     if looks_like_text && let Some(decoded) = base64(bytes) {
-        return vec![Input {
+        return Ok(vec![Input {
             encoding: Encoding::Base64,
             label: None,
             bytes: decoded,
-        }];
+        }]);
     }
-    vec![Input {
+    Ok(vec![Input {
         encoding: Encoding::Der,
         label: None,
         bytes: bytes.to_vec(),
-    }]
+    }])
 }
 
 /// Reads `bytes` as `encoding`, without sniffing.
@@ -219,22 +287,7 @@ pub fn read_as(bytes: &[u8], encoding: Encoding) -> Result<Vec<Input>, String> {
             })
             .ok_or_else(|| "the input is not base64".to_owned()),
         Encoding::Pem => {
-            let text = std::str::from_utf8(bytes).map_err(|_| "the input is not text")?;
-            let blocks: Vec<Input> = pem_blocks(text)
-                .into_iter()
-                .filter_map(|(label, bytes)| {
-                    Some(Input {
-                        encoding,
-                        label: Some(label),
-                        bytes: bytes?,
-                    })
-                })
-                .collect();
-            if blocks.is_empty() {
-                Err("the input has no PEM block".to_owned())
-            } else {
-                Ok(blocks)
-            }
+            pem_inputs(std::str::from_utf8(bytes).map_err(|_| "the input is not text")?)
         }
     }
 }
@@ -331,17 +384,92 @@ mod tests {
         }
         let pem = pem_armor("FOO", &[0x30; 50]);
         assert_eq!(pem.lines().nth(1).unwrap().len(), 64);
-        assert_eq!(sniff(pem.as_bytes())[0].bytes, [0x30; 50]);
+        assert_eq!(sniff(pem.as_bytes()).unwrap()[0].bytes, [0x30; 50]);
     }
 
     #[test]
     fn pem_then_base64_then_der() {
         let pem = "intro\n-----BEGIN FOO-----\nMAA=\n-----END FOO-----\ntext\n-----BEGIN BAR-----\nBQA=\n-----END BAR-----\n";
-        let inputs = sniff(pem.as_bytes());
+        let inputs = sniff(pem.as_bytes()).unwrap();
         assert_eq!(inputs.len(), 2);
         assert_eq!(inputs[0].label.as_deref(), Some("FOO"));
         assert_eq!(inputs[0].bytes, [0x30, 0x00]);
-        assert_eq!(sniff(b"MAA=")[0].encoding, Encoding::Base64);
-        assert_eq!(sniff(&[0x30, 0x00])[0].encoding, Encoding::Der);
+        assert_eq!(sniff(b"MAA=").unwrap()[0].encoding, Encoding::Base64);
+        assert_eq!(sniff(&[0x30, 0x00]).unwrap()[0].encoding, Encoding::Der);
+    }
+
+    fn block(body: &str) -> Result<Vec<u8>, String> {
+        let text = format!("-----BEGIN FOO-----\n{body}\n-----END FOO-----\n");
+        pem_blocks(&text).remove(0).1
+    }
+
+    #[test]
+    fn pem_bodies_in_the_lax_grammar_are_read() {
+        assert_eq!(block("MAA=").unwrap(), [0x30, 0x00]);
+        assert_eq!(block("MAA").unwrap(), [0x30, 0x00]);
+        assert_eq!(block(" MA\tA= ").unwrap(), [0x30, 0x00]);
+        assert_eq!(block("").unwrap(), b"");
+        let crlf = "-----BEGIN FOO-----\r\nMAA=\r\n-----END FOO-----\r\n";
+        assert_eq!(pem_blocks(crlf).remove(0).1.unwrap(), [0x30, 0x00]);
+        let cr = "-----BEGIN FOO-----\rMAA=\r-----END FOO-----\r";
+        assert_eq!(pem_blocks(cr).remove(0).1.unwrap(), [0x30, 0x00]);
+    }
+
+    // RFC 7468 Section 2 (no headers, the standard alphabet) and Figure 2; RFC 4648 Section 3.5 (pad bits).
+    #[test]
+    fn pem_bodies_outside_the_grammar_are_refused() {
+        for (body, problem) in [
+            ("Proc-Type: 4,ENCRYPTED\nMAA=", "header"),
+            ("MA_A", "not a base64 character"),
+            ("MA-A", "not a base64 character"),
+            ("MA!A", "not a base64 character"),
+            ("MA=A", "after `=`"),
+            ("MA===", "more than two"),
+            ("MAA=A", "after `=`"),
+            ("MAAAB", "whole octet"),
+            ("MA=", "whole octet"),
+            ("MAB=", "pad bits"),
+            ("MB==", "pad bits"),
+        ] {
+            let error = block(body).unwrap_err();
+            assert!(error.contains(problem), "{body:?}: {error}");
+        }
+    }
+
+    #[test]
+    fn pem_boundaries_must_close_and_match() {
+        let unclosed = "-----BEGIN FOO-----\nMAA=\n";
+        assert!(
+            pem_blocks(unclosed)
+                .remove(0)
+                .1
+                .unwrap_err()
+                .contains("no `-----END FOO-----`")
+        );
+        let other = "-----BEGIN FOO-----\nMAA=\n-----END BAR-----\n";
+        assert!(
+            pem_blocks(other)
+                .remove(0)
+                .1
+                .unwrap_err()
+                .contains("names `BAR`")
+        );
+        let nested = "-----BEGIN FOO-----\nMAA=\n-----BEGIN BAR-----\nMAA=\n-----END BAR-----\n";
+        assert!(pem_blocks(nested).remove(0).1.is_err());
+    }
+
+    #[test]
+    fn one_bad_block_fails_the_whole_input() {
+        let text = "-----BEGIN FOO-----\nMAA=\n-----END FOO-----\n-----BEGIN FOO-----\nM!A=\n-----END FOO-----\n";
+        let error = read_as(text.as_bytes(), Encoding::Pem).unwrap_err();
+        assert!(error.starts_with("PEM block 2 (FOO)"), "{error}");
+        assert!(sniff(text.as_bytes()).is_err());
+        let text_around = "intro\n-----BEGIN FOO-----\nMAA=\n-----END FOO-----\ntrailing text\n";
+        assert_eq!(
+            read_as(text_around.as_bytes(), Encoding::Pem)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

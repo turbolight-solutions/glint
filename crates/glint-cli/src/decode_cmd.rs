@@ -216,7 +216,7 @@ pub fn run(args: &Args) -> ExitCode {
         Err(error) => return failure(&format!("cannot read {}: {error}", display_name(&path))),
     };
     let inputs = match args.input {
-        InputFormat::Auto => Ok(sniff(&bytes)),
+        InputFormat::Auto => sniff(&bytes),
         InputFormat::Pem => read_as(&bytes, Encoding::Pem),
         InputFormat::Base64 => read_as(&bytes, Encoding::Base64),
         InputFormat::Der => read_as(&bytes, Encoding::Der),

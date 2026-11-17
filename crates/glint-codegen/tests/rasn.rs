@@ -91,7 +91,7 @@ fn rfc5280() -> Vec<String> {
 
 fn vector(path: &str) -> (String, Vec<u8>, Expect) {
     let text = read(path);
-    let input = sniff(text.as_bytes()).remove(0);
+    let input = sniff(text.as_bytes()).unwrap().remove(0);
     let name = path.rsplit('/').next().unwrap_or(path).to_owned();
     (name, input.bytes, Expect::Oracle)
 }

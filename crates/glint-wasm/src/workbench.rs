@@ -447,7 +447,7 @@ impl Service {
     /// suggests.
     pub fn decode(&self, request: &DecodeRequest, bytes: &[u8]) -> Result<DecodeResponse> {
         let inputs: Vec<Input> = match request.input {
-            InputFormat::Auto => Ok(sniff(bytes)),
+            InputFormat::Auto => sniff(bytes),
             InputFormat::Pem => read_as(bytes, Encoding::Pem),
             InputFormat::Base64 => read_as(bytes, Encoding::Base64),
             InputFormat::Der => read_as(bytes, Encoding::Der),
