@@ -599,6 +599,12 @@ const CODES: &[CodeInfo] = &[
         basis: "policy",
     },
     CodeInfo {
+        code: "E416",
+        severity: Severity::Error,
+        title: "A TLV whose type the decoder cannot check: the IR could not lower it (a module that is not available, a symbol neither defined nor imported, macro notation); it is decoded without a schema",
+        basis: "policy",
+    },
+    CodeInfo {
         code: "W420",
         severity: Severity::Warning,
         title: "Generated code: a construct the target library cannot express, and what the code does instead (a DEFAULT written as OPTIONAL, a value kept as a raw TLV)",

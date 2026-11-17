@@ -246,6 +246,130 @@ fn constraint_violations_fail_and_der_notes_fail_only_when_strict() {
     assert_eq!(decode(&long, true).status.code(), Some(1));
 }
 
+#[test]
+fn an_empty_input_is_an_error() {
+    let dir = scratch("empty");
+    let empty = dir.join("empty.der");
+    std::fs::write(&empty, b"").unwrap();
+    let from_file = glint()
+        .args(["decode", "--input", "der"])
+        .arg(&empty)
+        .output()
+        .unwrap();
+    let mut stdin = glint();
+    stdin.args(["decode", "--input", "der", "-"]);
+    let from_stdin = run(stdin, b"");
+    for output in [from_file, from_stdin] {
+        assert_eq!(output.status.code(), Some(1));
+        let text = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            text.contains("E400") && text.contains("the input is empty"),
+            "{text}"
+        );
+    }
+}
+
+const BIG_MODULE: &str = "Big DEFINITIONS ::= BEGIN
+  Small ::= INTEGER (0..9)
+  Natural ::= INTEGER (0..MAX)
+END
+";
+
+/// An INTEGER of `octets` octets: `first`, then zeros.
+fn integer(first: u8, octets: usize) -> Vec<u8> {
+    let mut der = vec![0x02];
+    if octets < 0x80 {
+        der.push(u8::try_from(octets).unwrap());
+    } else {
+        der.extend([
+            0x82,
+            u8::try_from(octets >> 8).unwrap(),
+            u8::try_from(octets & 0xff).unwrap(),
+        ]);
+    }
+    der.push(first);
+    der.resize(der.len().saturating_add(octets).saturating_sub(1), 0);
+    der
+}
+
+// X.680 51.4: a value range constrains every value, however many octets it takes.
+#[test]
+fn integers_too_long_for_i128_are_checked_against_their_range() {
+    let dir = scratch("big");
+    let asn1 = dir.join("big.asn");
+    std::fs::write(&asn1, BIG_MODULE).unwrap();
+    let decode = |ty: &str, bytes: &[u8]| {
+        let mut command = glint();
+        command
+            .args(["decode", "--input", "der", "Big", ty, "-", "--file"])
+            .arg(&asn1);
+        run(command, bytes)
+    };
+    for (first, octets) in [(0x01, 17), (0x7f, 17), (0x80, 17), (0x01, 1024)] {
+        let output = decode("Small", &integer(first, octets));
+        assert_eq!(output.status.code(), Some(1), "{first:#x} x {octets}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("E407"));
+    }
+    // 0x00 0x80 0...: the smallest positive value of 17 octets, 2^127
+    let mut least = integer(0x00, 17);
+    least[3] = 0x80;
+    assert_eq!(decode("Small", &least).status.code(), Some(1));
+    assert!(decode("Natural", &least).status.success());
+    assert!(decode("Natural", &integer(0x01, 1024)).status.success());
+    assert_eq!(
+        decode("Natural", &integer(0x80, 1024)).status.code(),
+        Some(1)
+    );
+}
+
+#[test]
+fn a_type_from_a_module_that_is_not_available_fails_the_decode() {
+    let dir = scratch("opaque");
+    let importer = dir.join("importer.asn");
+    std::fs::write(
+        &importer,
+        "Importer DEFINITIONS ::= BEGIN
+  IMPORTS Small FROM Dep { 1 3 6 1 4 1 99 9 };
+  Holder ::= SEQUENCE { value Small }
+END
+",
+    )
+    .unwrap();
+    let dep = dir.join("dep.asn");
+    std::fs::write(
+        &dep,
+        "Dep { 1 3 6 1 4 1 99 9 } DEFINITIONS ::= BEGIN
+  Small ::= INTEGER (0..9)
+END
+",
+    )
+    .unwrap();
+    let decode = |files: &[&Path], bytes: &[u8]| {
+        let mut command = glint();
+        command.args(["decode", "--input", "der", "Importer", "Holder", "-"]);
+        for file in files {
+            command.arg("--file").arg(file);
+        }
+        run(command, bytes)
+    };
+    let output = decode(&[&importer], &[0x30, 0x03, 0x02, 0x01, 0x05]);
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.contains("E416") && text.contains("Small"), "{text}");
+
+    assert!(
+        decode(&[&importer, &dep], &[0x30, 0x03, 0x02, 0x01, 0x05])
+            .status
+            .success()
+    );
+    assert_eq!(
+        decode(&[&importer, &dep], &[0x30, 0x03, 0x02, 0x01, 0x0b])
+            .status
+            .code(),
+        Some(1)
+    );
+}
+
 /// One object sets `&Params`, the other leaves it unset (an AlgorithmIdentifier's `PARAMS ARE absent`).
 const PARAMS_MODULE: &str = "P DEFINITIONS ::= BEGIN
   ALG ::= CLASS { &id OBJECT IDENTIFIER UNIQUE, &Params OPTIONAL } WITH SYNTAX { ID &id [PARAMS &Params] }

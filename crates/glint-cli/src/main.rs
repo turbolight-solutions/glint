@@ -68,8 +68,9 @@ enum Command {
     /// contents of `CONTAINING` octet strings and of open types decoded through their object sets, and for 1988-syntax
     /// modules, which have no object sets, through the corpus's OID hint table (marked `~`, heuristic). Findings:
     /// malformed encodings, invalid contents, DER violations, tag mismatches, missing or unknown components,
-    /// constraint violations, unresolved open types and trailing data (`glint explain E400` ... `E409`). A TLV that
-    /// does not match its type is decoded without a schema, and decoding carries on.
+    /// constraint violations, unresolved open types and trailing data (`glint explain E400` ... `E409`), and types the
+    /// IR could not lower, such as an import nothing answers (`E416`). A TLV that does not match its type is decoded
+    /// without a schema, and decoding carries on.
     ///
     /// Exits 1 when the encoding has errors (and with --strict-der, DER violations).
     Decode(decode_cmd::Args),

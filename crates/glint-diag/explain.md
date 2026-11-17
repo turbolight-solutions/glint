@@ -1559,6 +1559,26 @@ MAYCAQUCAQc=
 </middle></rfc>
 ```
 
+## E416
+
+`glint decode` reached a type the IR could not lower: a module that is not available (an import that neither a `--file` nor the corpus answers), a symbol that is neither defined nor imported, or macro notation. The TLV is decoded without a schema. Since nothing checked its value against the type, the decode fails: supply the missing module with `--file`, or decode with `--no-schema` to look at the octets.
+
+```asn1 schema
+M DEFINITIONS ::= BEGIN
+  T ::= SEQUENCE { a Missing }
+END
+```
+
+```der bad M.T
+30 03 02 01 05
+```
+
+Without a schema, nothing is claimed about the type:
+
+```der good
+30 03 02 01 05
+```
+
 ## W420
 
 `glint codegen` met a construct the target library cannot express, and the generated code does something else, which the message says: a `DEFAULT` value the target cannot write makes the component `OPTIONAL`; a `REAL`, `EXTERNAL`, `EMBEDDED PDV` or `CHARACTER STRING` value is kept as a raw TLV; an open type whose `@` path no enclosing record holds is kept raw; of several relations, only the first selects the type.

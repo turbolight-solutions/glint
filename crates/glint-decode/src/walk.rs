@@ -54,6 +54,9 @@ pub(crate) fn decode(
         tlvs.push(tlv);
     }
     let mut findings = Vec::new();
+    if bytes.is_empty() {
+        findings.push(finding::malformed("no encoding: the input is empty"));
+    }
     if let (Some(first), true) = (raws.first(), raws.len() > 1) {
         findings.push(DecodeFinding::new(
             "E409",
@@ -331,6 +334,33 @@ fn class_rank(class: TagClass) -> u8 {
 
 fn outside(value: i128, range: &glint_ir::Range) -> bool {
     range.lo.is_some_and(|lo| value < lo) || range.hi.is_some_and(|hi| value > hi)
+}
+
+/// The INTEGER `content` (two's complement) when it is outside `range`, as text. A value that does not fit in an
+/// `i128` once redundant sign octets are dropped is beyond every bound a range can have on its side.
+fn integer_outside(content: &[u8], range: &glint_ir::Range) -> Option<String> {
+    let mut minimal = content;
+    while let [first, second, ..] = minimal
+        && ((*first == 0x00 && second & 0x80 == 0) || (*first == 0xff && second & 0x80 != 0))
+    {
+        minimal = minimal.get(1..).unwrap_or_default();
+    }
+    if let Some(v) = value::small_integer(minimal) {
+        return outside(v, range).then(|| v.to_string());
+    }
+    let negative = minimal.first()? & 0x80 != 0;
+    let beyond = if negative {
+        range.lo.is_some()
+    } else {
+        range.hi.is_some()
+    };
+    beyond.then(|| {
+        format!(
+            "a {} value of {} octets",
+            if negative { "negative" } else { "positive" },
+            minimal.len()
+        )
+    })
 }
 
 fn range_text(range: &glint_ir::Range) -> String {
@@ -644,10 +674,14 @@ impl<'b> Walker<'b> {
             Kind::SequenceOf(c) => self.collection(set, c, false, ovr, raw, label, &ctx),
             Kind::SetOf(c) => self.collection(set, c, true, ovr, raw, label, &ctx),
             Kind::OpenType(open) => self.open_type(set, open, raw, label),
-            Kind::Opaque { .. } => {
+            Kind::Opaque { reason } => {
                 let mut node = self.schemaless(raw);
                 node.field = label.field;
                 node.type_name = label.type_name;
+                node.findings.push(DecodeFinding::new(
+                    "E416",
+                    format!("the type is not available ({reason}), so its value is not checked"),
+                ));
                 node
             }
             kind => match kind.universal_tag() {
@@ -795,8 +829,7 @@ impl<'b> Walker<'b> {
         };
         if let (Some(range), Kind::Integer { .. }) = (&summary.value, kind)
             && !range.extensible
-            && let Some(v) = value::small_integer(content)
-            && outside(v, range)
+            && let Some(v) = integer_outside(content, range)
         {
             node.findings.push(DecodeFinding::new(
                 "E407",
